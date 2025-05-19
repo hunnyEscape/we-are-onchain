@@ -1,0 +1,108 @@
+// src/app/components/hero-section/HeroBackground.tsx
+import React from 'react';
+import styles from './HeroSection.module.css';
+import { GlitchState } from './GlitchEffects';
+
+interface HeroBackgroundProps {
+  backgroundTransform: string;
+  midLayerTransform: string;
+  glitchState: GlitchState;
+  getGlitchStyle: (baseTransform: string) => any;
+}
+
+export const HeroBackground: React.FC<HeroBackgroundProps> = ({
+  backgroundTransform,
+  midLayerTransform,
+  glitchState,
+  getGlitchStyle,
+}) => {
+  return (
+    <>
+      {/* 背景画像 - グリッチ効果に対応 */}
+      <div
+        className={`${styles.backgroundImage} ${glitchState.active ? styles.glitchActive : ''}`}
+        style={{
+          backgroundImage: `url('/images/pepe-cyberpunk.png')`,
+          ...(!glitchState.active
+            ? {
+              filter: 'contrast(1.1) brightness(0.9)',
+              transform: backgroundTransform,
+              transition: 'transform 2s ease-out',
+            }
+            : getGlitchStyle(backgroundTransform)
+          )
+        }}
+      />
+
+      {/* 暗いオーバーレイ - 少し動く */}
+      <div
+        className={styles.darkOverlay}
+        style={{
+          transform: `scale(1.02) ${midLayerTransform}`,
+          transition: 'transform 1.5s ease-out',
+        }}
+      />
+
+      {/* 中心部に光の効果 - マウスとは逆方向に少し動く */}
+      <div
+        className={styles.centerLight}
+        style={{
+          transform: midLayerTransform,
+          transition: 'transform 1.5s ease-out',
+        }}
+      />
+
+      {/* グリッチに対応するノイズレイヤー */}
+      <div className={`${styles.mainNoise} ${glitchState.active ? styles.noiseIntense : ''}`} />
+
+      {/* 格子状ノイズ - 少し動く */}
+      <div
+        className={styles.gridNoise}
+        style={{
+          backgroundImage: "url('/images/noisy_grid.webp')",
+          transform: midLayerTransform,
+          transition: 'transform 1.5s ease-out',
+        }}
+      />
+
+      {/* 動くノイズ */}
+      <div className={styles.movingNoise} />
+
+      {/* RGB分離効果 - グリッチ状態に対応 */}
+      <div className={`${styles.rgbSplit} ${glitchState.active && glitchState.type.includes('rgb') ? styles.rgbActive : ''}`} />
+
+      {/* グリッチブロックエフェクト */}
+      {glitchState.active && glitchState.intensity > 2 && (
+        <div
+          className={styles.glitchBlocks}
+          style={{
+            backgroundImage: `url('/images/pepe-cyberpunk.png')`,
+            opacity: 0.4 + (glitchState.intensity * 0.05),
+          }}
+        />
+      )}
+
+      {/* RGBスライス効果 - 強いグリッチ時のみ */}
+      {glitchState.active && glitchState.type.includes('rgb') && glitchState.intensity > 2 && (
+        <>
+          <div
+            className={styles.rgbSliceRed}
+            style={{
+              backgroundImage: `url('/images/pepe-cyberpunk.png')`,
+              transform: `translateX(${glitchState.intensity * 1.5}px)`,
+            }}
+          />
+          <div
+            className={styles.rgbSliceBlue}
+            style={{
+              backgroundImage: `url('/images/pepe-cyberpunk.png')`,
+              transform: `translateX(-${glitchState.intensity * 1.5}px)`,
+            }}
+          />
+        </>
+      )}
+    </>
+  );
+};
+
+export default HeroBackground;

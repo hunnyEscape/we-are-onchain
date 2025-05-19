@@ -1,0 +1,285 @@
+/* src/app/components/hero-section/HeroSection.module.css */
+
+/* ノイズアニメーションをよりコントロールされたものに */
+@keyframes staticNoise {
+  0%, 100% { background-position: 0 0; opacity: 0.4; }
+  20% { background-position: -15px 15px; opacity: 0.42; }
+  40% { background-position: 20px -20px; opacity: 0.38; }
+  60% { background-position: -25px -15px; opacity: 0.44; }
+  80% { background-position: 15px 25px; opacity: 0.4; }
+}
+
+/* グリッチブロックアニメーション - より激しく */
+@keyframes glitchBlocks {
+  0%, 100% { 
+    clip-path: inset(30% 0 40% 0);
+    transform: translate(-10px, 0);
+  }
+  20% { 
+    clip-path: inset(60% 0 20% 0);
+    transform: translate(8px, 0);
+  }
+  40% { 
+    clip-path: inset(20% 0 70% 0);
+    transform: translate(-8px, 0);
+  }
+  60% { 
+    clip-path: inset(10% 0 50% 0);
+    transform: translate(10px, 0);
+  }
+  80% { 
+    clip-path: inset(40% 0 30% 0);
+    transform: translate(-5px, 0);
+  }
+}
+
+/* RGB分離アニメーション - 強調版 */
+@keyframes rgbShift {
+  0%, 100% { 
+    text-shadow: 2px 0 0 #ff0000, -2px 0 0 #00ffff; 
+    filter: hue-rotate(0deg);
+  }
+  33% { 
+    text-shadow: -2px 0 0 #ff0000, 2px 0 0 #00ffff; 
+    filter: hue-rotate(5deg);
+  }
+  66% { 
+    text-shadow: 1px 0 0 #ff0000, -1px 0 0 #00ffff; 
+    filter: hue-rotate(-5deg);
+  }
+}
+
+/* インテンシブなRGB分離アニメーション - グリッチ時用 */
+@keyframes rgbShiftIntense {
+  0%, 100% { 
+    text-shadow: 4px 0 0 #ff0000, -4px 0 0 #00ffff; 
+    filter: hue-rotate(0deg);
+    transform: translateX(0);
+  }
+  25% { 
+    text-shadow: -5px 0 0 #ff0000, 5px 0 0 #00ffff; 
+    filter: hue-rotate(12deg);
+    transform: translateX(2px);
+  }
+  50% { 
+    text-shadow: 3px 0 0 #ff0000, -3px 0 0 #00ffff; 
+    filter: hue-rotate(-8deg);
+    transform: translateX(-2px);
+  }
+  75% { 
+    text-shadow: -4px 0 0 #ff0000, 4px 0 0 #00ffff; 
+    filter: hue-rotate(5deg);
+    transform: translateX(1px);
+  }
+}
+
+.heroContainer {
+  position: relative;
+  height: 100vh;
+  width: 100%;
+  overflow: hidden;
+  background-color: black;
+}
+
+.backgroundImage {
+  position: absolute;
+  inset: 0;
+  background-size: cover;
+  background-position: center;
+  opacity: 0.65; /* 背景の不透明度を上げる */
+  transition: filter 0.3s, transform 0.2s; /* 5秒から0.3秒に変更 */
+  filter: contrast(1.1) brightness(0.9); /* コントラストを上げる */
+  will-change: transform, filter; /* パフォーマンス最適化 */
+}
+
+/* グリッチ時のスタイル */
+.glitchActive {
+  /* 変化をスムーズではなく、瞬間的に */
+  transition: transform 0.05s linear, filter 0.05s linear !important; 
+}
+
+.darkOverlay {
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(
+    circle at center, 
+    rgba(0, 0, 0, 0.2) 0%, 
+    rgba(0, 0, 0, 0.5) 30%, 
+    rgba(0, 0, 0, 0.9) 70%, 
+    rgba(0, 0, 0, 0.95) 80%
+  );
+  z-index: 1;
+}
+
+.centerLight {
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(
+    circle at center,
+    rgba(0, 255, 127, 0.3) 0%,
+    rgba(0, 255, 127, 0.15) 20%,
+    rgba(0, 0, 0, 0) 50%
+  );
+  z-index: 2;
+  pointer-events: none;
+}
+
+/* メインのノイズレイヤー - 改良版 */
+.mainNoise {
+  position: absolute;
+  inset: 0;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 250 250' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='1'/%3E%3C/svg%3E");
+  opacity: 0.35;
+  mix-blend-mode: overlay;
+  z-index: 3;
+  animation: staticNoise 12s ease infinite; /* ゆっくり、滑らかに */
+  will-change: opacity, background-position; /* パフォーマンス最適化 */
+}
+
+/* グリッチ時のノイズ強調 */
+.noiseIntense {
+  opacity: 0.5;
+  animation: staticNoise 2s linear infinite; /* グリッチ時は速く */
+}
+
+/* 格子状ノイズ */
+.gridNoise {
+  position: absolute;
+  inset: 0;
+  background-repeat: repeat;
+  opacity: 0.5;
+  mix-blend-mode: overlay;
+  background-size: 60px 60px;
+  z-index: 4;
+}
+
+/* 動くノイズ - より良いアニメーション */
+.movingNoise {
+  position: absolute;
+  inset: 0;
+  background-image: url('/images/noisy.webp');
+  background-repeat: repeat;
+  opacity: 0.3;
+  mix-blend-mode: overlay;
+  z-index: 5;
+  animation: staticNoise 15s ease infinite;
+  will-change: background-position; /* パフォーマンス最適化 */
+}
+
+/* RGB分離効果 - 画面全体に適用 */
+.rgbSplit {
+  position: absolute;
+  inset: 0;
+  background-color: transparent;
+  opacity: 0.35; /* より強く */
+  pointer-events: none;
+  z-index: 9;
+  box-shadow: inset 0 0 100px rgba(255,0,0,0.25), inset 0 0 100px rgba(0,255,255,0.25);
+  animation: rgbShift 2s infinite;
+  will-change: box-shadow, filter; /* パフォーマンス最適化 */
+}
+
+/* グリッチ時のRGB強調 */
+.rgbActive {
+  opacity: 0.6; /* 強調 */
+  animation: rgbShiftIntense 0.3s infinite;
+  box-shadow: inset 0 0 200px rgba(255,0,0,0.4), inset 0 0 200px rgba(0,255,255,0.4);
+}
+
+/* スキャンライン */
+.scanlines {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    to bottom,
+    transparent 50%,
+    rgba(0, 255, 127, 0.1) 50%
+  );
+  background-size: 100% 4px; /* 細かいスキャンライン */
+  z-index: 8;
+  pointer-events: none;
+  opacity: 0.5;
+}
+
+/* フラッシュ関連のスタイルは削除 */
+
+/* グリッチブロックエフェクト - 新しいレイヤー */
+.glitchBlocks {
+  position: absolute;
+  inset: 0;
+  background-size: cover;
+  background-position: center;
+  opacity: 0.4;
+  z-index: 7;
+  animation: glitchBlocks 0.2s linear infinite;
+  mix-blend-mode: screen; /* より強調されるブレンドモード */
+  filter: hue-rotate(180deg) saturate(1.8) contrast(1.5); /* 虹色っぽく */
+  will-change: clip-path, transform; /* パフォーマンス最適化 */
+}
+
+/* RGBスライス効果 - 新しいレイヤー */
+.rgbSliceRed {
+  position: absolute;
+  inset: 0;
+  background-size: cover;
+  background-position: center;
+  opacity: 0.5;
+  z-index: 6;
+  mix-blend-mode: screen;
+  filter: saturate(2) contrast(1.2) hue-rotate(-20deg);
+  clip-path: polygon(0 15%, 100% 15%, 100% 45%, 0 45%);
+  will-change: transform;
+}
+
+.rgbSliceBlue {
+  position: absolute;
+  inset: 0;
+  background-size: cover;
+  background-position: center;
+  opacity: 0.5;
+  z-index: 6;
+  mix-blend-mode: screen;
+  filter: saturate(2) contrast(1.2) hue-rotate(180deg);
+  clip-path: polygon(0 55%, 100% 55%, 100% 85%, 0 85%);
+  will-change: transform;
+}
+
+/* グリッチエフェクト用アニメーション */
+@keyframes glitchFlash {
+  0%, 95%, 100% { opacity: 0; background: transparent; }
+  95.5% { opacity: 0.6; background: white; }
+  96% { opacity: 0; background: transparent; }
+  96.5% { opacity: 0.4; background: rgba(0, 255, 127, 0.5); }
+  97% { opacity: 0; background: transparent; }
+}
+
+.contentContainer {
+  position: relative;
+  z-index: 20; /* 他のエフェクトより前面に */
+  display: flex;
+  height: 100%;
+  width: 100%;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 0 1rem;
+  transition: transform 0.1s ease-out;
+}
+
+.titleContainer {
+  text-align: center;
+  filter: drop-shadow(0 0 20px rgba(0, 0, 0, 0.8));
+  position: relative; /* 子要素を配置するため */
+}
+
+.titleGroup {
+  margin-bottom: 1.5rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  position: relative; /* 疑似要素の基準とするため */
+}
+
+/* 以前コメントアウトされていた部分は削除 */

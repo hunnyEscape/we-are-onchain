@@ -108,8 +108,9 @@ const PepeFlavorModel: React.FC<PepeFlavorModelProps> = ({
 		<primitive
 			ref={modelRef}
 			object={scene}
-			scale={0.2}
+			scale={0.55}
 			position={[0, 0, 0]}
+			rotation={[ 0, Math.PI / 4, 0 ]}
 		/>
 	);
 };

@@ -6,7 +6,7 @@ import { useGlitchEffect } from './GlitchEffects';
 import HeroBackground from './HeroBackground';
 import HeroTitle from './HeroTitle';
 import HeroModel from './HeroModel';
-import ScrollSpace from './ScrollSpace';
+import ScrollSpace from '../glowing-3d-text/ScrollSpace';
 
 export const HeroSection: React.FC = () => {
 	const [mousePosition, setMousePosition] = useState({ x: 0, y: 0 });
@@ -47,8 +47,9 @@ export const HeroSection: React.FC = () => {
 				getGlitchStyle={getGlitchStyle}
 			/>
 
-			{/* 3Dモデル（中間レイヤー） */}
-			<div
+			{/* 
+			
+						<div
 				className="absolute inset-0 z-[15] pointer-events-none"
 				style={{
 					transform: midLayerTransform,
@@ -57,6 +58,9 @@ export const HeroSection: React.FC = () => {
 			>
 				<HeroModel />
 			</div>
+
+			*/}
+
 
 			{/* タイトル（前景） */}
 			<div

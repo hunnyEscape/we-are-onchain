@@ -1,36 +1,144 @@
 .section {
-  position: relative;
-  width: 100%;
-  height: 100vh;
-  overflow: hidden;
-  background-color: #000;
-  display: flex;
-  align-items: center;
-  justify-content: center;
+	position: relative;
+	width: 100%;
+	height: 150vh;
+	overflow: hidden;
+	background-color: #000;
+	display: flex;
+	align-items: center;
+	justify-content: center;
 }
 
 .canvasContainer {
-  position: absolute;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
+	position: absolute;
+	top: 0;
+	left: 0;
+	width: 100%;
+	height: 100%;
 }
 
 /* モデルがロードされる前のローディング表示用 */
 .loading {
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%);
-  color: #5CFF5C;
-  font-family: 'Orbitron', sans-serif;
-  font-size: 1.5rem;
+	position: absolute;
+	top: 50%;
+	left: 50%;
+	transform: translate(-50%, -50%);
+	color: #5CFF5C;
+	font-family: 'Orbitron', sans-serif;
+	font-size: 1.5rem;
 }
 
 /* フルスクリーン表示時の調整 */
 @media (max-height: 500px) {
-  .section {
-    height: 120vh; /* モバイル横向きなどでも十分な高さを確保 */
-  }
+	.section {
+		height: 120vh;
+		/* モバイル横向きなどでも十分な高さを確保 */
+	}
+}
+
+.cyberpunkTextContainer {
+	position: relative;
+	padding: 2rem;
+	background: rgba(0, 0, 0, 0.7);
+	border: 1px solid #00ff41;
+	box-shadow: 0 0 20px rgba(0, 255, 65, 0.5);
+	z-index: 10;
+	overflow: hidden;
+	margin: 2rem auto;
+	max-width: 90%;
+}
+
+.cyberpunkGlitch {
+	font-family: 'Blender Pro', sans-serif;
+	font-size: 2rem;
+	color: #ff003c;
+	text-shadow: 0 0 5px #ff003c, 0 0 10px #ff003c;
+	position: relative;
+	margin-bottom: 1rem;
+	letter-spacing: 2px;
+}
+
+.cyberpunkGlitch::before {
+	content: attr(data-text);
+	position: absolute;
+	left: -2px;
+	text-shadow: 2px 0 #00fff2;
+	top: 0;
+	color: #ff003c;
+	overflow: hidden;
+	clip: rect(0, 900px, 0, 0);
+	animation: cyberpunk-noise-anim 3s infinite linear alternate-reverse;
+}
+
+.cyberpunkGlitch::after {
+	content: attr(data-text);
+	position: absolute;
+	left: 2px;
+	text-shadow: -2px 0 #ff00a0;
+	top: 0;
+	color: #ff003c;
+	overflow: hidden;
+	clip: rect(0, 900px, 0, 0);
+	animation: cyberpunk-noise-anim 2s infinite linear alternate-reverse;
+}
+
+.cyberpunkTagline {
+	font-family: 'Rajdhani', sans-serif;
+	font-size: 1.5rem;
+	line-height: 1.4;
+	letter-spacing: 1px;
+}
+
+.neonText {
+	color: #fff;
+	text-shadow: 0 0 5px rgba(255, 255, 255, 0.8);
+}
+
+.hackText {
+	color: #00ff41;
+	font-weight: bold;
+	text-shadow: 0 0 5px #00ff41, 0 0 10px #00ff41;
+	border-bottom: 1px solid #00ff41;
+	padding: 0 4px;
+}
+
+.glitchText {
+	color: #ff00a0;
+	font-weight: bold;
+	text-shadow: 0 0 5px #ff00a0, 0 0 10px #ff00a0;
+	border-bottom: 1px solid #ff00a0;
+	padding: 0 4px;
+}
+
+.scanline {
+	position: absolute;
+	top: 0;
+	left: 0;
+	width: 100%;
+	height: 100%;
+	background: linear-gradient(to bottom,
+			transparent 50%,
+			rgba(0, 255, 65, 0.05) 50%);
+	background-size: 100% 4px;
+	z-index: -1;
+	pointer-events: none;
+}
+
+@keyframes cyberpunk-noise-anim {
+	0% {
+		clip: rect(12px, 9999px, 25px, 0);
+	}
+
+	5% {
+		clip: rect(45px, 9999px, 65px, 0);
+	}
+
+	10% {
+		clip: rect(38px, 9999px, 92px, 0);
+	}
+
+	/* Add more keyframes as desired */
+	100% {
+		clip: rect(78px, 9999px, 103px, 0);
+	}
 }

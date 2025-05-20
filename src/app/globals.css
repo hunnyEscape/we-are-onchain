@@ -8,7 +8,9 @@
 	--neon-green: 0, 255, 127;
 	--neon-orange: 255, 109, 0;
 }
-
+html {
+  scroll-behavior: smooth;
+}
 @keyframes flicker {
 
 	0%,

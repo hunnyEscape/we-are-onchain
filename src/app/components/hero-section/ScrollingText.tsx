@@ -38,10 +38,10 @@ const ScrollingText: React.FC<ScrollingTextProps> = ({ className }) => {
   
   // アスペクト比に基づいて移動距離を調整
   // 横長の画面なら長い距離を移動させる
-  const endX = `-${150 + (screenAspect > 1 ? (screenAspect - 1) * 100 : 0)}%`;
+  const endX = `-${180 + (screenAspect > 1 ? (screenAspect - 1) * 50 : 0)}%`;
   
   // 右から左へのアニメーション - スクロールに応じてX位置を変更
-  const xPos = useTransform(scrollYProgress, [0, 1], ['100vw', endX]);
+  const xPos = useTransform(scrollYProgress, [0, 1], ['120vw', endX]);
   
   // スクロールによるテキストの不透明度変化
   const opacity = useTransform(
@@ -75,7 +75,7 @@ const ScrollingText: React.FC<ScrollingTextProps> = ({ className }) => {
           scale,
           ...(glitchState.active ? getGlitchStyle() : {}) 
         }}
-        className={`${styles.textContainer} text-5xl md:text-6xl lg:text-8xl font-bold py-8 px-4 z-10`}
+        className={`${styles.textContainer} text-4xl md:text-5xl lg:text-8xl font-bold py-8 px-4 z-10`}
       >
         <span className={`${styles.cyberText} text-neonGreen font-mono`}>
           <GlitchText 

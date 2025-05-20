@@ -35,7 +35,7 @@ const SelfCustodySection: React.FC = () => {
 
           {/* Key highlighted line with glitch and custom line break */}
           <KeyLine
-            text={`セルフカストディアンの戦士たちへ―魂を呼び覚ませ`}
+            text={`セルフカストディアンの戦士よ―魂を呼び覚ませ`}
             colorClass="text-neonGreen font-heading text-[7vw]"
             borderClass="border-l-2 border-neonGreen"
           />
@@ -50,10 +50,10 @@ const SelfCustodySection: React.FC = () => {
         }
         @keyframes glitchRainbow {
           0%,100% { text-shadow: none; }
-          20% { text-shadow: 1px 0 #f00, -1px 0 #0ff; }
-          40% { text-shadow: 1px 0 #ff0, -1px 0 #00f; }
-          60% { text-shadow: 1px 0 #0f0, -1px 0 #f0f; }
-          80% { text-shadow: 1px 0 #f0f, -1px 0 #ff0; }
+          20% { text-shadow: 4px 0 #f00, -4px 0 #0ff; }
+          40% { text-shadow: 4px 0 #ff0, -4px 0 #00f; }
+          60% { text-shadow: 4px 0 #0f0, -4px 0 #f0f; }
+          80% { text-shadow: 4px 0 #f0f, -4px 0 #ff0; }
         }
       `}</style>
     </section>

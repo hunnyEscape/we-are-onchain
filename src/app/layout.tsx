@@ -1,7 +1,7 @@
 import { Montserrat, Space_Grotesk } from 'next/font/google';
 import './globals.css';
 import type { Metadata } from 'next';
-
+import SmoothScroll from './components/layout/SmoothScroll';
 // フォントの設定
 const montserrat = Montserrat({
 	subsets: ['latin'],
@@ -30,7 +30,9 @@ export default function RootLayout({
 	return (
 		<html lang="en" className={`${montserrat.variable} ${spaceGrotesk.variable}`}>
 			<body className="bg-black text-white min-h-screen font-sans antialiased">
-				{children}
+				<SmoothScroll>
+					{children}
+				</SmoothScroll>
 			</body>
 		</html>
 	);

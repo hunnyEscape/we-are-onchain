@@ -1,4 +1,3 @@
-// src/app/components/hero-section/HeroSection.tsx
 'use client';
 import React, { useState, useEffect } from 'react';
 import ScanlineEffect from '../ui/ScanlineEffect';
@@ -7,7 +6,7 @@ import { useGlitchEffect } from './GlitchEffects';
 import HeroBackground from './HeroBackground';
 import HeroTitle from './HeroTitle';
 import HeroModel from './HeroModel';
-import ProteinStory from './ProteinStory';
+import ScrollingText from './ScrollingText'; // ProteinStoryをScrollingTextに変更
 
 export const HeroSection: React.FC = () => {
 	const [mousePosition, setMousePosition] = useState({ x: 0, y: 0 });
@@ -39,11 +38,11 @@ export const HeroSection: React.FC = () => {
   `;
 
 	return (
-		/**
+		/** 
 		 * ┌──────────────────────── wrapper ────────────────────────┐
 		 * │ sticky(100vh) = ヒーロー                                   │
 		 * │ ↓                                                       │
-		 * │ normal flow            = プロテインストーリー             │
+		 * │ normal flow            = スクロールテキスト               │
 		 * └──────────────────────────────────────────────────────────┘
 		 */
 		<div className="relative">
@@ -83,9 +82,9 @@ export const HeroSection: React.FC = () => {
 				<ScanlineEffect />
 			</div>
 
-			{/* ────── 以下は通常スクロールで流れる部分 ───── */}
+			{/* ────── 以下は通常スクロールで流れる部分 ────── */}
 			<section className="bg-gradient-to-b from-transparent to-black">
-				<ProteinStory />
+				<ScrollingText /> {/* ProteinStoryをScrollingTextに変更 */}
 			</section>
 		</div>
 	);

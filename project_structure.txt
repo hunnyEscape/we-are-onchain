@@ -14,10 +14,8 @@
 │   ├── file.svg
 │   ├── globe.svg
 │   ├── images
-│   │   ├── cyberpunk-cityscape.png
 │   │   ├── noisy.webp
-│   │   ├── noisy_grid.webp
-│   │   └── pepe-cyberpunk.png
+│   │   └── noisy_grid.webp
 │   ├── models
 │   │   ├── pepe.glb
 │   │   └── protein_powder.glb
@@ -40,15 +38,27 @@
 │       │   │   ├── HeroSection.module.css
 │       │   │   ├── HeroSection.tsx
 │       │   │   ├── HeroTitle.tsx
-│       │   │   └── ProteinStory.tsx
+│       │   │   └── ScrollSpace.tsx
 │       │   ├── layout
-│       │   │   └── Navbar.tsx
+│       │   │   ├── Navbar.tsx
+│       │   │   └── SmoothScroll.tsx
+│       │   ├── matrix-scroll
+│       │   │   ├── MatrixScroll.module.css
+│       │   │   └── MatrixScrollContainer.tsx
 │       │   ├── pepe3d
 │       │   │   ├── PepeModel3D.tsx
-│       │   │   └── PepeStyles.module.css
+│       │   │   ├── PepeStyles.module.css
+│       │   │   ├── PepeTop.tsx
+│       │   │   └── ScrollMessage.tsx
+│       │   ├── sphere
+│       │   │   ├── MessageOverlay.tsx
+│       │   │   ├── SmoothRotation.tsx
+│       │   │   ├── Sphere.module.css
+│       │   │   ├── Sphere.tsx
+│       │   │   └── SphereTop.tsx
 │       │   └── ui
-│       │       ├── CyberBox.tsx
 │       │       ├── GlitchText.tsx
+│       │       ├── ScanlineEffect.module.css
 │       │       └── ScanlineEffect.tsx
 │       ├── favicon.ico
 │       ├── globals.css
@@ -57,4 +67,4 @@
 ├── tailwind.config.js
 └── tsconfig.json
 
-12 directories, 45 files
+14 directories, 53 files

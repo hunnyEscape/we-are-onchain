@@ -3,12 +3,12 @@ import SphereTop from './components/sphere/SphereTop';
 import PepeTop from './components/pepe3d/PepeTop';
 import ScrollSpace from './components/hero-section/ScrollSpace';
 import CyberTextRevealSection from './components/cyber-text-reveal/CyberTextRevealSection';
+import GlowingTextSection from './components/glowing-3d-text/GlowingTextSection';
 export default function Home() {
 	return (
 		<main className="relative">
 			<HeroSection/>
-			<ScrollSpace />
-			<CyberTextRevealSection />
+			<GlowingTextSection /> 
 			<PepeTop/>
 			<SphereTop />
 			<div

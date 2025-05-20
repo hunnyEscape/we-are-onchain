@@ -1,12 +1,13 @@
 import HeroSection from './components/hero-section/HeroSection';
 import SphereTop from './components/sphere/SphereTop';
 import PepeTop from './components/pepe3d/PepeTop';
-
+import ScrollSpace from './components/hero-section/ScrollSpace';
 export default function Home() {
 	return (
 		<main className="relative">
-			<HeroSection />
-			<PepeTop />
+			<HeroSection/>
+			<ScrollSpace />
+			<PepeTop/>
 			<SphereTop />
 			<div
 				className="h-screen w-full bg-cover bg-center"

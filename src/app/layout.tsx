@@ -30,9 +30,9 @@ export default function RootLayout({
 	return (
 		<html lang="en" className={`${montserrat.variable} ${spaceGrotesk.variable}`}>
 			<body className="bg-black text-white min-h-screen font-sans antialiased">
-				<SmoothScroll>
+	
 					{children}
-				</SmoothScroll>
+		
 			</body>
 		</html>
 	);

@@ -33,8 +33,6 @@ export const HeroBackground: React.FC<HeroBackgroundProps> = ({
           )
         }}
       />
-
-      {/* 暗いオーバーレイ - 少し動く */}
       <div
         className={styles.darkOverlay}
         style={{

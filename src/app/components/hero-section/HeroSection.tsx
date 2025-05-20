@@ -6,8 +6,7 @@ import { useGlitchEffect } from './GlitchEffects';
 import HeroBackground from './HeroBackground';
 import HeroTitle from './HeroTitle';
 import HeroModel from './HeroModel';
-import ScrollingText from './ScrollingText'; // ProteinStoryをScrollingTextに変更
-import ScrollSpace from './ScrollSpace'; // スクロールスペースを追加
+import ScrollSpace from './ScrollSpace';
 
 export const HeroSection: React.FC = () => {
 	const [mousePosition, setMousePosition] = useState({ x: 0, y: 0 });
@@ -39,59 +38,41 @@ export const HeroSection: React.FC = () => {
   `;
 
 	return (
-		/** 
-		 * ┌──────────────────────── wrapper ────────────────────────┐
-		 * │ sticky(100vh) = ヒーロー                                   │
-		 * │ ↓                                                       │
-		 * │ ScrollingText = 右から左へ流れるテキスト                   │
-		 * │ ↓                                                       │
-		 * │ ScrollSpace   = スクロールスペース                         │
-		 * └──────────────────────────────────────────────────────────┘
-		 */
-		<div className="relative">
-			{/* ────── ビューポートに貼り付ける部分 ────── */}
-			<div className="sticky top-0 h-screen overflow-hidden">
-				{/* 背景 & エフェクト */}
-				<HeroBackground
-					backgroundTransform={backgroundTransform}
-					midLayerTransform={midLayerTransform}
-					glitchState={glitchState}
-					getGlitchStyle={getGlitchStyle}
-				/>
+		<div className="sticky top-0 h-screen overflow-hidden">
+			{/* 背景 & エフェクト */}
+			<HeroBackground
+				backgroundTransform={backgroundTransform}
+				midLayerTransform={midLayerTransform}
+				glitchState={glitchState}
+				getGlitchStyle={getGlitchStyle}
+			/>
 
-				{/* 3Dモデル（中間レイヤー） */}
-				<div
-					className="absolute inset-0 z-[15] pointer-events-none"
-					style={{
-						transform: midLayerTransform,
-						transition: 'transform 1.5s ease-out',
-					}}
-				>
-					<HeroModel />
-				</div>
-
-				{/* タイトル（前景） */}
-				<div
-					className={styles.contentContainer}
-					style={{
-						transform: foregroundTransform,
-						transition: 'transform 0.5s ease-out',
-					}}
-				>
-					<HeroTitle />
-				</div>
-
-				{/* スキャンライン */}
-				<ScanlineEffect />
+			{/* 3Dモデル（中間レイヤー） */}
+			<div
+				className="absolute inset-0 z-[15] pointer-events-none"
+				style={{
+					transform: midLayerTransform,
+					transition: 'transform 1.5s ease-out',
+				}}
+			>
+				<HeroModel />
 			</div>
 
-			{/* ────── 以下は通常スクロールで流れる部分 ────── */}
-			{/* 右から左へ流れるスクロールテキスト */}
-			<ScrollingText />
-			
-			{/* スクロールスペース - アニメーション表示用 */}
-			<ScrollSpace />
+			{/* タイトル（前景） */}
+			<div
+				className={styles.contentContainer}
+				style={{
+					transform: foregroundTransform,
+					transition: 'transform 0.5s ease-out',
+				}}
+			>
+				<HeroTitle />
+			</div>
+
+			{/* スキャンライン */}
+			<ScanlineEffect />
 		</div>
+
 	);
 };
 

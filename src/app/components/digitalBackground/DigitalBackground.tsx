@@ -1,16 +1,12 @@
 'use client';
 import React, { useRef, useState, useEffect } from 'react';
 import styles from './SphereStyles.module.css';
-import RotatingSphere from './RotatingSphere';
+import DigitalEnvironment from './DigitalEnvironment';
 import StoryOverlay from './StoryOverlay';
 import ScrollProgress from './ScrollProgress';
 
-interface SphereBackgroundProps {
-  backgroundImage?: string;
-  sphereTexture?: string;
-  wireframe?: boolean;
-  color?: string;
-  sphereSize?: number;
+interface DigitalBackgroundProps {
+  environmentTexture: string;
   showProgress?: boolean;
   progressColor?: string;
   progressPosition?: 'top' | 'bottom' | 'left' | 'right';
@@ -19,12 +15,8 @@ interface SphereBackgroundProps {
   enableControls?: boolean;
 }
 
-const SphereBackground: React.FC<SphereBackgroundProps> = ({
-  backgroundImage,
-  sphereTexture,
-  wireframe = false, // デフォルトでワイヤーフレームをオフに
-  color = '#00ff9f',
-  sphereSize = 2.5, // 球体サイズを大きく
+const DigitalBackground: React.FC<DigitalBackgroundProps> = ({
+  environmentTexture,
   showProgress = true,
   progressColor = '#00ff9f',
   progressPosition = 'bottom',
@@ -43,11 +35,9 @@ const SphereBackground: React.FC<SphereBackgroundProps> = ({
   // サーバーサイドレンダリング対策
   useEffect(() => {
     setIsClient(true);
-    console.log("SphereBackground mounted on client");
-    console.log("sphereTexture:", sphereTexture);
-    console.log("backgroundImage:", backgroundImage);
-    console.log("wireframe setting:", wireframe);
-  }, [sphereTexture, backgroundImage, wireframe]);
+    console.log("DigitalBackground mounted on client");
+    console.log("Environment texture:", environmentTexture);
+  }, [environmentTexture]);
   
   // 要素への参照
   const containerRef = useRef<HTMLDivElement>(null);
@@ -101,10 +91,9 @@ const SphereBackground: React.FC<SphereBackgroundProps> = ({
     setVisibilityRatio(Math.max(0, Math.min(1, ratio)));
     setIsVisible(ratio > 0);
     
-    // 回転値の計算 - スクロール位置に基づいて回転
-    // スクロール位置をラジアンに変換（複数回転するように乗数を調整）
+    // 回転値の計算 - スクロール位置に基づいて回転（非常にゆっくりに）
     const scrollPosition = window.scrollY;
-    const rotationSpeed = 0.001; // 回転速度調整
+    const rotationSpeed = 0.0003; // 回転速度調整（さらに遅く）
     setRotationValue(scrollPosition * rotationSpeed);
     setScrollY(scrollPosition);
   };
@@ -154,7 +143,7 @@ const SphereBackground: React.FC<SphereBackgroundProps> = ({
         />
       )}
       
-      {/* Pepeモデルと同様の構造で実装 */}
+      {/* Matrixスタイルの環境表示 */}
       <div className={`${styles.modelContainer} ${className}`}>
         {/* サイバーパンク風装飾ライン */}
         <div className={`${styles.decorLine} ${styles.decorLineTop}`}></div>
@@ -166,19 +155,17 @@ const SphereBackground: React.FC<SphereBackgroundProps> = ({
           className={styles.stickyContainer}
           style={{ 
             opacity: visibilityRatio,
-            transform: `scale(${0.8 + visibilityRatio * 0.2})`,
+            // 変形を除去して、完全な没入感を得る（スケーリングなし）
+            transform: 'none',
           }}
         >
-          {/* 球体表示エリア - 重要な設定を明示的に渡す */}
+          {/* デジタル環境表示 */}
           {isVisible && (
-            <RotatingSphere
+            <DigitalEnvironment
               rotationValue={rotationValue}
-              backgroundImage={backgroundImage}
-              sphereTexture={sphereTexture || backgroundImage} // テクスチャがなければ背景と同じものを使用
-              wireframe={wireframe}
-              color={color}
-              size={sphereSize}
+              environmentTexture={environmentTexture}
               enableControls={enableControls}
+              showTextOverlay={false} // テキストオーバーレイはStoryOverlayで代用
             />
           )}
           
@@ -192,7 +179,7 @@ const SphereBackground: React.FC<SphereBackgroundProps> = ({
         
         {/* 情報オーバーレイ */}
         <div className={styles.infoOverlay}>
-          SPHERE: BLOCKCHAIN v1.0
+          MATRIX: BLOCKCHAIN v1.0
         </div>
       </div>
       
@@ -213,13 +200,12 @@ const SphereBackground: React.FC<SphereBackgroundProps> = ({
           scrollY: {scrollY}px<br/>
           visible: {isVisible ? 'true' : 'false'}<br/>
           ratio: {visibilityRatio.toFixed(2)}<br/>
-          rotation: {rotationValue.toFixed(2)}<br/>
-          sphere: {sphereTexture ? 'yes' : 'no'}<br/>
-          wireframe: {wireframe ? 'on' : 'off'}
+          rotation: {rotationValue.toFixed(4)}<br/>
+          texture: {environmentTexture ? 'yes' : 'no'}
         </div>
       )}
     </div>
   );
 };
 
-export default SphereBackground;
+export default DigitalBackground;

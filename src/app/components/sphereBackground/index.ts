@@ -1,10 +1,25 @@
 // sphereBackground/index.ts
 // エクスポートファイル - インポートを簡略化するため
 
-export { default as SphereBackground } from './SphereBackground';
-export { default as RotatingSphere } from './RotatingSphere';
-export { default as StoryOverlay } from './StoryOverlay';
-export { default as ScrollProgress } from './ScrollProgress';
+import SphereBackground from './SphereBackground';
+import RotatingSphere from './RotatingSphere';
+import StoryOverlay from './StoryOverlay';
+import ScrollProgress from './ScrollProgress';
 
-// 型定義もエクスポート
-export type { default as StorySection } from './StoryOverlay';
+export { 
+  SphereBackground,
+  RotatingSphere,
+  StoryOverlay,
+  ScrollProgress
+};
+
+// 型定義も必要に応じてエクスポート
+export type { StorySection } from './StoryOverlay';
+
+// StorySection型を正しくエクスポート
+interface StorySection {
+  id: number;
+  title: string;
+  content: string;
+  triggerPoint: number;
+}

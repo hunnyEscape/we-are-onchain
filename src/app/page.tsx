@@ -3,18 +3,15 @@ import HeroSection from './components/hero-section/HeroSection';
 import ModelDebug from './components/debug/ModelDebug';
 import PepeModel from './components/3d/PepeModel';
 import PepeModelImproved from './components/3d/PepeModelImproved';
-import PepeModel3D from './components/pepe3d/PepeModel3D';
+import Sphere from './components/sphere/Sphere';
 import DigitalBackground from './components/digitalBackground/DigitalBackground';
-import SphereBackground from './components/sphereBackground/SphereBackground';
 export default function Home() {
 	return (
 		<main className="min-h-screen">
 			<HeroSection />
-
 			<div className="h-[100vh] w-full border border-green-500 rounded-lg overflow-hidden bg-gradient-to-b from-gray-900 to-black">
-				<SphereBackground enableControls={true} rotationSpeed={0.5} backgroundImage={`${process.env.NEXT_PUBLIC_CLOUDFRONT_URL}/cyberpunk-cityscape.webp`} useDefaultEnvironment={false} />
+				<Sphere enableControls={true} rotationSpeed={0.5} backgroundImage={`${process.env.NEXT_PUBLIC_CLOUDFRONT_URL}/cyberpunk-cityscape.webp`} useDefaultEnvironment={false} />
 			</div>
-	
 		</main>
 	);
 }

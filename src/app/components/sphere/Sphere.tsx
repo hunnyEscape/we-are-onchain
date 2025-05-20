@@ -3,7 +3,7 @@ import React, { useRef, useState, useEffect } from 'react';
 import { useGLTF, Environment, PerspectiveCamera, OrbitControls } from '@react-three/drei';
 import { useFrame, Canvas } from '@react-three/fiber';
 import * as THREE from 'three';
-import styles from './sphereBackground.module.css';
+import styles from './Sphere.module.css';
 
 // エラーバウンダリーコンポーネント
 interface ErrorBoundaryProps {
@@ -39,6 +39,7 @@ interface PepeContainerProps {
 	autoRotate?: boolean;
 	rotationSpeed?: number;
 }
+
 // 背景用の球体コンポーネント
 const BackgroundSphere = ({ backgroundImage }) => {
 	const texture = new THREE.TextureLoader().load(backgroundImage);
@@ -64,7 +65,7 @@ interface PepeModel3DProps {
 	useDefaultEnvironment?: boolean; // デフォルト環境マップを使用するかどうか
 }
 
-const SphereBackground: React.FC<PepeModel3DProps> = ({
+const Sphere: React.FC<PepeModel3DProps> = ({
 	className = '',
 	autoRotate = true,
 	enableControls = false,
@@ -161,7 +162,7 @@ const SphereBackground: React.FC<PepeModel3DProps> = ({
 	);
 };
 
-export default SphereBackground;
+export default Sphere;
 
 // グローバルにモデルをプリロード
 useGLTF.preload('/models/pepe.glb');

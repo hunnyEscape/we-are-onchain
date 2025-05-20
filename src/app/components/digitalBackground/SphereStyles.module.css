@@ -1,4 +1,5 @@
-/* SphereStyles.module.css */
+/* SphereStyles.module.css - 修正版 */
+
 .modelContainer {
   width: 100%;
   height: 100%;
@@ -27,6 +28,12 @@
   height: 100vh;
   overflow: hidden;
   z-index: 0;
+  /* 重要: transform-style を追加して3D変換を適切に処理 */
+  transform-style: preserve-3d;
+  /* 重要: will-change を追加してGPUアクセラレーションを促進 */
+  will-change: transform, opacity;
+  /* backface-visibility を設定 */
+  backface-visibility: hidden;
 }
 
 .sphereWrapper {

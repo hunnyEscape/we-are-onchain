@@ -1,225 +1,167 @@
 'use client';
 import React, { useRef, useState, useEffect } from 'react';
-import styles from './SphereStyles.module.css';
-import RotatingSphere from './RotatingSphere';
-import StoryOverlay from './StoryOverlay';
-import ScrollProgress from './ScrollProgress';
+import { useGLTF, Environment, PerspectiveCamera, OrbitControls } from '@react-three/drei';
+import { useFrame, Canvas } from '@react-three/fiber';
+import * as THREE from 'three';
+import styles from './sphereBackground.module.css';
 
-interface SphereBackgroundProps {
-  backgroundImage?: string;
-  sphereTexture?: string;
-  wireframe?: boolean;
-  color?: string;
-  sphereSize?: number;
-  showProgress?: boolean;
-  progressColor?: string;
-  progressPosition?: 'top' | 'bottom' | 'left' | 'right';
-  customStoryData?: any[]; // StorySection[] 型は StoryOverlay から取得
-  className?: string;
-  enableControls?: boolean;
+// エラーバウンダリーコンポーネント
+interface ErrorBoundaryProps {
+	children: React.ReactNode;
+	fallback: React.ReactNode;
 }
 
-const SphereBackground: React.FC<SphereBackgroundProps> = ({
-  backgroundImage,
-  sphereTexture,
-  wireframe = false, // デフォルトでワイヤーフレームをオフに
-  color = '#00ff9f',
-  sphereSize = 2.5, // 球体サイズを大きく
-  showProgress = true,
-  progressColor = '#00ff9f',
-  progressPosition = 'bottom',
-  customStoryData,
-  className = '',
-  enableControls = false,
+interface ErrorBoundaryState {
+	hasError: boolean;
+	error?: Error;
+}
+
+class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoundaryState> {
+	constructor(props: ErrorBoundaryProps) {
+		super(props);
+		this.state = { hasError: false };
+	}
+
+	static getDerivedStateFromError(error: Error) {
+		return { hasError: true, error };
+	}
+
+	render() {
+		if (this.state.hasError) {
+			return this.props.fallback;
+		}
+		return this.props.children;
+	}
+}
+
+// Pepeモデルコンテナコンポーネント
+interface PepeContainerProps {
+	autoRotate?: boolean;
+	rotationSpeed?: number;
+}
+// 背景用の球体コンポーネント
+const BackgroundSphere = ({ backgroundImage }) => {
+	const texture = new THREE.TextureLoader().load(backgroundImage);
+	texture.mapping = THREE.EquirectangularReflectionMapping;
+	texture.encoding = THREE.sRGBEncoding;
+
+	return (
+		<mesh>
+			{/* この部分のサイズを小さくします。元は [50, 64, 64] */}
+			<sphereGeometry args={[2, 64, 64]} />
+			<meshBasicMaterial map={texture} side={THREE.BackSide} />
+		</mesh>
+	);
+};
+
+// メインのエクスポートコンポーネント
+interface PepeModel3DProps {
+	className?: string;
+	autoRotate?: boolean;
+	enableControls?: boolean; // マウスによる水平回転（Y軸周り）操作を許可するかどうか
+	rotationSpeed?: number;
+	backgroundImage?: string; // カスタム背景画像のパス
+	useDefaultEnvironment?: boolean; // デフォルト環境マップを使用するかどうか
+}
+
+const SphereBackground: React.FC<PepeModel3DProps> = ({
+	className = '',
+	autoRotate = true,
+	enableControls = false,
+	rotationSpeed = 0.3,
+	backgroundImage = '',
+	useDefaultEnvironment = true
 }) => {
-  // スクロール関連の状態
-  const [scrollY, setScrollY] = useState(0);
-  const [rotationValue, setRotationValue] = useState(0);
-  const [visibilityRatio, setVisibilityRatio] = useState(0);
-  const [isVisible, setIsVisible] = useState(false);
-  const [totalHeight, setTotalHeight] = useState(0);
-  const [isClient, setIsClient] = useState(false);
-  
-  // サーバーサイドレンダリング対策
-  useEffect(() => {
-    setIsClient(true);
-    console.log("SphereBackground mounted on client");
-    console.log("sphereTexture:", sphereTexture);
-    console.log("backgroundImage:", backgroundImage);
-    console.log("wireframe setting:", wireframe);
-  }, [sphereTexture, backgroundImage, wireframe]);
-  
-  // 要素への参照
-  const containerRef = useRef<HTMLDivElement>(null);
-  const sectionRef = useRef<HTMLDivElement>(null);
-  
-  // 初期化時に高さを設定
-  useEffect(() => {
-    if (sectionRef.current) {
-      setTotalHeight(sectionRef.current.scrollHeight);
-      console.log("Total height set:", sectionRef.current.scrollHeight);
-    }
-  }, []);
-  
-  // スクロール位置に基づく計算
-  const calculateValues = () => {
-    if (!sectionRef.current) return;
-    
-    const sectionRect = sectionRef.current.getBoundingClientRect();
-    const sectionTop = sectionRect.top;
-    const sectionHeight = sectionRect.height;
-    const viewportHeight = window.innerHeight;
-    
-    // セクションの総高さを更新
-    setTotalHeight(sectionHeight);
-    
-    // 表示開始位置（画面下から徐々に表示）
-    const appearThreshold = viewportHeight; 
-    
-    // 完全に表示される位置
-    const fullyVisibleThreshold = viewportHeight / 2;
-    
-    // 消失開始位置（セクション終了の少し前から）
-    const disappearStart = -(sectionHeight - viewportHeight * 2);
-    
-    // 表示比率の計算
-    let ratio = 0;
-    
-    if (sectionTop <= appearThreshold && sectionTop >= fullyVisibleThreshold) {
-      // 徐々に表示
-      ratio = (appearThreshold - sectionTop) / (appearThreshold - fullyVisibleThreshold);
-    } else if (sectionTop < fullyVisibleThreshold && sectionTop > disappearStart) {
-      // 完全表示
-      ratio = 1;
-    } else if (sectionTop <= disappearStart) {
-      // 徐々に消失
-      const disappearProgress = Math.min(-(sectionTop - disappearStart) / viewportHeight, 1);
-      ratio = 1 - disappearProgress;
-    }
-    
-    // 値の設定
-    setVisibilityRatio(Math.max(0, Math.min(1, ratio)));
-    setIsVisible(ratio > 0);
-    
-    // 回転値の計算 - スクロール位置に基づいて回転
-    // スクロール位置をラジアンに変換（複数回転するように乗数を調整）
-    const scrollPosition = window.scrollY;
-    const rotationSpeed = 0.001; // 回転速度調整
-    setRotationValue(scrollPosition * rotationSpeed);
-    setScrollY(scrollPosition);
-  };
-  
-  // スクロールイベントの監視
-  useEffect(() => {
-    const handleScroll = () => {
-      // スクロール位置が変わるたびに値を計算
-      calculateValues();
-    };
-    
-    // 初期計算
-    calculateValues();
-    
-    // イベントリスナーの登録
-    window.addEventListener('scroll', handleScroll, { passive: true });
-    window.addEventListener('resize', calculateValues);
-    
-    return () => {
-      // クリーンアップ
-      window.removeEventListener('scroll', handleScroll);
-      window.removeEventListener('resize', calculateValues);
-    };
-  }, []);
-  
-  // ローディング表示（サーバーサイドレンダリング対策）
-  if (!isClient) {
-    return (
-      <div ref={sectionRef} className={styles.storySection}>
-        <div className={styles.loadingIndicator}>
-          <div className={styles.loadingSpinner}></div>
-          <span>Loading...</span>
-        </div>
-      </div>
-    );
-  }
-  
-  return (
-    <div ref={sectionRef} className={styles.storySection}>
-      {/* スクロールプログレス表示 (オプション) */}
-      {showProgress && (
-        <ScrollProgress 
-          scrollY={scrollY}
-          totalHeight={totalHeight}
-          color={progressColor}
-          position={progressPosition}
-        />
-      )}
-      
-      {/* Pepeモデルと同様の構造で実装 */}
-      <div className={`${styles.modelContainer} ${className}`}>
-        {/* サイバーパンク風装飾ライン */}
-        <div className={`${styles.decorLine} ${styles.decorLineTop}`}></div>
-        <div className={`${styles.decorLine} ${styles.decorLineBottom}`}></div>
-        
-        {/* Sticky位置固定 */}
-        <div 
-          ref={containerRef}
-          className={styles.stickyContainer}
-          style={{ 
-            opacity: visibilityRatio,
-            transform: `scale(${0.8 + visibilityRatio * 0.2})`,
-          }}
-        >
-          {/* 球体表示エリア - 重要な設定を明示的に渡す */}
-          {isVisible && (
-            <RotatingSphere
-              rotationValue={rotationValue}
-              backgroundImage={backgroundImage}
-              sphereTexture={sphereTexture || backgroundImage} // テクスチャがなければ背景と同じものを使用
-              wireframe={wireframe}
-              color={color}
-              size={sphereSize}
-              enableControls={enableControls}
-            />
-          )}
-          
-          {/* ストーリーオーバーレイ */}
-          <StoryOverlay 
-            scrollY={scrollY} 
-            totalHeight={totalHeight}
-            storyData={customStoryData}
-          />
-        </div>
-        
-        {/* 情報オーバーレイ */}
-        <div className={styles.infoOverlay}>
-          SPHERE: BLOCKCHAIN v1.0
-        </div>
-      </div>
-      
-      {/* デバッグ情報表示 (開発環境のみ) */}
-      {process.env.NODE_ENV === 'development' && (
-        <div style={{ 
-          position: 'fixed', 
-          bottom: '80px', 
-          right: '10px', 
-          background: 'rgba(0,0,0,0.7)', 
-          color: '#00ff9f', 
-          padding: '10px', 
-          borderRadius: '5px',
-          zIndex: 9999,
-          fontSize: '12px',
-          pointerEvents: 'none',
-        }}>
-          scrollY: {scrollY}px<br/>
-          visible: {isVisible ? 'true' : 'false'}<br/>
-          ratio: {visibilityRatio.toFixed(2)}<br/>
-          rotation: {rotationValue.toFixed(2)}<br/>
-          sphere: {sphereTexture ? 'yes' : 'no'}<br/>
-          wireframe: {wireframe ? 'on' : 'off'}
-        </div>
-      )}
-    </div>
-  );
+	const [isClient, setIsClient] = useState(false);
+	const [isHdrBackground, setIsHdrBackground] = useState(false);
+
+	// サーバーサイドレンダリング対策
+	useEffect(() => {
+		setIsClient(true);
+		// HDRファイルかどうかを確認
+		if (backgroundImage && backgroundImage.toLowerCase().endsWith('.hdr')) {
+			setIsHdrBackground(true);
+		}
+	}, [backgroundImage]);
+
+	if (!isClient) {
+		return (
+			<div className={`${styles.modelContainer} ${className}`}>
+				<div className={styles.loadingIndicator}>
+					<div className={styles.loadingSpinner}></div>
+					<span>Loading Model...</span>
+				</div>
+			</div>
+		);
+	}
+
+	// 背景画像がCSSで設定される場合はスタイルを追加
+	const containerStyle = {};
+
+	return (
+		<div
+			className={`${styles.modelContainer} ${className}`}
+			style={containerStyle}
+		>
+			{/* サイバーパンク風の装飾 */}
+			<div className={`${styles.decorLine} ${styles.decorLineTop}`}></div>
+			<div className={`${styles.decorLine} ${styles.decorLineBottom}`}></div>
+
+			<div className={styles.canvasWrapper}>
+				<Canvas shadows>
+					<ErrorBoundary
+						fallback={
+							<div className={styles.errorMessage}>
+								エラー: 3Dモデルの読み込みに失敗しました
+							</div>
+						}
+					>
+						{/* ライティング設定 */}
+						<ambientLight intensity={0.8} />
+						<directionalLight position={[5, 5, 5]} intensity={1.0} castShadow />
+						<spotLight position={[-5, 8, -5]} angle={0.15} penumbra={1} intensity={1.5} castShadow />
+						<hemisphereLight intensity={0.4} color="#88eeff" groundColor="#553333" />
+
+						{/* 背景設定 */}
+						{backgroundImage ? (
+							isHdrBackground ? (
+								<Environment files={backgroundImage} background />
+							) : (
+								<BackgroundSphere backgroundImage={backgroundImage} />
+							)
+						) : useDefaultEnvironment ? (
+							<Environment preset="night" background blur={0.7} />
+						) : null}
+
+
+						{/* カメラ設定 - 少し下向きにして顔が中心に来るように */}
+						<PerspectiveCamera makeDefault position={[0, 1, 4]} fov={45} />
+
+						{/* コントロール設定 - Y軸周りの回転のみ許可（水平方向のみ回転可能） */}
+						{enableControls && (
+							<OrbitControls
+								enableZoom={false}
+								enablePan={false}
+								enableRotate={true}
+								minPolarAngle={Math.PI / 2} // 90度 - 常に赤道面に固定
+								maxPolarAngle={Math.PI / 2} // 90度 - 常に赤道面に固定
+								dampingFactor={0.05}
+								rotateSpeed={0.5}
+							/>
+						)}
+					</ErrorBoundary>
+				</Canvas>
+			</div>
+
+			{/* 情報オーバーレイ（オプション） */}
+			<div className={styles.infoOverlay}>
+				MODEL: PEPE-3D v1.0
+			</div>
+		</div>
+	);
 };
 
 export default SphereBackground;
+
+// グローバルにモデルをプリロード
+useGLTF.preload('/models/pepe.glb');

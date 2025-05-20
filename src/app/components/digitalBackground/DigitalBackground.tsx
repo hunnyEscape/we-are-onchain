@@ -93,7 +93,7 @@ const DigitalBackground: React.FC<DigitalBackgroundProps> = ({
     
     // 回転値の計算 - スクロール位置に基づいて回転（非常にゆっくりに）
     const scrollPosition = window.scrollY;
-    const rotationSpeed = 0.0003; // 回転速度調整（さらに遅く）
+    const rotationSpeed = 0.0003; // 回転速度調整
     setRotationValue(scrollPosition * rotationSpeed);
     setScrollY(scrollPosition);
   };
@@ -149,14 +149,14 @@ const DigitalBackground: React.FC<DigitalBackgroundProps> = ({
         <div className={`${styles.decorLine} ${styles.decorLineTop}`}></div>
         <div className={`${styles.decorLine} ${styles.decorLineBottom}`}></div>
         
-        {/* Sticky位置固定 */}
+        {/* Sticky位置固定 - スケーリング効果を変更 */}
         <div 
           ref={containerRef}
           className={styles.stickyContainer}
           style={{ 
             opacity: visibilityRatio,
-            // 変形を除去して、完全な没入感を得る（スケーリングなし）
-            transform: 'none',
+            // cssで設定したtransform-styleを活かすため、transformプロパティを簡素化
+            transform: isVisible ? 'none' : 'scale(0.9)',
           }}
         >
           {/* デジタル環境表示 */}

@@ -80,16 +80,6 @@ const PepeContainer: React.FC<PepeContainerProps> = ({
 		}
 	}, [scene]);
 
-	// 自動回転アニメーション
-	useFrame((state, delta) => {
-		if (groupRef.current && autoRotate) {
-			// Y軸周りに回転
-			groupRef.current.rotation.y += delta * rotationSpeed;
-
-			// わずかに上下に揺れる動き（控えめな浮遊感）
-			groupRef.current.position.y = modelPosition[1] + Math.sin(state.clock.elapsedTime * 0.5) * 0.05;
-		}
-	});
 
 	// モデルが読み込まれていない場合のローディング表示
 	if (isLoading || !scene) {
@@ -111,21 +101,6 @@ const PepeContainer: React.FC<PepeContainerProps> = ({
 		>
 			<primitive object={scene.clone()} />
 		</group>
-	);
-};
-
-// 背景用の球体コンポーネント
-const BackgroundSphere = ({ backgroundImage }) => {
-	const texture = new THREE.TextureLoader().load(backgroundImage);
-	texture.mapping = THREE.EquirectangularReflectionMapping;
-	texture.encoding = THREE.sRGBEncoding;
-
-	return (
-		<mesh>
-			{/* この部分のサイズを小さくします。元は [50, 64, 64] */}
-			<sphereGeometry args={[2, 64, 64]} />
-			<meshBasicMaterial map={texture} side={THREE.BackSide} />
-		</mesh>
 	);
 };
 
@@ -174,65 +149,57 @@ const PepeModel3D: React.FC<PepeModel3DProps> = ({
 	const containerStyle = {};
 
 	return (
-		<div
-			className={`${styles.modelContainer} ${className}`}
-			style={containerStyle}
-		>
-			{/* サイバーパンク風の装飾 */}
-			<div className={`${styles.decorLine} ${styles.decorLineTop}`}></div>
-			<div className={`${styles.decorLine} ${styles.decorLineBottom}`}></div>
+		<div className={`h-[100vh]`}>
+			<div
+				className={`${styles.modelContainer} ${className}`}
+				style={containerStyle}
+			>
+				{/* サイバーパンク風の装飾 */}
+				<div className={`${styles.decorLine} ${styles.decorLineTop}`}></div>
+				<div className={`${styles.decorLine} ${styles.decorLineBottom}`}></div>
 
-			<div className={styles.canvasWrapper}>
-				<Canvas shadows>
-					<ErrorBoundary
-						fallback={
-							<div className={styles.errorMessage}>
-								エラー: 3Dモデルの読み込みに失敗しました
-							</div>
-						}
-					>
-						{/* ライティング設定 */}
-						<ambientLight intensity={0.8} />
-						<directionalLight position={[5, 5, 5]} intensity={1.0} castShadow />
-						<spotLight position={[-5, 8, -5]} angle={0.15} penumbra={1} intensity={1.5} castShadow />
-						<hemisphereLight intensity={0.4} color="#88eeff" groundColor="#553333" />
+				<div className={styles.canvasWrapper}>
+					<Canvas shadows>
+						<ErrorBoundary
+							fallback={
+								<div className={styles.errorMessage}>
+									エラー: 3Dモデルの読み込みに失敗しました
+								</div>
+							}
+						>
+							{/* ライティング設定 */}
+							<ambientLight intensity={0.8} />
+							<directionalLight position={[5, 5, 5]} intensity={1.0} castShadow />
+							<spotLight position={[-5, 8, -5]} angle={0.15} penumbra={1} intensity={1.5} castShadow />
+							<hemisphereLight intensity={0.4} color="#88eeff" groundColor="#553333" />
 
-						{/* 背景設定 */}
-						{backgroundImage ? (
-							isHdrBackground ? (
-								<Environment files={backgroundImage} background />
-							) : (
-								<BackgroundSphere backgroundImage={backgroundImage} />
-							)
-						) : useDefaultEnvironment ? (
-							<Environment preset="night" background blur={0.7} />
-						) : null}
 
-						{/* Pepeモデル */}
-						<PepeContainer autoRotate={autoRotate} rotationSpeed={rotationSpeed} />
+							{/* Pepeモデル */}
+							<PepeContainer autoRotate={autoRotate} rotationSpeed={rotationSpeed} />
 
-						{/* カメラ設定 - 少し下向きにして顔が中心に来るように */}
-						<PerspectiveCamera makeDefault position={[0, 1, 4]} fov={45} />
+							{/* カメラ設定 - 少し下向きにして顔が中心に来るように */}
+							<PerspectiveCamera makeDefault position={[0, 1, 4]} fov={45} />
 
-						{/* コントロール設定 - Y軸周りの回転のみ許可（水平方向のみ回転可能） */}
-						{enableControls && (
-							<OrbitControls
-								enableZoom={false}
-								enablePan={false}
-								enableRotate={true}
-								minPolarAngle={Math.PI / 2} // 90度 - 常に赤道面に固定
-								maxPolarAngle={Math.PI / 2} // 90度 - 常に赤道面に固定
-								dampingFactor={0.05}
-								rotateSpeed={0.5}
-							/>
-						)}
-					</ErrorBoundary>
-				</Canvas>
-			</div>
+							{/* コントロール設定 - Y軸周りの回転のみ許可（水平方向のみ回転可能） */}
+							{enableControls && (
+								<OrbitControls
+									enableZoom={false}
+									enablePan={false}
+									enableRotate={true}
+									minPolarAngle={Math.PI / 2} // 90度 - 常に赤道面に固定
+									maxPolarAngle={Math.PI / 2} // 90度 - 常に赤道面に固定
+									dampingFactor={0.05}
+									rotateSpeed={0.5}
+								/>
+							)}
+						</ErrorBoundary>
+					</Canvas>
+				</div>
 
-			{/* 情報オーバーレイ（オプション） */}
-			<div className={styles.infoOverlay}>
-				MODEL: PEPE-3D v1.0
+				{/* 情報オーバーレイ（オプション） */}
+				<div className={styles.infoOverlay}>
+					MODEL: PEPE-3D v1.0
+				</div>
 			</div>
 		</div>
 	);

@@ -1,6 +1,9 @@
 'use client';
-import React, { useRef } from 'react';
+import React, { useRef, useEffect, useState } from 'react';
 import { motion, useScroll, useTransform } from 'framer-motion';
+import styles from './ScrollingText.module.css';
+import GlitchText from '../ui/GlitchText';
+import { useGlitchEffect } from './GlitchEffects';
 
 interface ScrollingTextProps {
   className?: string;
@@ -8,6 +11,24 @@ interface ScrollingTextProps {
 
 const ScrollingText: React.FC<ScrollingTextProps> = ({ className }) => {
   const containerRef = useRef<HTMLDivElement>(null);
+  const { glitchState, getGlitchStyle } = useGlitchEffect();
+  
+  // 画面のアスペクト比に基づいてスクロール速度を調整
+  const [screenAspect, setScreenAspect] = useState(1);
+  
+  useEffect(() => {
+    // 初期設定と画面サイズ変更時にアスペクト比を計算
+    const updateAspectRatio = () => {
+      setScreenAspect(window.innerWidth / window.innerHeight);
+    };
+    
+    updateAspectRatio();
+    window.addEventListener('resize', updateAspectRatio);
+    
+    return () => {
+      window.removeEventListener('resize', updateAspectRatio);
+    };
+  }, []);
   
   // スクロール位置に基づくアニメーション用のスクロールトラッキング
   const { scrollYProgress } = useScroll({
@@ -15,35 +36,72 @@ const ScrollingText: React.FC<ScrollingTextProps> = ({ className }) => {
     offset: ['start end', 'end start']
   });
   
+  // アスペクト比に基づいて移動距離を調整
+  // 横長の画面なら長い距離を移動させる
+  const endX = `-${150 + (screenAspect > 1 ? (screenAspect - 1) * 100 : 0)}%`;
+  
   // 右から左へのアニメーション - スクロールに応じてX位置を変更
-  // 画面幅の100%から-100%へ移動（右から左へ完全に移動）
-  const xPos = useTransform(scrollYProgress, [0, 1], ['100vw', '-100%']);
+  const xPos = useTransform(scrollYProgress, [0, 1], ['100vw', endX]);
+  
+  // スクロールによるテキストの不透明度変化
+  const opacity = useTransform(
+    scrollYProgress, 
+    [0, 0.2, 0.8, 1], 
+    [0.2, 1, 1, 0.2]
+  );
+  
+  // スケール変化 - スクロール中央部で少し拡大
+  const scale = useTransform(
+    scrollYProgress,
+    [0, 0.5, 1],
+    [0.95, 1.05, 0.95]
+  );
   
   return (
     <div 
       ref={containerRef}
-      className={`h-screen flex items-center overflow-hidden bg-black ${className}`}
+      className={`${styles.scrollContainer} ${className}`}
     >
+      {/* 追加エフェクトレイヤー */}
+      <div className={styles.textGlow} />
+      <div className={styles.glitchBlocks} />
+      <div className={styles.scanlines} />
+      <div className={styles.noiseOverlay} />
+      
       <motion.div
-        style={{ x: xPos }}
-        className="whitespace-nowrap text-4xl md:text-5xl lg:text-6xl font-bold py-4"
+        style={{ 
+          x: xPos, 
+          opacity,
+          scale,
+          ...(glitchState.active ? getGlitchStyle() : {}) 
+        }}
+        className={`${styles.textContainer} text-5xl md:text-6xl lg:text-8xl font-bold py-8 px-4 z-10`}
       >
-        <span className="text-neonGreen font-mono">
-          "ペペ味"スペシャルフレーバ
+        <span className={`${styles.cyberText} text-neonGreen font-mono`}>
+          <GlitchText 
+            text='"ペペ味"スペシャルフレーバ' 
+            glitchIntensity="medium"
+            color="text-neonGreen"
+          />
         </span>
-        <span className="text-white mx-2">
+        
+        <span className="text-white mx-4">
           は、ただのプロテインではない。それは、ぺぺが紡ぐ
         </span>
-        <span className="text-neonOrange">
+        
+        <span className={`${styles.rgbText} text-neonOrange`}>
           「勇気」
         </span>
+        
         <span className="text-white mx-2">
           と
         </span>
-        <span className="text-neonOrange">
+        
+        <span className={`${styles.rgbText} text-neonOrange`}>
           「ユーモア」
         </span>
-        <span className="text-white ml-2">
+        
+        <span className="text-white ml-4">
           の物語。
         </span>
       </motion.div>

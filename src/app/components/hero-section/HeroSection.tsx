@@ -7,6 +7,7 @@ import HeroBackground from './HeroBackground';
 import HeroTitle from './HeroTitle';
 import HeroModel from './HeroModel';
 import ScrollingText from './ScrollingText'; // ProteinStoryをScrollingTextに変更
+import ScrollSpace from './ScrollSpace'; // スクロールスペースを追加
 
 export const HeroSection: React.FC = () => {
 	const [mousePosition, setMousePosition] = useState({ x: 0, y: 0 });
@@ -42,7 +43,9 @@ export const HeroSection: React.FC = () => {
 		 * ┌──────────────────────── wrapper ────────────────────────┐
 		 * │ sticky(100vh) = ヒーロー                                   │
 		 * │ ↓                                                       │
-		 * │ normal flow            = スクロールテキスト               │
+		 * │ ScrollingText = 右から左へ流れるテキスト                   │
+		 * │ ↓                                                       │
+		 * │ ScrollSpace   = スクロールスペース                         │
 		 * └──────────────────────────────────────────────────────────┘
 		 */
 		<div className="relative">
@@ -83,9 +86,11 @@ export const HeroSection: React.FC = () => {
 			</div>
 
 			{/* ────── 以下は通常スクロールで流れる部分 ────── */}
-			<section className="bg-gradient-to-b from-transparent to-black">
-				<ScrollingText /> {/* ProteinStoryをScrollingTextに変更 */}
-			</section>
+			{/* 右から左へ流れるスクロールテキスト */}
+			<ScrollingText />
+			
+			{/* スクロールスペース - アニメーション表示用 */}
+			<ScrollSpace />
 		</div>
 	);
 };

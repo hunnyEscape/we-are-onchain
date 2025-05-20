@@ -22,7 +22,7 @@ export const HeroBackground: React.FC<HeroBackgroundProps> = ({
       <div
         className={`${styles.backgroundImage} ${glitchState.active ? styles.glitchActive : ''}`}
         style={{
-          backgroundImage: `url('/images/pepe-cyberpunk.png')`,
+          backgroundImage: `url('${process.env.NEXT_PUBLIC_CLOUDFRONT_URL}/pepe-cyberpunk.webp')`,
           ...(!glitchState.active
             ? {
               filter: 'contrast(1.1) brightness(0.9)',
@@ -59,7 +59,7 @@ export const HeroBackground: React.FC<HeroBackgroundProps> = ({
       <div
         className={styles.gridNoise}
         style={{
-          backgroundImage: "url('/images/noisy_grid.webp')",
+          backgroundImage: `url('${process.env.NEXT_PUBLIC_CLOUDFRONT_URL}/noisy_grid.webp')`,
           transform: midLayerTransform,
           transition: 'transform 1.5s ease-out',
         }}
@@ -76,7 +76,7 @@ export const HeroBackground: React.FC<HeroBackgroundProps> = ({
         <div
           className={styles.glitchBlocks}
           style={{
-            backgroundImage: `url('/images/pepe-cyberpunk.png')`,
+            backgroundImage: `url(''${process.env.NEXT_PUBLIC_CLOUDFRONT_URL}/pepe-cyberpunk.webp')`,
             opacity: 0.4 + (glitchState.intensity * 0.05),
           }}
         />
@@ -88,14 +88,14 @@ export const HeroBackground: React.FC<HeroBackgroundProps> = ({
           <div
             className={styles.rgbSliceRed}
             style={{
-              backgroundImage: `url('/images/pepe-cyberpunk.png')`,
+              backgroundImage: `url('${process.env.NEXT_PUBLIC_CLOUDFRONT_URL}/pepe-cyberpunk.webp')`,
               transform: `translateX(${glitchState.intensity * 1.5}px)`,
             }}
           />
           <div
             className={styles.rgbSliceBlue}
             style={{
-              backgroundImage: `url('/images/pepe-cyberpunk.png')`,
+              backgroundImage: `url('${process.env.NEXT_PUBLIC_CLOUDFRONT_URL}/pepe-cyberpunk.webp')`,
               transform: `translateX(-${glitchState.intensity * 1.5}px)`,
             }}
           />

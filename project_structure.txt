@@ -14,6 +14,7 @@
 │   ├── file.svg
 │   ├── globe.svg
 │   ├── images
+│   │   ├── cyberpunk-cityscape.png
 │   │   ├── noisy.webp
 │   │   ├── noisy_grid.webp
 │   │   └── pepe-cyberpunk.png
@@ -28,6 +29,7 @@
 │       ├── components
 │       │   ├── 3d
 │       │   │   ├── PepeModel.tsx
+│       │   │   ├── PepeModelImproved.tsx
 │       │   │   └── ProteinModel.tsx
 │       │   ├── debug
 │       │   │   └── ModelDebug.tsx
@@ -41,6 +43,9 @@
 │       │   │   └── ProteinStory.tsx
 │       │   ├── layout
 │       │   │   └── Navbar.tsx
+│       │   ├── pepe3d
+│       │   │   ├── PepeModel3D.tsx
+│       │   │   └── PepeStyles.module.css
 │       │   └── ui
 │       │       ├── CyberBox.tsx
 │       │       ├── GlitchText.tsx
@@ -52,4 +57,4 @@
 ├── tailwind.config.js
 └── tsconfig.json
 
-11 directories, 41 files
+12 directories, 45 files

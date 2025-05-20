@@ -83,7 +83,7 @@ export const HeroSection: React.FC = () => {
 				<ScanlineEffect />
 			</div>
 
-			{/* ────── 以下は通常スクロールで流れる部分 ────── */}
+			{/* ────── 以下は通常スクロールで流れる部分 ───── */}
 			<section className="bg-gradient-to-b from-transparent to-black">
 				<ProteinStory />
 			</section>

@@ -1,6 +1,6 @@
 'use client';
 import React, { useRef, useState, useEffect } from 'react';
-import { useGLTF, Environment, PerspectiveCamera, OrbitControls } from '@react-three/drei';
+import { Environment, PerspectiveCamera, OrbitControls } from '@react-three/drei';
 import { useFrame, Canvas } from '@react-three/fiber';
 import * as THREE from 'three';
 import styles from './Sphere.module.css';
@@ -34,11 +34,28 @@ class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoundarySta
 	}
 }
 
-// Pepeモデルコンテナコンポーネント
-interface PepeContainerProps {
-	autoRotate?: boolean;
-	rotationSpeed?: number;
-}
+// 回転制御コンポーネント
+const RotatingGroup = ({ rotationY = 0, rotationSpeed = 0.3, autoRotate = true, children }) => {
+	const groupRef = useRef<THREE.Group>(null);
+
+	useFrame((_, delta) => {
+		if (!groupRef.current) return;
+
+		// 自動回転が有効な場合
+		if (autoRotate) {
+			groupRef.current.rotation.y += rotationSpeed * delta;
+		} else {
+			// 外部から渡された回転値を適用
+			groupRef.current.rotation.y = rotationY;
+		}
+	});
+
+	return (
+		<group ref={groupRef}>
+			{children}
+		</group>
+	);
+};
 
 // 背景用の球体コンポーネント
 const BackgroundSphere = ({ backgroundImage }) => {
@@ -48,7 +65,6 @@ const BackgroundSphere = ({ backgroundImage }) => {
 
 	return (
 		<mesh>
-			{/* この部分のサイズを小さくします。元は [50, 64, 64] */}
 			<sphereGeometry args={[2, 64, 64]} />
 			<meshBasicMaterial map={texture} side={THREE.BackSide} />
 		</mesh>
@@ -56,22 +72,24 @@ const BackgroundSphere = ({ backgroundImage }) => {
 };
 
 // メインのエクスポートコンポーネント
-interface PepeModel3DProps {
+interface SphereProps {
 	className?: string;
 	autoRotate?: boolean;
 	enableControls?: boolean; // マウスによる水平回転（Y軸周り）操作を許可するかどうか
 	rotationSpeed?: number;
 	backgroundImage?: string; // カスタム背景画像のパス
 	useDefaultEnvironment?: boolean; // デフォルト環境マップを使用するかどうか
+	manualRotation?: number; // 手動で指定する回転値（ラジアン）
 }
 
-const Sphere: React.FC<PepeModel3DProps> = ({
+const Sphere: React.FC<SphereProps> = ({
 	className = '',
 	autoRotate = true,
 	enableControls = false,
 	rotationSpeed = 0.3,
 	backgroundImage = '',
-	useDefaultEnvironment = true
+	useDefaultEnvironment = true,
+	manualRotation = 0
 }) => {
 	const [isClient, setIsClient] = useState(false);
 	const [isHdrBackground, setIsHdrBackground] = useState(false);
@@ -117,35 +135,28 @@ const Sphere: React.FC<PepeModel3DProps> = ({
 							</div>
 						}
 					>
-						{/* ライティング設定 */}
-						<ambientLight intensity={0.8} />
-						<directionalLight position={[5, 5, 5]} intensity={1.0} castShadow />
-						<spotLight position={[-5, 8, -5]} angle={0.15} penumbra={1} intensity={1.5} castShadow />
-						<hemisphereLight intensity={0.4} color="#88eeff" groundColor="#553333" />
-
-						{/* 背景設定 */}
-						{backgroundImage ? (
-							isHdrBackground ? (
-								<Environment files={backgroundImage} background />
-							) : (
-								<BackgroundSphere backgroundImage={backgroundImage} />
-							)
-						) : useDefaultEnvironment ? (
-							<Environment preset="night" background blur={0.7} />
-						) : null}
 
 
-						{/* カメラ設定 - 少し下向きにして顔が中心に来るように */}
-						<PerspectiveCamera makeDefault position={[0, 1, 4]} fov={45} />
+						{/* 回転制御コンポーネントで背景を囲む */}
+						<RotatingGroup
+							rotationY={manualRotation}
+							rotationSpeed={rotationSpeed}
+							autoRotate={autoRotate}
+						>
+							<BackgroundSphere backgroundImage={backgroundImage} />
+						</RotatingGroup>
 
-						{/* コントロール設定 - Y軸周りの回転のみ許可（水平方向のみ回転可能） */}
+						{/* カメラ設定 */}
+						<PerspectiveCamera makeDefault position={[0, 0, 4]} fov={45} />
+
+						{/* コントロール設定 */}
 						{enableControls && (
 							<OrbitControls
 								enableZoom={false}
 								enablePan={false}
 								enableRotate={true}
-								minPolarAngle={Math.PI / 2} // 90度 - 常に赤道面に固定
-								maxPolarAngle={Math.PI / 2} // 90度 - 常に赤道面に固定
+								minPolarAngle={Math.PI / 2}
+								maxPolarAngle={Math.PI / 2}
 								dampingFactor={0.05}
 								rotateSpeed={0.5}
 							/>
@@ -154,15 +165,12 @@ const Sphere: React.FC<PepeModel3DProps> = ({
 				</Canvas>
 			</div>
 
-			{/* 情報オーバーレイ（オプション） */}
+			{/* 情報オーバーレイ */}
 			<div className={styles.infoOverlay}>
-				MODEL: PEPE-3D v1.0
+				MODEL: MATRIX-SPHERE v1.0
 			</div>
 		</div>
 	);
 };
 
 export default Sphere;
-
-// グローバルにモデルをプリロード
-useGLTF.preload('/models/pepe.glb');

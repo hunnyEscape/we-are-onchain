@@ -1,16 +1,25 @@
 // src/app/page.tsx
 import HeroSection from './components/hero-section/HeroSection';
-import ModelDebug from './components/debug/ModelDebug';
-import PepeModel from './components/3d/PepeModel';
-import PepeModelImproved from './components/3d/PepeModelImproved';
 import Sphere from './components/sphere/Sphere';
-import DigitalBackground from './components/digitalBackground/DigitalBackground';
+import MessageOverlay from './components/sphere/MessageOverlay';
+
 export default function Home() {
 	return (
-		<main className="min-h-screen">
+		<main className="relative">
+			{/* 1. ヒーローセクション */}
 			<HeroSection />
-			<div className="h-[100vh] w-full border border-green-500 rounded-lg overflow-hidden bg-gradient-to-b from-gray-900 to-black">
-				<Sphere enableControls={true} rotationSpeed={0.5} backgroundImage={`${process.env.NEXT_PUBLIC_CLOUDFRONT_URL}/cyberpunk-cityscape.webp`} useDefaultEnvironment={false} />
+			<div className="relative h-[500vh]">
+				<div className="sticky top-0 h-screen w-full overflow-hidden">
+					<Sphere
+						enableControls={false}
+						rotationSpeed={0.3}
+						backgroundImage={`${process.env.NEXT_PUBLIC_CLOUDFRONT_URL}/cyberpunk-cityscape.webp`}
+						useDefaultEnvironment={false}
+					/>
+				</div>
+				<div className="sticky top-0 h-screen w-full pointer-events-none">
+					<MessageOverlay />
+				</div>
 			</div>
 		</main>
 	);

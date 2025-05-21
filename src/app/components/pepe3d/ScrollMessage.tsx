@@ -1,6 +1,6 @@
 'use client';
 import React, { useEffect, useRef, useState } from 'react';
-import styles from './PepeStyles.module.css';
+
 type MessageConfig = {
 	id: string;
 	text: string;
@@ -23,7 +23,7 @@ const messages: MessageConfig[] = [
 		id: 'trigger-2',
 		text: '💎そこから湧き出るグリーンミネラルが、濃厚なコクとほどよい甘みをもたらす。',
 		top: '30vh',
-		left: '50vw',
+		left: '30vw',
 		width: 'max-content',
 		fontSize: '2rem',
 	},
@@ -38,10 +38,10 @@ const messages: MessageConfig[] = [
 	{
 		id: 'trigger-4',
 		text: '次元を超えたグリーンパワーを、その手で感じよ。',
-		top: '50vh',
+		top: '80vh',
 		left: '30vw',
 		width: '60vw',
-		fontSize: '3rem', // 特に大きく
+		fontSize: '3rem',
 	},
 ];
 
@@ -53,62 +53,50 @@ const ScrollTriggerMessages: React.FC = () => {
 		const observer = new IntersectionObserver(
 			(entries) => {
 				let found = false;
-
 				entries.forEach((entry) => {
-					const index = refs.current.findIndex((ref) => ref === entry.target);
+					const idx = refs.current.findIndex((r) => r === entry.target);
 					if (entry.isIntersecting) {
-						setActiveIndex(index);
+						setActiveIndex(idx);
 						found = true;
 					}
 				});
-
-				if (!found) {
-					setActiveIndex(null);
-				}
+				if (!found) setActiveIndex(null);
 			},
-			{
-				root: null,
-				rootMargin: '0px',
-				threshold: 0.5,
-			}
+			{ root: null, rootMargin: '0px', threshold: 0.5 }
 		);
 
-		refs.current.forEach((ref) => {
-			if (ref) observer.observe(ref);
-		});
-
-		return () => {
-			refs.current.forEach((ref) => {
-				if (ref) observer.unobserve(ref);
-			});
-		};
+		refs.current.forEach((r) => r && observer.observe(r));
+		return () => refs.current.forEach((r) => r && observer.unobserve(r));
 	}, []);
 
 	return (
 		<>
-			{/* スクロールトリガーゾーン */}
+			{/* トリガー用ダミーゾーン（100vh × 4つ） */}
 			{messages.map((_, i) => (
-				<div
-					key={`trigger-${i}`}
-					ref={(el) => (refs.current[i] = el)}
-					className="h-[100vh] w-full"
-				/>
+				<div key={`zone-${i}`} ref={(el) => (refs.current[i] = el)} className="h-screen w-full" />
 			))}
 
-			{/* 表示するメッセージ */}
-			{messages.map((msg, i) => (
-				<div
-					className={`
-						${styles.message}
-						${activeIndex === i ? styles.active : ''}
-						${styles.scan}
-						${msg.id === 'trigger-4' ? styles.glitch + ' ' + styles.highlight : ''}
-					`}
-					style={{ top: msg.top, left: msg.left, width: msg.width, fontSize: msg.fontSize }}
-				>
-					{msg.text}
-				</div>
-			))}
+			{/* フローティングメッセージ */}
+			{messages.map((msg, i) => {
+				const isActive = activeIndex === i;
+				return (
+					<div
+						key={msg.id}
+						className={`fixed z-50 font-pixel text-white transition-opacity duration-700 ease-in-out
+									${isActive ? 'opacity-100' : 'opacity-0'}
+									${msg.id === 'trigger-4' && isActive ? 'animate-glitch-slow' : ''}
+            					`}
+						style={{
+							top: msg.top,
+							left: msg.left,
+							width: msg.width,
+							fontSize: msg.fontSize,
+						}}
+					>
+						{msg.text}
+					</div>
+				);
+			})}
 		</>
 	);
 };

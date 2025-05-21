@@ -5,7 +5,7 @@ import { useFrame, Canvas } from '@react-three/fiber';
 import * as THREE from 'three';
 import styles from './Sphere.module.css';
 
-// エラーバウンダリーコンポーネント
+// エラーバウンダリーコンポーネン
 interface ErrorBoundaryProps {
 	children: React.ReactNode;
 	fallback: React.ReactNode;

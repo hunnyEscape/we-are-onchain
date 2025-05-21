@@ -71,7 +71,7 @@ const BackgroundSphere = ({ backgroundImage }) => {
 	);
 };
 
-// メインのエクスポートコンポーネント
+// メインのエクスポートコンポーネン
 interface SphereProps {
 	className?: string;
 	autoRotate?: boolean;

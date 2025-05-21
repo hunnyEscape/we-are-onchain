@@ -3,8 +3,6 @@
 import React, { useRef } from 'react';
 import PepeModel3D from './PepeModel3D';
 import ScrollMessage from './ScrollMessage';
-import DiagonalTransition from './DiagonalTransition';
-
 const PepeTop: React.FC = () => {
 	// ScrollMessageへの参照を作成
 	const scrollMessageRef = useRef<HTMLDivElement>(null);

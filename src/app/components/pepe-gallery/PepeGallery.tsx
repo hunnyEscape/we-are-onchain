@@ -1,19 +1,10 @@
 'use client';
 
-import React, { Suspense, useState, useEffect, useRef } from 'react';
-import { Canvas, useFrame } from '@react-three/fiber';
-import { ScrollControls, Preload, Scroll, Image as DreiImage, useScroll } from '@react-three/drei';
+import React, { Suspense, useState, useEffect, useRef, useCallback } from 'react';
+import { Canvas, useFrame, useThree } from '@react-three/fiber';
+import { Image as DreiImage, Preload } from '@react-three/drei';
 
-// 不足している型定義とサイズ定数を追加
-interface ImageItemProps {
-	image: any;  // 一時的に any 型に
-	position: [number, number, number];
-	scrollProgress: number;
-	isVisible?: boolean;
-	index: number;
-}
-
-// 定数の追加
+// サイズ定数
 const SIZE_SCALES = {
 	S: 1.5,
 	M: 2.5,
@@ -22,9 +13,7 @@ const SIZE_SCALES = {
 
 // スクロール設定
 const SCROLL_SETTINGS = {
-	damping: 0.2,
-	pages: 3,
-	distance: 1.0
+	pages: 3
 };
 
 // テスト用の画像データ
@@ -49,43 +38,55 @@ const testImages = [
 	}
 ];
 
-// ImageItemコンポーネント - 親コンポーネントの外で定義
-const ImageItem = ({ image, position, scrollProgress, isVisible = true, index }) => {
-	const ref = useRef(null);
-	const data = useScroll();
+// スクロール位置をコンテキスト経由で共有
+const ScrollContext = React.createContext(0);
 
-	// 画像情報処理部分（変更なし）
+// ImageItemコンポーネント
+const ImageItem = ({ image, position, index }) => {
+	const ref = useRef(null);
+	const scrollOffset = React.useContext(ScrollContext);
+
 	let imageUrl = '';
 	let imageSize = 'L';
+
 	if (typeof image === 'string') {
 		imageUrl = image;
 	} else {
 		imageUrl = image.path;
 		imageSize = image.size;
 	}
+
 	const scale = SIZE_SCALES[imageSize];
 	const scaleFactor = typeof scale === 'number' ? scale :
 		Array.isArray(scale) ? [scale[0], scale[1], 1] : [scale, scale, 1];
 
-	// スクロールに応じた拡大効果
+	// スクロールに応じた効果
 	useFrame(() => {
 		if (ref.current && ref.current.material) {
 			// 各画像に異なるスクロール範囲でズーム効果を適用
-			const startPoint = index * 0.2; // 各画像で開始点をずらす
-			const zoom = 1 + data.range(startPoint, 0.3) / 3; // スクロール範囲内でズーム効果
+			const startPoint = index * 0.2;
+			const duration = 0.3;
+			const endPoint = startPoint + duration;
 
-			// 直接materialのzoomプロパティを設定
+			// スクロール位置が範囲内にあるか確認
+			let progress = 0;
+			if (scrollOffset > startPoint && scrollOffset < endPoint) {
+				progress = (scrollOffset - startPoint) / duration;
+			} else if (scrollOffset >= endPoint) {
+				progress = 1;
+			}
+
+			// ズーム効果の適用
+			const zoom = 1 + (progress / 3);
 			ref.current.material.zoom = zoom;
 
-			// または、スケールを使用する場合
-			// ref.current.scale.x = scaleFactor[0] * zoom;
-			// ref.current.scale.y = scaleFactor[1] * zoom;
+			// 視差効果 - Y位置をスクロールに応じて調整
+			const baseY = position[1];
+			const parallaxStrength = index + 1;
+			const yOffset = baseY - (scrollOffset * 3 * parallaxStrength);
+			ref.current.position.y = yOffset;
 		}
 	});
-
-	if (!isVisible) {
-		return null;
-	}
 
 	return (
 		<DreiImage
@@ -99,87 +100,138 @@ const ImageItem = ({ image, position, scrollProgress, isVisible = true, index })
 	);
 };
 
-interface PepeGalleryProps {
-	className?: string;
-}
+// メインのThree.jsシーン
+const ThreeScene = () => {
+	return (
+		<>
+			<ambientLight intensity={0.5} />
+			<pointLight position={[10, 10, 10]} />
 
-const PepeGallery: React.FC<PepeGalleryProps> = ({ className = '' }) => {
+			{/* テスト用のボックス */}
+			<mesh position={[0, 0, 0]}>
+				<boxGeometry args={[2, 2, 2]} />
+				<meshStandardMaterial color="blue" />
+			</mesh>
+
+			<mesh position={[0, -3, 0]}>
+				<boxGeometry args={[1, 1, 1]} />
+				<meshStandardMaterial color="red" />
+			</mesh>
+
+			{/* 複数の画像を追加 */}
+			{testImages.map((img, index) => (
+				<ImageItem
+					key={img.id}
+					image={img}
+					position={[
+						(index % 2) * 4 - 2,
+						-index * 3,
+						0
+					]}
+					index={index}
+				/>
+			))}
+		</>
+	);
+};
+
+// メインコンポーネント
+const PepeGallery = ({ className = '' }) => {
 	const [isLoading, setIsLoading] = useState(true);
+	const [scrollOffset, setScrollOffset] = useState(0);
+	const containerRef = useRef(null);
 
-	// 簡略化のため、画像プリロードを省略
-	useEffect(() => {
-		// ちょっとだけ待ってからローディング状態を解除
-		const timer = setTimeout(() => {
-			setIsLoading(false);
-			console.log('Loading complete');
-		}, 1000);
-
-		return () => clearTimeout(timer);
+	// スクロールハンドラー
+	const handleScroll = useCallback(() => {
+		if (containerRef.current) {
+			// スクロール位置を0~1の範囲に正規化
+			const scrollHeight = containerRef.current.scrollHeight - window.innerHeight;
+			const scrollTop = containerRef.current.scrollTop;
+			const normalized = Math.max(0, Math.min(1, scrollTop / scrollHeight));
+			setScrollOffset(normalized);
+		}
 	}, []);
 
+	// コンポーネントマウント時の処理
+	useEffect(() => {
+		// 初期ロード
+		const timer = setTimeout(() => {
+			setIsLoading(false);
+		}, 1000);
+
+		// スクロールイベントの設定
+		const currentRef = containerRef.current;
+		if (currentRef) {
+			currentRef.addEventListener('scroll', handleScroll);
+		}
+
+		// クリーンアップ
+		return () => {
+			clearTimeout(timer);
+			if (currentRef) {
+				currentRef.removeEventListener('scroll', handleScroll);
+			}
+		};
+	}, [handleScroll]);
+
+	// 仮想スクロールエリアの高さ
+	const scrollHeight = `${SCROLL_SETTINGS.pages * 100}vh`;
+
 	return (
-		<div className={`w-full h-screen relative overflow-hidden ${className}`}>
-			{/* ローディング状態の表示 */}
+		<div
+			ref={containerRef}
+			className={`w-full h-screen overflow-auto ${className}`}
+			style={{ scrollBehavior: 'smooth' }}
+		>
+			{/* ローディング表示 */}
 			{isLoading && (
-				<div className="absolute inset-0 flex items-center justify-center bg-gray-900 bg-opacity-80 z-50">
+				<div className="fixed inset-0 flex items-center justify-center bg-gray-900 bg-opacity-80 z-50">
 					<div className="text-white text-2xl">Loading Gallery...</div>
 				</div>
 			)}
 
-			<Canvas
-				camera={{ position: [0, 0, 15], fov: 15 }}
-				className="w-full h-full"
-				gl={{
-					antialias: true,
-					alpha: true,
-					preserveDrawingBuffer: true
-				}}
-				dpr={[1, 1.5]}
-			>
-				<color attach="background" args={['#d8d7d7']} />
+			{/* スクロール可能なコンテンツエリア */}
+			<div style={{ height: scrollHeight, position: 'relative' }}>
+				{/* Three.jsコンテンツ（固定位置） */}
+				<div className="fixed inset-0">
+					<ScrollContext.Provider value={scrollOffset}>
+						<Canvas
+							camera={{ position: [0, 0, 15], fov: 15 }}
+							className="w-full h-full"
+							gl={{
+								antialias: true,
+								alpha: true,
+								preserveDrawingBuffer: true
+							}}
+							dpr={[1, 1.5]}
+						>
+							<color attach="background" args={['#d8d7d7']} />
+							<Suspense fallback={null}>
+								<ThreeScene />
+								<Preload all />
+							</Suspense>
+						</Canvas>
+					</ScrollContext.Provider>
+				</div>
 
-				<ambientLight intensity={0.5} />
-				<pointLight position={[10, 10, 10]} />
-
-				<Suspense fallback={null}>
-					<ScrollControls
-						damping={SCROLL_SETTINGS.damping}
-						pages={SCROLL_SETTINGS.pages}
-						distance={SCROLL_SETTINGS.distance}
+				{/* HTML/DOMコンテンツ（スクロール可能） */}
+				<div className="relative w-full h-full" style={{ pointerEvents: 'none' }}>
+					{/* 例：スクロールに連動するテキスト */}
+					<div
+						className="absolute top-[100vh] left-10 text-4xl font-bold"
+						style={{ pointerEvents: 'auto' }}
 					>
-						<Scroll>
-							{/* テスト用のボックス */}
-							<mesh position={[0, 0, 0]}>
-								<boxGeometry args={[2, 2, 2]} />
-								<meshStandardMaterial color="blue" />
-							</mesh>
+						Pepe Gallery
+					</div>
 
-							<mesh position={[0, -3, 0]}>
-								<boxGeometry args={[1, 1, 1]} />
-								<meshStandardMaterial color="red" />
-							</mesh>
-
-							{/* 複数の画像を追加 */}
-							{testImages.map((img, index) => (
-								<ImageItem
-									key={img.id}
-									image={img}
-									position={[
-										(index % 2) * 4 - 2, // X座標: 左右に配置
-										-index * 3,          // Y座標: 下に配置
-										0                    // Z座標
-									]}
-									scrollProgress={0}
-									isVisible={true}
-									index={index}
-								/>
-							))}
-						</Scroll>
-					</ScrollControls>
-
-					<Preload all />
-				</Suspense>
-			</Canvas>
+					<div
+						className="absolute top-[200vh] right-10 text-4xl font-bold"
+						style={{ pointerEvents: 'auto' }}
+					>
+						Collection
+					</div>
+				</div>
+			</div>
 		</div>
 	);
 };

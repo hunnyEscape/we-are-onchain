@@ -1,52 +1,33 @@
-import { Object3D } from 'three';
+import { Vector3 } from 'three';
 import { SizeType } from './constants';
 
-// FloatingImageコンポーネントのProps
-export interface FloatingImageProps {
+// 円形モーションのProps
+export interface CircularImageProps {
   imageUrl: string;
   size: SizeType;
   index: number;
-  initialDelay?: number;
+  totalItems: number;
+  radius?: number;
+  speed?: number;
+  height?: number;
 }
 
-// FloatingCanvasコンポーネントのProps
-export interface FloatingCanvasProps {
-  scrollY?: number;
-}
-
-// アニメーション状態
-export interface AnimationState {
-  position: [number, number, number];
+// 円形モーションの状態
+export interface CircularMotionState {
+  position: Vector3;
   rotation: [number, number, number];
   scale: number;
   opacity: number;
 }
 
-// イメージアイテムの設定
-export interface ImageConfig {
-  size: SizeType;
-  speed: number;
-  rotationSpeed: number;
-  scale: number;
-  zPosition: number;
-  opacity: number;
-  initialX: number;
-  initialY: number;
-  initialRotation: number;
-  delay: number;
+// FloatingImagesFixのProps
+export interface FloatingImagesFixProps {
+  radius?: number;
+  speed?: number;
+  height?: number;
 }
 
-// Three.jsオブジェクト用の型拡張
-export interface FloatingObject extends Object3D {
-  material?: {
-    opacity?: number;
-    transparent?: boolean;
-  };
-}
-
-// スクロール関連の状態
-export interface ScrollState {
-  current: number;
-  target: number;
-  ease: number;
+// FloatingImagesFixSectionのProps
+export interface FloatingImagesFixSectionProps {
+  className?: string;
 }

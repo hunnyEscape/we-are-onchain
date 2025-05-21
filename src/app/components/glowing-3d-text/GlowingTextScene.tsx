@@ -13,12 +13,11 @@ const GlowingTextScene: React.FC<GlowingTextSceneProps> = ({
 	scrollProgress
 }) => {
 	return (
-		<Canvas shadows dpr={[1, 2]}>
-			<PerspectiveCamera makeDefault position={[0, 0, 5]} fov={50} />
+		<Canvas className="w-full h-full" shadows dpr={[1, 2]}>
+			<PerspectiveCamera makeDefault position={[1, 1, 5]} fov={50} />
 			<Suspense fallback={null}>
 				<PepeFlavorModel scrollProgress={scrollProgress} />
 			</Suspense>
-			<OrbitControls enableZoom={false} enablePan={false} />
 		</Canvas>
 	);
 };

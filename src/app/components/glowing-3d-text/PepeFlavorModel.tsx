@@ -79,6 +79,7 @@ const PepeFlavorModel: React.FC<PepeFlavorModelProps> = ({
 		});
 	}, [scene, preserveOriginalMaterials]);
 
+	const INITIAL_Y = Math.PI / 4; 
 	// スクロール位置に応じたアニメーション
 	useFrame((state, delta) => {
 		if (!modelRef.current) return;
@@ -86,10 +87,10 @@ const PepeFlavorModel: React.FC<PepeFlavorModelProps> = ({
 		// 現在のスクロール位置を取得
 		const progress = scrollProgress.get();
 
-		// モデルの回転 - スクロールに応じて回転
+		 //モデルの回転 - スクロールに応じて回転
 		modelRef.current.rotation.y = THREE.MathUtils.lerp(
 			modelRef.current.rotation.y,
-			Math.sin(state.clock.elapsedTime * 0.1) * 0.1 - progress * Math.PI * 0.5,
+			Math.sin(state.clock.elapsedTime * 0.1) * 0.1 - progress * Math.PI * 0.1,
 			0.05
 		);
 
@@ -99,7 +100,7 @@ const PepeFlavorModel: React.FC<PepeFlavorModelProps> = ({
 		// スクロールに応じたZ位置の調整
 		modelRef.current.position.z = THREE.MathUtils.lerp(
 			modelRef.current.position.z,
-			-2 + progress * 3, // 奥から手前に移動
+			-2 + progress * 5, // 奥から手前に移動
 			0.05
 		);
 	});
@@ -108,9 +109,9 @@ const PepeFlavorModel: React.FC<PepeFlavorModelProps> = ({
 		<primitive
 			ref={modelRef}
 			object={scene}
-			scale={0.55}
-			position={[0, 0, 0]}
-			rotation={[ 0, Math.PI / 4, 0 ]}
+			scale={1}
+			position={[1.5, 0, 0]}
+			rotation={[ 0, 0, 0 ]}
 		/>
 	);
 };

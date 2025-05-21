@@ -21,6 +21,7 @@ module.exports = {
 			fontFamily: {
 				sans: ['var(--font-montserrat)', 'sans-serif'],
 				heading: ['var(--font-space-grotesk)', 'sans-serif'],
+				 pixel: ['var(--font-pixel)', 'sans-serif'],
 			},
 			animation: {
 				glitch: 'glitch 0.2s ease-in-out infinite',

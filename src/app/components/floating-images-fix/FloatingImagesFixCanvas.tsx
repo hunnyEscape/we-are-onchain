@@ -6,26 +6,23 @@ import FloatingImageFix from './FloatingImageFix';
 import { imageFiles, SCALE_MAP, ImageSize } from './constants';
 
 const CANVAS_DEPTH = 5; // 奥行き全体の幅
-const PADDING = 0.3;    // viewportパディング（Three.js空間単位）
+const PADDING_X = 0.5;  // 横方向パディング
+const PADDING_Y = 2;  // 縦方向パディング
 
-// 画像サイズごとにzの層を指定
 const getZBySize = (size: ImageSize) => {
-	if (size === 'L') return CANVAS_DEPTH * 0.42 + Math.random();      // 一番前
-	if (size === 'M') return Math.random() * 2 - 1;                    // 中央付近
-	return -CANVAS_DEPTH * 0.42 + Math.random();                       // 一番奥
+	if (size === 'L') return CANVAS_DEPTH * 0.42 + Math.random();
+	if (size === 'M') return Math.random() * 2 - 1;
+	return -CANVAS_DEPTH * 0.42 + Math.random();
 };
 
-// Canvas内でviewportを使い配置
 const FloatingImagesFixInner: React.FC = () => {
 	const { viewport } = useThree();
 	const count = imageFiles.length;
 	const cols = Math.ceil(Math.sqrt(count));
 	const rows = Math.ceil(count / cols);
 
-	// 配置計算
 	const positions = useMemo(() => {
 		const arr: [number, number, number][] = [];
-		// 逆順描画（最新画像ほど最前面に来るように）
 		const images = imageFiles.slice().reverse();
 
 		for (let i = 0; i < count; i++) {
@@ -33,30 +30,27 @@ const FloatingImagesFixInner: React.FC = () => {
 			const row = Math.floor(i / cols);
 			const image = images[i];
 
-			// XY: 画面内に等間隔で配置（paddingつき）
+			// パディングX/Yをそれぞれ使用
 			const x =
-				((col + 0.5) / cols) * (viewport.width - PADDING * 2) +
-				PADDING -
+				((col + 0.5) / cols) * (viewport.width - PADDING_X * 2) +
+				PADDING_X -
 				viewport.width / 2;
 			const y =
-				((row + 0.5) / rows) * (viewport.height - PADDING * 2) +
-				PADDING -
+				((row + 0.5) / rows) * (viewport.height - PADDING_Y * 2) +
+				PADDING_Y -
 				viewport.height / 2;
 
-			// Z: L/M/Sごとに層を分ける
 			const z = getZBySize(image.size);
-
 			arr.push([x, y, z]);
 		}
 		return arr;
 	}, [count, cols, rows, viewport.width, viewport.height]);
 
 	const speeds = useMemo(
-		() => imageFiles.map(() => 0.03 + Math.random() * 0.05), // 0.004〜0.008
+		() => imageFiles.map(() => 0.03 + Math.random() * 0.05),
 		[]
 	);
 
-	// 配置順を逆転
 	const images = useMemo(() => imageFiles.slice().reverse(), []);
 
 	return (

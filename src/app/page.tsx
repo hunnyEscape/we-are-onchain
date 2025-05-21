@@ -13,12 +13,6 @@ export default function Home() {
 			<PepeTop />
 			<SphereTop />
 			<FloatingImagesFixSection />
-			<div
-				className="h-screen w-full bg-cover bg-center"
-				style={{
-					backgroundImage: `url('${process.env.NEXT_PUBLIC_CLOUDFRONT_URL}/pepe-cyberpunk.webp')`,
-				}}
-			/>
 		</main>
 	);
-}//<FloatingImagesSection />
+}

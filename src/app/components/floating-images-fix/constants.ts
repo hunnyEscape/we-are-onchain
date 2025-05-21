@@ -53,7 +53,7 @@ export const imageFiles: ImageFile[] = [
 
 // サイズに応じたスケール
 export const SCALE_MAP: Record<ImageSize, number> = {
-  L: 3.2,
-  M: 2.2,
-  S: 1.2,
+  L: 4,
+  M: 3,
+  S: 2,
 };

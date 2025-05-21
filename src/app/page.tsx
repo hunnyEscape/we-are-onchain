@@ -1,8 +1,6 @@
 import HeroSection from './components/hero-section/HeroSection';
 import SphereTop from './components/sphere/SphereTop';
 import PepeTop from './components/pepe3d/PepeTop';
-import ScrollSpace from './components/glowing-3d-text/ScrollSpace';
-import CyberTextRevealSection from './components/cyber-text-reveal/CyberTextRevealSection';
 import GlowingTextSection from './components/glowing-3d-text/GlowingTextSection';
 import PulsatingComponent from './components/layout/PulsatingComponent';
 export default function Home() {

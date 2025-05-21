@@ -219,6 +219,76 @@ const Navbar = () => {
 };
 
 export default Navbar;-e 
+### FILE: ./src/app/components/layout/PulsatingComponent.tsx
+
+'use client';
+import { useState, useEffect } from 'react';
+
+const PulsatingComponent = () => {
+	const [pulses, setPulses] = useState<{ id: number; size: number; opacity: number }[]>([]);
+
+	// Create a new pulse every second
+	useEffect(() => {
+		const interval = setInterval(() => {
+			setPulses(prev => [
+				...prev,
+				{
+					id: Date.now(),   // 安全にユニークにするなら timestamp など
+					size: 0,
+					opacity: 0.8
+				}
+			]);
+		}, 1000);
+
+		return () => clearInterval(interval);
+	}, []);
+
+	// Update pulses animation
+	useEffect(() => {
+		const animationInterval = setInterval(() => {
+			setPulses(prev =>
+				prev
+					.map(pulse => ({
+						...pulse,
+						size: pulse.size + 3,
+						opacity: Math.max(0, pulse.opacity - 0.01),
+					}))
+					.filter(pulse => pulse.opacity > 0)
+			);
+		}, 50);
+
+		return () => clearInterval(animationInterval);
+	}, []);
+
+	return (
+		<div className="h-screen relative overflow-hidden bg-black">
+			{/* 中心を基準にするコンテナ */}
+			<div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+				{pulses.map(pulse => (
+					<div
+						key={pulse.id}
+						className="absolute rounded-full border border-neonGreen"
+						style={{
+							width: `${pulse.size}px`,
+							height: `${pulse.size}px`,
+							opacity: pulse.opacity,
+							left: '50%',     // ← 中心
+							top: '50%',      // ← 中心
+							transform: 'translate(-50%, -50%)',  // ← 真ん中合わせ
+						}}
+					/>
+				))}
+
+				<div className="z-10 border border-neonGreen px-8 py-3 text-white font-mono whitespace-nowrap bg-black bg-opacity-70">
+					We Are <span className="text-orange-500">On-Chain</span>
+				</div>
+			</div>
+		</div>
+	);
+};
+
+export default PulsatingComponent;
+-e 
 ### FILE: ./src/app/components/sphere/SmoothRotation.tsx
 
 'use client';
@@ -915,38 +985,6 @@ export const HeroTitle: React.FC<HeroTitleProps> = ({ style }) => {
 };
 
 export default HeroTitle;-e 
-### FILE: ./src/app/components/hero-section/ScrollSpace.tsx
-
-'use client';
-import React from 'react';
-import { motion } from 'framer-motion';
-
-// スクロールスペースを作るだけのコンポーネント
-const ScrollSpace: React.FC = () => {
-  return (
-    <div className="h-[200vh] bg-gradient-to-b from-black to-gray-900 relative">
-      {/* スクロールガイド - ユーザーに下にスクロールするよう促す */}
-      <motion.div 
-        className="absolute top-10 left-1/2 transform -translate-x-1/2 text-neonGreen text-center"
-        initial={{ opacity: 0, y: -10 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.5, duration: 0.8, repeat: Infinity, repeatType: "reverse" }}
-      >
-        <div className="text-xl mb-2">↓</div>
-        <div className="text-sm font-mono">SCROLL DOWN</div>
-      </motion.div>
-      
-      {/* 途中にちょっとした装飾要素を追加 */}
-      <div className="absolute bottom-1/4 left-1/2 transform -translate-x-1/2 w-full text-center">
-        <div className="inline-block border border-neonGreen px-8 py-3 text-white font-mono">
-          We Are <span className="text-neonOrange">On-Chain</span>
-        </div>
-      </div>
-    </div>
-  );
-};
-
-export default ScrollSpace;-e 
 ### FILE: ./src/app/components/hero-section/HeroModel.tsx
 
 // src/app/components/hero-section/HeroModel.tsx
@@ -963,16 +1001,11 @@ export const HeroModel: React.FC<HeroModelProps> = ({
 	scale = 1.2
 }) => {
 	return (
-		<div
-			className="absolute right-[10%] bottom-[5%] w-[300px] h-[400px] md:w-[400px] md:h-[500px] lg:w-[500px] lg:h-[600px] pointer-events-auto"
-			style={style}
-		>
-			<ProteinModel
-				autoRotate={true}
-				mouseControl={true}
-				scale={scale}
-			/>
-		</div>
+		<ProteinModel
+			autoRotate={true}
+			mouseControl={true}
+			scale={scale}
+		/>
 	);
 };
 
@@ -1095,7 +1128,7 @@ import { useGlitchEffect } from './GlitchEffects';
 import HeroBackground from './HeroBackground';
 import HeroTitle from './HeroTitle';
 import HeroModel from './HeroModel';
-import ScrollSpace from './ScrollSpace';
+import ScrollSpace from '../glowing-3d-text/ScrollSpace';
 
 export const HeroSection: React.FC = () => {
 	const [mousePosition, setMousePosition] = useState({ x: 0, y: 0 });
@@ -1136,8 +1169,9 @@ export const HeroSection: React.FC = () => {
 				getGlitchStyle={getGlitchStyle}
 			/>
 
-			{/* 3Dモデル（中間レイヤー） */}
-			<div
+			{/* 
+			
+						<div
 				className="absolute inset-0 z-[15] pointer-events-none"
 				style={{
 					transform: midLayerTransform,
@@ -1146,6 +1180,9 @@ export const HeroSection: React.FC = () => {
 			>
 				<HeroModel />
 			</div>
+
+			*/}
+
 
 			{/* タイトル（前景） */}
 			<div
@@ -1606,7 +1643,7 @@ useGLTF.preload('/models/protein_powder.glb');-e
 
 'use client';
 import React, { useEffect, useRef, useState } from 'react';
-import styles from './PepeStyles.module.css';
+
 type MessageConfig = {
 	id: string;
 	text: string;
@@ -1629,7 +1666,7 @@ const messages: MessageConfig[] = [
 		id: 'trigger-2',
 		text: '💎そこから湧き出るグリーンミネラルが、濃厚なコクとほどよい甘みをもたらす。',
 		top: '30vh',
-		left: '50vw',
+		left: '30vw',
 		width: 'max-content',
 		fontSize: '2rem',
 	},
@@ -1644,10 +1681,10 @@ const messages: MessageConfig[] = [
 	{
 		id: 'trigger-4',
 		text: '次元を超えたグリーンパワーを、その手で感じよ。',
-		top: '50vh',
+		top: '80vh',
 		left: '30vw',
 		width: '60vw',
-		fontSize: '3rem', // 特に大きく
+		fontSize: '3rem',
 	},
 ];
 
@@ -1659,62 +1696,50 @@ const ScrollTriggerMessages: React.FC = () => {
 		const observer = new IntersectionObserver(
 			(entries) => {
 				let found = false;
-
 				entries.forEach((entry) => {
-					const index = refs.current.findIndex((ref) => ref === entry.target);
+					const idx = refs.current.findIndex((r) => r === entry.target);
 					if (entry.isIntersecting) {
-						setActiveIndex(index);
+						setActiveIndex(idx);
 						found = true;
 					}
 				});
-
-				if (!found) {
-					setActiveIndex(null);
-				}
+				if (!found) setActiveIndex(null);
 			},
-			{
-				root: null,
-				rootMargin: '0px',
-				threshold: 0.5,
-			}
+			{ root: null, rootMargin: '0px', threshold: 0.5 }
 		);
 
-		refs.current.forEach((ref) => {
-			if (ref) observer.observe(ref);
-		});
-
-		return () => {
-			refs.current.forEach((ref) => {
-				if (ref) observer.unobserve(ref);
-			});
-		};
+		refs.current.forEach((r) => r && observer.observe(r));
+		return () => refs.current.forEach((r) => r && observer.unobserve(r));
 	}, []);
 
 	return (
 		<>
-			{/* スクロールトリガーゾーン */}
+			{/* トリガー用ダミーゾーン（100vh × 4つ） */}
 			{messages.map((_, i) => (
-				<div
-					key={`trigger-${i}`}
-					ref={(el) => (refs.current[i] = el)}
-					className="h-[100vh] w-full"
-				/>
+				<div key={`zone-${i}`} ref={(el) => (refs.current[i] = el)} className="h-screen w-full" />
 			))}
 
-			{/* 表示するメッセージ */}
-			{messages.map((msg, i) => (
-				<div
-					className={`
-						${styles.message}
-						${activeIndex === i ? styles.active : ''}
-						${styles.scan}
-						${msg.id === 'trigger-4' ? styles.glitch + ' ' + styles.highlight : ''}
-					`}
-					style={{ top: msg.top, left: msg.left, width: msg.width, fontSize: msg.fontSize }}
-				>
-					{msg.text}
-				</div>
-			))}
+			{/* フローティングメッセージ */}
+			{messages.map((msg, i) => {
+				const isActive = activeIndex === i;
+				return (
+					<div
+						key={msg.id}
+						className={`fixed z-50 font-pixel text-white transition-opacity duration-700 ease-in-out
+									${isActive ? 'opacity-100' : 'opacity-0'}
+									${msg.id === 'trigger-4' && isActive ? 'animate-glitch-slow' : ''}
+            					`}
+						style={{
+							top: msg.top,
+							left: msg.left,
+							width: msg.width,
+							fontSize: msg.fontSize,
+						}}
+					>
+						{msg.text}
+					</div>
+				);
+			})}
 		</>
 	);
 };
@@ -2270,6 +2295,974 @@ const MatrixTextOverlay = ({ scrollProgress }) => {
 };
 
 export default MatrixScrollContainer;-e 
+### FILE: ./src/app/components/glowing-3d-text/PepeFlavorModel.tsx
+
+'use client';
+import { useRef, useEffect } from 'react';
+import { useGLTF } from '@react-three/drei';
+import { useFrame } from '@react-three/fiber';
+import { MotionValue } from 'framer-motion';
+import * as THREE from 'three';
+
+interface PepeFlavorModelProps {
+	scrollProgress: MotionValue<number>;
+	preserveOriginalMaterials?: boolean; // Blenderのマテリアルをそのまま使用するかどうか
+}
+
+const PepeFlavorModel: React.FC<PepeFlavorModelProps> = ({ 
+	scrollProgress,
+	preserveOriginalMaterials = true // デフォルトでBlenderのマテリアルを保持
+}) => {
+	// GLBモデルをロード
+	const { scene, nodes, materials } = useGLTF('/models/pepe_flavor.glb');
+	const modelRef = useRef<THREE.Group>(null);
+
+	// モデルの初期設定
+	useEffect(() => {
+		if (!scene) return;
+
+		console.log("Loading Pepe Flavor model with materials:", materials);
+		
+		// 色管理を有効化 - これは常に有効にするとよい
+		THREE.ColorManagement.enabled = true;
+
+		// Blenderから読み込んだマテリアルを処理
+		scene.traverse((object) => {
+			if (object instanceof THREE.Mesh && object.material) {
+				console.log(`Found mesh: ${object.name} with material:`, object.material);
+				
+				if (preserveOriginalMaterials) {
+					// オリジナルのマテリアルを保持しつつ、設定を最適化
+					if (object.material instanceof THREE.Material) {
+						// 発光を強化
+						if ('emissive' in object.material && object.material.emissive) {
+							// Blenderの色をそのまま使用しつつ発光を強化
+							object.material.emissiveIntensity = 1.2;
+						}
+						
+						// トーンマッピングを無効化して色変換を防止
+						object.material.toneMapped = false;
+						
+						// メタリック・反射設定を微調整（必要に応じて）
+						if ('metalness' in object.material) object.material.metalness = 0.8;
+						if ('roughness' in object.material) object.material.roughness = 0.2;
+						
+						console.log(`Enhanced original material for ${object.name}`);
+					}
+				} else {
+					// オリジナルの色を保持
+					const originalColor = object.material.color ? object.material.color.clone() : new THREE.Color("#00ff9f");
+					
+					// マテリアルをカスタムシェーダーマテリアルに置き換え
+					const material = new THREE.MeshPhysicalMaterial({
+						color: originalColor, // オリジナルの色を使用
+						emissive: originalColor.clone(),
+						emissiveIntensity: 1.2,
+						metalness: 0.7,
+						roughness: 0.2,
+						clearcoat: 0.5,
+						clearcoatRoughness: 0.2,
+						transmission: 0.2,
+						thickness: 0.5,
+						toneMapped: false,
+					});
+
+					// オリジナルマテリアルから必要なプロパティをコピー
+					if (object.material.map) material.map = object.material.map;
+					if (object.material.normalMap) material.normalMap = object.material.normalMap;
+					
+					// マテリアルを置き換え
+					object.material = material;
+				}
+			}
+		});
+	}, [scene, preserveOriginalMaterials]);
+
+	const INITIAL_Y = Math.PI / 4; 
+	// スクロール位置に応じたアニメーション
+	useFrame((state, delta) => {
+		if (!modelRef.current) return;
+
+		// 現在のスクロール位置を取得
+		const progress = scrollProgress.get();
+
+		 //モデルの回転 - スクロールに応じて回転
+		modelRef.current.rotation.y = THREE.MathUtils.lerp(
+			modelRef.current.rotation.y,
+			Math.sin(state.clock.elapsedTime * 0.1) * 0.1 - progress * Math.PI * 0.1,
+			0.05
+		);
+
+		// わずかな浮遊アニメーション
+		modelRef.current.position.y = Math.sin(state.clock.elapsedTime * 0.5) * 0.05;
+
+		// スクロールに応じたZ位置の調整
+		modelRef.current.position.z = THREE.MathUtils.lerp(
+			modelRef.current.position.z,
+			-2 + progress * 5, // 奥から手前に移動
+			0.05
+		);
+	});
+
+	return (
+		<primitive
+			ref={modelRef}
+			object={scene}
+			scale={1}
+			position={[1.5, 0, 0]}
+			rotation={[ 0, 0, 0 ]}
+		/>
+	);
+};
+
+// モデルの事前ロード
+useGLTF.preload('/models/pepe_flavor.glb');
+
+export default PepeFlavorModel;-e 
+### FILE: ./src/app/components/glowing-3d-text/GlowingTextScene.tsx
+
+import { Canvas } from '@react-three/fiber';
+import { Suspense } from 'react';
+import { MotionValue } from 'framer-motion';
+import { OrbitControls, PerspectiveCamera } from '@react-three/drei';
+import PepeFlavorModel from './PepeFlavorModel';
+import LightingSetup from './LightingSetup';
+
+interface GlowingTextSceneProps {
+	scrollProgress: MotionValue<number>;
+}
+
+const GlowingTextScene: React.FC<GlowingTextSceneProps> = ({
+	scrollProgress
+}) => {
+	return (
+		<Canvas className="w-full h-full" shadows dpr={[1, 2]}>
+			<PerspectiveCamera makeDefault position={[1, 1, 5]} fov={50} />
+			<Suspense fallback={null}>
+				<PepeFlavorModel scrollProgress={scrollProgress} />
+			</Suspense>
+		</Canvas>
+	);
+};
+
+export default GlowingTextScene;-e 
+### FILE: ./src/app/components/glowing-3d-text/PostProcessEffects.tsx
+
+import { EffectComposer, Bloom, ChromaticAberration, Noise, Vignette } from '@react-three/postprocessing';
+import { BlendFunction } from 'postprocessing';
+
+const PostProcessEffects = () => {
+	return (
+		<EffectComposer multisampling={8}>
+			{/* HDRトーンマッピング */}
+			<ToneMapping
+				adaptive
+				resolution={256}
+				middleGrey={0.6}
+				maxLuminance={16.0}
+				averageLuminance={1.0}
+				adaptationRate={1.0}
+			/>
+
+			{/* 多層ブルームエフェクト */}
+			<Bloom
+				intensity={2.0}
+				luminanceThreshold={0.2}
+				luminanceSmoothing={0.9}
+				mipmapBlur
+				radius={0.8}
+			/>
+
+			{/* 2つ目のブルームレイヤー - 広い拡散用 */}
+			<Bloom
+				intensity={0.5}
+				luminanceThreshold={0.1}
+				luminanceSmoothing={0.9}
+				mipmapBlur
+				radius={1.2}
+			/>
+
+			{/* 色収差 */}
+			<ChromaticAberration
+				offset={[0.002, 0.002]}
+				radialModulation
+				modulationOffset={0.5}
+			/>
+
+			{/* ビネット効果 */}
+			<Vignette darkness={0.7} offset={0.3} />
+
+			{/* 微細なノイズテクスチャ */}
+			<Noise opacity={0.02} />
+
+			{/* シャープネス調整 */}
+			<SMAA />
+		</EffectComposer>
+	);
+};
+
+export default PostProcessEffects;-e 
+### FILE: ./src/app/components/glowing-3d-text/GlowingTextSection.tsx
+
+"use client";
+import { useRef } from 'react';
+import { useScroll } from 'framer-motion';
+import GlowingTextScene from './GlowingTextScene';
+import styles from './GlowingText.module.css';
+import ScrollSpace from './ScrollSpace';
+import { motion } from 'framer-motion';
+import HeroModel from '../hero-section/HeroModel';
+const GlowingTextSection = () => {
+	const sectionRef = useRef<HTMLDivElement>(null);
+
+	// スクロール位置の検出
+	const { scrollYProgress } = useScroll({
+		target: sectionRef,
+		offset: ["start end", "end start"]
+	});
+
+	return (
+		<section
+			ref={sectionRef}
+			className="relative w-full overflow-hidden bg-black flex flex-col items-center justify-center"
+		>
+			<motion.div
+				className="mt-5 mb-40 left-1/2 transform text-neonGreen text-center"
+				initial={{ opacity: 0, y: -10 }}
+				animate={{ opacity: 1, y: 0 }}
+				transition={{ delay: 0.5, duration: 0.8, repeat: Infinity, repeatType: "reverse" }}
+			>
+				<div className="text-xl mb-2">↓</div>
+				<div className="text-sm font-mono">SCROLL DOWN</div>
+			</motion.div>
+
+
+			<div className="flex justify-center">
+				<div className="relative w-full h-[120px] md:w-[800px] md:h-[150px] lg:w-[1200px] lg:h-[200px] pointer-events-auto">
+					<GlowingTextScene scrollProgress={scrollYProgress} />
+				</div>
+			</div>
+			<div className="flex justify-center">
+				<div className="w-[300px] h-[400px] md:w-[400px] md:h-[500px] lg:w-[500px] lg:h-[600px] pointer-events-auto">
+					<HeroModel scale={1.2} />
+				</div>
+			</div>
+			<p className="text-center text-white">
+				ただのプロテインではない。それは、ぺぺが紡ぐ「勇気」と「ユーモア」の物語。
+			</p>
+			<div className="text-xs mt-8 w-full max-w-sm px-4">
+				<table className="w-full table-auto border-collapse border border-white text-white">
+					<tbody>
+						<tr>
+							<td className="border border-white px-2 py-1 text-center">たんぱくしつ</td>
+							<td className="border border-white px-2 py-1 text-left">25 g</td>
+						</tr>
+						<tr>
+							<td className="border border-white px-2 py-1 text-center">ししつ</td>
+							<td className="border border-white px-2 py-1 text-left">1.5 g</td>
+						</tr>
+						<tr>
+							<td className="border border-white px-2 py-1 text-center">たんすいかぶつ</td>
+							<td className="border border-white px-2 py-1 text-left">2 g</td>
+						</tr>
+						<tr>
+							<td className="border border-white px-2 py-1 text-center">しょくもつせんい</td>
+							<td className="border border-white px-2 py-1 text-left">1 g</td>
+						</tr>
+						<tr>
+							<td className="border border-white px-2 py-1 text-center">あれるげん</td>
+							<td className="border border-white px-2 py-1 text-left">乳</td>
+						</tr>
+					</tbody>
+				</table>
+			</div>
+
+
+		</section>
+	);
+};
+
+export default GlowingTextSection;-e 
+### FILE: ./src/app/components/glowing-3d-text/LightingSetup.tsx
+
+import { useRef } from 'react';
+import { useFrame } from '@react-three/fiber';
+import * as THREE from 'three';
+
+const LightingSetup = () => {
+  // ライトの参照を保持
+  const spotLightRef = useRef<THREE.SpotLight>(null);
+  const pointLightRef = useRef<THREE.PointLight>(null);
+  
+  // ライトのアニメーション
+  useFrame(({ clock }) => {
+    const time = clock.getElapsedTime();
+    
+    // スポットライトの位置を微妙に変化
+    if (spotLightRef.current) {
+      spotLightRef.current.position.x = Math.sin(time * 0.3) * 3;
+      spotLightRef.current.position.z = Math.cos(time * 0.2) * 3;
+    }
+    
+    // ポイントライトの強度を変化（パルス効果）
+    if (pointLightRef.current) {
+      pointLightRef.current.intensity = 1 + Math.sin(time * 2) * 0.3;
+    }
+  });
+  
+  return (
+    <>
+      {/* 環境光 - 暗めの基本照明 */}
+      <ambientLight intensity={0.1} color="#222222" />
+      
+      {/* メインのスポットライト - テキストを照らす */}
+    </>
+  );
+};
+
+export default LightingSetup;-e 
+### FILE: ./src/app/components/cyber-text-reveal/CyberGrid.tsx
+
+import { useRef, useEffect } from 'react';
+import { MotionValue } from 'framer-motion';
+import styles from './CyberTextReveal.module.css';
+
+interface CyberGridProps {
+  progress: MotionValue<number>;
+}
+
+const CyberGrid: React.FC<CyberGridProps> = ({ progress }) => {
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const animationRef = useRef<number>(0);
+  
+  // キャンバスのリサイズ
+  const resizeCanvas = () => {
+    if (!canvasRef.current) return;
+    
+    const canvas = canvasRef.current;
+    canvas.width = window.innerWidth;
+    canvas.height = window.innerHeight;
+    
+    // リサイズ後にグリッドを再描画
+    drawGrid();
+  };
+  
+  // グリッドの描画
+  const drawGrid = () => {
+    if (!canvasRef.current) return;
+    
+    const canvas = canvasRef.current;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+    
+    // キャンバスをクリア
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    
+    // 現在のスクロール進行状況を取得
+    const currentProgress = progress.get();
+    
+    // 進行状況に応じたグリッドのZ軸オフセットを計算
+    const zOffset = (1 - currentProgress) * 500;
+    
+    // グリッド線の濃さをスクロール進行状況に基づいて調整
+    const gridOpacity = 0.05 + (currentProgress * 0.1);
+    
+    // 3Dグリッドの描画
+    ctx.strokeStyle = `rgba(92, 255, 92, ${gridOpacity})`;
+    ctx.lineWidth = 1;
+    
+    // 水平グリッド線
+    const horizonY = canvas.height / 2;
+    const gridSize = 50; // グリッドのセルサイズ
+    const gridCount = 20; // グリッド線の数
+    
+    // パースペクティブ効果のための消失点
+    const vanishPointX = canvas.width / 2;
+    const vanishPointY = horizonY;
+    
+    // 水平グリッド線
+    for (let i = -gridCount; i <= gridCount; i++) {
+      const y = horizonY + i * gridSize;
+      
+      // スクロール進行に応じてグリッド線をZ軸方向に移動
+      const scaleFactor = 1 - Math.min(1, Math.abs(y - horizonY) / (canvas.height / 2));
+      const zScaleFactor = Math.max(0.1, scaleFactor - (zOffset / 1000));
+      
+      // Z軸に応じた透明度の調整
+      ctx.globalAlpha = Math.max(0.1, zScaleFactor) * gridOpacity * 2;
+      
+      ctx.beginPath();
+      
+      // 左端の点
+      const leftX = 0;
+      const leftY = horizonY + (y - horizonY) * zScaleFactor;
+      
+      // 右端の点
+      const rightX = canvas.width;
+      const rightY = leftY;
+      
+      ctx.moveTo(leftX, leftY);
+      ctx.lineTo(rightX, rightY);
+      ctx.stroke();
+    }
+    
+    // 垂直グリッド線
+    for (let i = -gridCount; i <= gridCount; i++) {
+      const x = vanishPointX + i * gridSize;
+      
+      // スクロール進行に応じてグリッド線をZ軸方向に移動
+      const scaleFactor = 1 - Math.min(1, Math.abs(x - vanishPointX) / (canvas.width / 2));
+      const zScaleFactor = Math.max(0.1, scaleFactor - (zOffset / 1000));
+      
+      // Z軸に応じた透明度の調整
+      ctx.globalAlpha = Math.max(0.1, zScaleFactor) * gridOpacity * 2;
+      
+      ctx.beginPath();
+      
+      // 上端の点
+      const topX = vanishPointX + (x - vanishPointX) * zScaleFactor;
+      const topY = 0;
+      
+      // 下端の点
+      const bottomX = topX;
+      const bottomY = canvas.height;
+      
+      ctx.moveTo(topX, topY);
+      ctx.lineTo(bottomX, bottomY);
+      ctx.stroke();
+    }
+    
+    // 特殊効果: 消失点からのライン
+    if (currentProgress > 0.4) {
+      const glowIntensity = (currentProgress - 0.4) * 2;
+      
+      ctx.globalAlpha = glowIntensity * 0.3;
+      ctx.strokeStyle = `rgba(92, 255, 92, ${glowIntensity * 0.5})`;
+      ctx.lineWidth = 2;
+      
+      // 放射状のライン
+      const rayCount = 12;
+      for (let i = 0; i < rayCount; i++) {
+        const angle = (i / rayCount) * Math.PI * 2;
+        const rayLength = canvas.width * 0.8 * glowIntensity;
+        
+        const endX = vanishPointX + Math.cos(angle) * rayLength;
+        const endY = vanishPointY + Math.sin(angle) * rayLength;
+        
+        ctx.beginPath();
+        ctx.moveTo(vanishPointX, vanishPointY);
+        ctx.lineTo(endX, endY);
+        ctx.stroke();
+      }
+    }
+    
+    // 進行状況に応じたアニメーション更新
+    animationRef.current = requestAnimationFrame(drawGrid);
+  };
+  
+  useEffect(() => {
+    // キャンバスの初期化とリサイズイベントの設定
+    resizeCanvas();
+    window.addEventListener('resize', resizeCanvas);
+    
+    // アニメーションの開始
+    drawGrid();
+    
+    return () => {
+      // クリーンアップ
+      window.removeEventListener('resize', resizeCanvas);
+      cancelAnimationFrame(animationRef.current);
+    };
+  }, []);
+  
+  return (
+    <canvas
+      ref={canvasRef}
+      className={styles.cyberGrid}
+    />
+  );
+};
+
+export default CyberGrid;-e 
+### FILE: ./src/app/components/cyber-text-reveal/GlitchText3D.tsx
+
+import { useEffect, useRef } from 'react';
+import { MotionValue } from 'framer-motion';
+import styles from './CyberTextReveal.module.css';
+
+interface TextPart {
+  text: string;
+  color: string;
+  isHighlight: boolean;
+}
+
+interface GlitchText3DProps {
+  textParts: TextPart[];
+  progress: MotionValue<number>;
+  noiseIntensity: MotionValue<number>;
+  isMobile: boolean;
+}
+
+const GlitchText3D: React.FC<GlitchText3DProps> = ({
+  textParts,
+  progress,
+  noiseIntensity,
+  isMobile
+}) => {
+  const containerRef = useRef<HTMLDivElement>(null);
+  
+  // スクロール進行状況の変化をログに記録
+  useEffect(() => {
+    const unsubscribe = progress.onChange((value) => {
+      console.log('テキスト進行状況変化:', value);
+      // 進行に伴い強制的に再レンダリング
+      if (containerRef.current) {
+        containerRef.current.style.opacity = String(Math.max(0.1, value));
+      }
+    });
+    
+    return () => unsubscribe();
+  }, [progress]);
+  
+  // マウス動きに対する反応
+  const handleMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
+    if (!containerRef.current) return;
+    
+    const rect = containerRef.current.getBoundingClientRect();
+    const centerX = rect.left + rect.width / 2;
+    const centerY = rect.top + rect.height / 2;
+    const mouseX = e.clientX;
+    const mouseY = e.clientY;
+    
+    // マウス位置からの相対的な移動量を計算
+    const moveX = (mouseX - centerX) / 50;
+    const moveY = (mouseY - centerY) / 50;
+    
+    if (containerRef.current) {
+      containerRef.current.style.transform = `
+        rotateY(${moveX}deg) 
+        rotateX(${-moveY}deg)
+        translateZ(0)
+      `;
+    }
+  };
+  
+  // マウス移動終了時の挙動
+  const handleMouseLeave = () => {
+    if (!containerRef.current) return;
+    
+    if (containerRef.current) {
+      containerRef.current.style.transform = 'rotateY(0deg) rotateX(0deg) translateZ(0)';
+    }
+  };
+  
+  // 現在のプログレス値を取得
+  const currentProgress = progress.get();
+  const currentNoiseIntensity = noiseIntensity.get();
+  
+  // デバッグ用の表示を追加
+  console.log('描画時のテキスト進行状況:', currentProgress);
+  console.log('描画時のノイズ強度:', currentNoiseIntensity);
+  
+  return (
+    <div
+      ref={containerRef}
+      className={styles.glitchTextContainer}
+      style={{
+        transform: `perspective(1000px) rotateX(${25 - currentProgress * 25}deg) translateZ(${-200 + currentProgress * 200}px)`,
+        opacity: Math.max(0.1, currentProgress),
+        transition: 'transform 0.3s ease-out',
+      }}
+      onMouseMove={handleMouseMove}
+      onMouseLeave={handleMouseLeave}
+    >
+      <div className={styles.textWrapper}>
+        {textParts.map((part, index) => {
+          // パーツごとの遅延を計算
+          const delay = index * 0.1;
+          // 進行状況を考慮したパーツの表示タイミング
+          const partProgress = Math.max(0, (currentProgress - delay) * 1.2);
+          
+          // パーツのスタイルを計算
+          const partOpacity = Math.min(1, partProgress * 2);
+          const partScale = 0.5 + partProgress * 0.5;
+          
+          // テキスト要素のクラスを決定
+          const textClass = `
+            ${styles.textElement} 
+            ${part.isHighlight ? styles.textHighlight : ''}
+            ${currentNoiseIntensity > 0.3 ? styles.rgbSplit : ''}
+          `;
+          
+          return (
+            <div
+              key={index}
+              className={textClass}
+              style={{
+                color: part.color,
+                opacity: partOpacity,
+                transform: `scale(${partScale})`,
+                display: 'inline-block',
+                fontSize: part.isHighlight 
+                  ? (isMobile ? '1.5rem' : '2.5rem') 
+                  : (isMobile ? '1.2rem' : '2rem'),
+                marginRight: '0.5rem',
+                textShadow: part.isHighlight 
+                  ? (part.color === '#5CFF5C' ? 'var(--text-shadow-glow)' : 'var(--text-glow-orange)')
+                  : 'none',
+              }}
+              data-text={part.text}
+            >
+              {/* テキストが確実に表示されるようにする */}
+              <span style={{ position: 'relative', zIndex: 10 }}>{part.text}</span>
+            </div>
+          );
+        })}
+      </div>
+      
+      {/* デバッグ用のインジケーター */}
+      <div style={{ position: 'absolute', top: 0, left: 0, background: 'rgba(255,255,255,0.1)', padding: '5px', fontSize: '10px', color: 'white', zIndex: 100 }}>
+        Progress: {currentProgress.toFixed(2)}, Noise: {currentNoiseIntensity.toFixed(2)}
+      </div>
+    </div>
+  );
+};
+
+export default GlitchText3D;-e 
+### FILE: ./src/app/components/cyber-text-reveal/CyberTextRevealSection.tsx
+
+"use client";
+import { useEffect, useRef, useState } from 'react';
+import { useScroll, useTransform } from 'framer-motion';
+import GlitchText3D from './GlitchText3D';
+import CyberGrid from './CyberGrid';
+import TextParticleEffect from './TextParticleEffect';
+import styles from './CyberTextReveal.module.css';
+
+const CyberTextRevealSection = () => {
+	const sectionRef = useRef<HTMLDivElement>(null);
+	const [isMobile, setIsMobile] = useState(false);
+	const [isVisible, setIsVisible] = useState(false);
+
+	// スクロール位置の検出
+	const { scrollYProgress } = useScroll({
+		target: sectionRef,
+		offset: ["start end", "end start"]
+	});
+
+	// スクロール位置に基づいた変換値
+	const textProgress = useTransform(scrollYProgress, [0.1, 0.6], [0, 1]);
+	const noiseIntensity = useTransform(scrollYProgress, [0.1, 0.5], [1, 0.1]);
+
+	// ビューポートサイズの検出
+	useEffect(() => {
+		const checkMobile = () => {
+			setIsMobile(window.innerWidth < 768);
+		};
+
+		checkMobile();
+		window.addEventListener('resize', checkMobile);
+
+		return () => {
+			window.removeEventListener('resize', checkMobile);
+		};
+	}, []);
+
+	// スクロール監視とデバッグ
+	useEffect(() => {
+		const unsubscribe = scrollYProgress.onChange((value) => {
+			console.log('スクロール進行状況:', value);
+			if (value > 0.05) {
+				setIsVisible(true);
+			}
+		});
+
+		// 初期表示の強制（デバッグ用）
+		setTimeout(() => {
+			setIsVisible(true);
+		}, 1000);
+
+		return () => unsubscribe();
+	}, [scrollYProgress]);
+
+	// テキスト内容の定義
+	const textParts = [
+		{ text: '"ペペ味"スペシャルフレーバ', color: '#5CFF5C', isHighlight: true },
+		{ text: 'は、ただのプロテインではない。それは、ぺぺが紡ぐ', color: '#FFFFFF', isHighlight: false },
+		{ text: '「勇気」', color: '#FF9140', isHighlight: true },
+		{ text: 'と', color: '#FFFFFF', isHighlight: false },
+		{ text: '「ユーモア」', color: '#FF9140', isHighlight: true },
+		{ text: 'の物語。', color: '#FFFFFF', isHighlight: false },
+	];
+
+	return (
+		<section ref={sectionRef} className={styles.section}>
+			<div className={styles.backgroundContainer}>
+				{/* サイバーグリッド背景 */}
+				<CyberGrid progress={textProgress} />
+
+				{/* ノイズオーバーレイ */}
+				<div
+					className={styles.noiseOverlay}
+					style={{ opacity: Math.min(0.8, noiseIntensity.get()) }}
+				/>
+			</div>
+
+			<div className={styles.textContainer}>
+				<div className={styles.textWrapper}>
+					{/* パーティクルエフェクト */}
+					<TextParticleEffect
+						progress={textProgress}
+						containerId="cyber-text-container"
+					/>
+
+					{/* 3Dテキスト - 強制的に表示 */}
+					<div
+						id="cyber-text-container"
+						className={styles.textContentWrapper}
+						style={{
+							opacity: isVisible ? 1 : 0.2, // デバッグ用に少し透明度を持たせる
+							zIndex: 20
+						}}
+					>
+						<GlitchText3D
+							textParts={textParts}
+							progress={textProgress}
+							noiseIntensity={noiseIntensity}
+							isMobile={isMobile}
+						/>
+					</div>
+				</div>
+			</div>
+
+			{/* デバッグ用のスクロールインジケーター */}
+			<div style={{
+				position: 'fixed',
+				top: '10px',
+				right: '10px',
+				background: 'rgba(0,0,0,0.7)',
+				color: 'white',
+				padding: '5px',
+				zIndex: 1000,
+				fontSize: '12px'
+			}}>
+				Scroll: {scrollYProgress.get().toFixed(2)}
+			</div>
+		</section>
+	);
+};
+
+export default CyberTextRevealSection;-e 
+### FILE: ./src/app/components/cyber-text-reveal/TextParticleEffect.tsx
+
+import { useEffect, useRef } from 'react';
+import { MotionValue } from 'framer-motion';
+
+interface Particle {
+	x: number;
+	y: number;
+	size: number;
+	color: string;
+	vx: number;
+	vy: number;
+	life: number;
+	maxLife: number;
+	targetX?: number;
+	targetY?: number;
+}
+
+interface TextParticleEffectProps {
+	progress: MotionValue<number>;
+	containerId: string;
+	particleCount?: number;
+	colors?: string[];
+}
+
+const TextParticleEffect: React.FC<TextParticleEffectProps> = ({
+	progress,
+	containerId,
+	particleCount = 100,
+	colors = ['#5CFF5C', '#00FFFF', '#FF9140']
+}) => {
+	const canvasRef = useRef<HTMLCanvasElement>(null);
+	const particlesRef = useRef<Particle[]>([]);
+	const requestRef = useRef<number>(0);
+
+	// キャンバスのサイズ調整
+	const resizeCanvas = () => {
+		if (!canvasRef.current) return;
+
+		const container = document.getElementById(containerId);
+		if (!container) return;
+
+		const { width, height } = container.getBoundingClientRect();
+		canvasRef.current.width = width;
+		canvasRef.current.height = height;
+	};
+
+	// パーティクルの初期化
+	const initParticles = () => {
+		if (!canvasRef.current) return;
+
+		const particles: Particle[] = [];
+		const { width, height } = canvasRef.current;
+
+		for (let i = 0; i < particleCount; i++) {
+			particles.push({
+				x: Math.random() * width,
+				y: Math.random() * height,
+				size: Math.random() * 3 + 1,
+				color: colors[Math.floor(Math.random() * colors.length)],
+				vx: (Math.random() - 0.5) * 2,
+				vy: (Math.random() - 0.5) * 2,
+				life: Math.random() * 100,
+				maxLife: 100 + Math.random() * 100
+			});
+		}
+
+		particlesRef.current = particles;
+	};
+
+	// パーティクルの更新とレンダリング
+	const updateParticles = () => {
+		if (!canvasRef.current) return;
+
+		const canvas = canvasRef.current;
+		const ctx = canvas.getContext('2d');
+		if (!ctx) return;
+
+		// キャンバスのクリア
+		ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+		const currentProgress = progress.get();
+		const particles = particlesRef.current;
+
+		// パーティクルの更新とレンダリング
+		for (let i = 0; i < particles.length; i++) {
+			const p = particles[i];
+
+			// ライフサイクルの更新
+			p.life -= 0.5;
+			if (p.life <= 0) {
+				// パーティクルの再生成
+				p.x = Math.random() * canvas.width;
+				p.y = Math.random() * canvas.height;
+				p.size = Math.random() * 3 + 1;
+				p.life = p.maxLife;
+				p.vx = (Math.random() - 0.5) * 2;
+				p.vy = (Math.random() - 0.5) * 2;
+
+				// 進行状況が50%以上の場合、テキスト周辺に集まるようにターゲット位置を設定
+				if (currentProgress > 0.5) {
+					const centerX = canvas.width / 2;
+					const centerY = canvas.height / 2;
+					const radius = Math.min(canvas.width, canvas.height) * 0.3;
+					const angle = Math.random() * Math.PI * 2;
+
+					p.targetX = centerX + Math.cos(angle) * radius * (0.8 + Math.random() * 0.4);
+					p.targetY = centerY + Math.sin(angle) * (radius * 0.5) * (0.8 + Math.random() * 0.4);
+				} else {
+					p.targetX = undefined;
+					p.targetY = undefined;
+				}
+			}
+
+			// 進行状況に応じた動き方
+			if (currentProgress > 0.5 && p.targetX !== undefined && p.targetY !== undefined) {
+				// テキスト周辺に集まる挙動
+				const dx = p.targetX - p.x;
+				const dy = p.targetY - p.y;
+				const dist = Math.sqrt(dx * dx + dy * dy);
+
+				if (dist > 5) {
+					p.vx = dx * 0.02;
+					p.vy = dy * 0.02;
+				} else {
+					// 目標位置付近ではランダムな動きに
+					p.vx = (Math.random() - 0.5) * 1;
+					p.vy = (Math.random() - 0.5) * 1;
+				}
+			}
+
+			// 位置の更新
+			p.x += p.vx;
+			p.y += p.vy;
+
+			// 画面外に出たパーティクルの処理
+			if (p.x < 0) p.x = canvas.width;
+			if (p.x > canvas.width) p.x = 0;
+			if (p.y < 0) p.y = canvas.height;
+			if (p.y > canvas.height) p.y = 0;
+
+			// 描画
+			const alpha = (p.life / p.maxLife) * 0.7;
+			ctx.globalAlpha = alpha;
+			ctx.fillStyle = p.color;
+			ctx.beginPath();
+			ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+			ctx.fill();
+
+			// 進行状況に応じたつながり線の描画
+			if (currentProgress > 0.7) {
+				for (let j = i + 1; j < particles.length; j++) {
+					const p2 = particles[j];
+					const dx = p.x - p2.x;
+					const dy = p.y - p2.y;
+					const dist = Math.sqrt(dx * dx + dy * dy);
+
+					if (dist < 50) {
+						ctx.globalAlpha = (1 - dist / 50) * 0.2 * alpha;
+						ctx.strokeStyle = p.color;
+						ctx.lineWidth = 0.5;
+						ctx.beginPath();
+						ctx.moveTo(p.x, p.y);
+						ctx.lineTo(p2.x, p2.y);
+						ctx.stroke();
+					}
+				}
+			}
+		}
+
+		// アニメーションフレームの更新
+		requestRef.current = requestAnimationFrame(updateParticles);
+	};
+
+	// コンポーネントのライフサイクル管理
+	useEffect(() => {
+		// キャンバスのリサイズ
+		resizeCanvas();
+		window.addEventListener('resize', resizeCanvas);
+
+		// パーティクルの初期化
+		initParticles();
+
+		// アニメーションの開始
+		requestRef.current = requestAnimationFrame(updateParticles);
+
+		// クリーンアップ関数
+		return () => {
+			window.removeEventListener('resize', resizeCanvas);
+			cancelAnimationFrame(requestRef.current);
+		};
+	}, []);
+
+	return (
+		<canvas
+			ref={canvasRef}
+			style={{
+				position: 'absolute',
+				top: 0,
+				left: 0,
+				width: '100%',
+				height: '100%',
+				pointerEvents: 'none',
+				zIndex: 1,
+			}}
+		/>
+	);
+};
+
+export default TextParticleEffect;-e 
 ### FILE: ./src/app/components/debug/ModelDebug.tsx
 
 'use client';
@@ -2401,7 +3394,7 @@ function GLBModel() {
 export default ModelDebug;-e 
 ### FILE: ./src/app/layout.tsx
 
-import { Montserrat, Space_Grotesk } from 'next/font/google';
+import { Montserrat, Space_Grotesk, DotGothic16 } from 'next/font/google';
 import './globals.css';
 import type { Metadata } from 'next';
 import SmoothScroll from './components/layout/SmoothScroll';
@@ -2417,6 +3410,12 @@ const spaceGrotesk = Space_Grotesk({
 	variable: '--font-space-grotesk',
 	display: 'swap',
 });
+const pixel = DotGothic16({
+  weight: '400',
+  subsets: ['latin', 'latin-ext'],
+  variable: '--font-pixel',
+  display: 'swap',
+});
 
 // メタデータ設定
 export const metadata: Metadata = {
@@ -2431,11 +3430,11 @@ export default function RootLayout({
 	children: React.ReactNode;
 }) {
 	return (
-		<html lang="en" className={`${montserrat.variable} ${spaceGrotesk.variable}`}>
+		<html lang="en" className={`${montserrat.variable} ${spaceGrotesk.variable} ${pixel.variable}`}>
 			<body className="bg-black text-white min-h-screen font-sans antialiased">
-	
-					{children}
-		
+
+				{children}
+
 			</body>
 		</html>
 	);
@@ -2445,12 +3444,14 @@ export default function RootLayout({
 import HeroSection from './components/hero-section/HeroSection';
 import SphereTop from './components/sphere/SphereTop';
 import PepeTop from './components/pepe3d/PepeTop';
-import ScrollSpace from './components/hero-section/ScrollSpace';
+import GlowingTextSection from './components/glowing-3d-text/GlowingTextSection';
+import PulsatingComponent from './components/layout/PulsatingComponent';
 export default function Home() {
 	return (
 		<main className="relative">
 			<HeroSection/>
-			<ScrollSpace />
+			<GlowingTextSection /> 
+			<PulsatingComponent/>
 			<PepeTop/>
 			<SphereTop />
 			<div
@@ -2488,6 +3489,7 @@ module.exports = {
 			fontFamily: {
 				sans: ['var(--font-montserrat)', 'sans-serif'],
 				heading: ['var(--font-space-grotesk)', 'sans-serif'],
+				 pixel: ['var(--font-pixel)', 'sans-serif'],
 			},
 			animation: {
 				glitch: 'glitch 0.2s ease-in-out infinite',

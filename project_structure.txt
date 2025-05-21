@@ -15,9 +15,11 @@
 │   ├── globe.svg
 │   ├── images
 │   │   ├── noisy.webp
-│   │   └── noisy_grid.webp
+│   │   ├── noisy_grid.webp
+│   │   └── pepe_flavor.png
 │   ├── models
 │   │   ├── pepe.glb
+│   │   ├── pepe_flavor.glb
 │   │   └── protein_powder.glb
 │   ├── next.svg
 │   ├── vercel.svg
@@ -29,18 +31,31 @@
 │       │   │   ├── PepeModel.tsx
 │       │   │   ├── PepeModelImproved.tsx
 │       │   │   └── ProteinModel.tsx
+│       │   ├── cyber-text-reveal
+│       │   │   ├── CyberGrid.tsx
+│       │   │   ├── CyberTextReveal.module.css
+│       │   │   ├── CyberTextRevealSection.tsx
+│       │   │   ├── GlitchText3D.tsx
+│       │   │   └── TextParticleEffect.tsx
 │       │   ├── debug
 │       │   │   └── ModelDebug.tsx
+│       │   ├── glowing-3d-text
+│       │   │   ├── GlowingText.module.css
+│       │   │   ├── GlowingTextScene.tsx
+│       │   │   ├── GlowingTextSection.tsx
+│       │   │   ├── LightingSetup.tsx
+│       │   │   ├── PepeFlavorModel.tsx
+│       │   │   └── PostProcessEffects.tsx
 │       │   ├── hero-section
 │       │   │   ├── GlitchEffects.tsx
 │       │   │   ├── HeroBackground.tsx
 │       │   │   ├── HeroModel.tsx
 │       │   │   ├── HeroSection.module.css
 │       │   │   ├── HeroSection.tsx
-│       │   │   ├── HeroTitle.tsx
-│       │   │   └── ScrollSpace.tsx
+│       │   │   └── HeroTitle.tsx
 │       │   ├── layout
 │       │   │   ├── Navbar.tsx
+│       │   │   ├── PulsatingComponent.tsx
 │       │   │   └── SmoothScroll.tsx
 │       │   ├── matrix-scroll
 │       │   │   ├── MatrixScroll.module.css
@@ -67,4 +82,4 @@
 ├── tailwind.config.js
 └── tsconfig.json
 
-14 directories, 53 files
+16 directories, 66 files

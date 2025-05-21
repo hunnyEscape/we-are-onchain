@@ -168,19 +168,7 @@ const CyberScrollMessages: React.FC = () => {
 
 	return (
 		<div className="absolute inset-0 pointer-events-none z-15 h-[800vh]">
-			{/* デバッグ情報 */}
-			<div className="fixed top-0 left-0 bg-black/80 text-white p-2 z-50 text-xs max-w-xs">
-				<div>Mode: {debugInfo.mode}</div>
-				<div>Section: {debugInfo.sectionFound || 'not found'}</div>
-				<div>Scroll: {Math.round(scrollProgress * 100)}%</div>
-				<div>Active: {activeIndex !== null ? cyberMessages[activeIndex].text : 'none'}</div>
-				<div>Force All: {forceAllActive ? 'ON (Press D to toggle)' : 'OFF (Press D to toggle)'}</div>
-				<pre className="text-[8px] mt-1 max-h-20 overflow-auto">
-					{JSON.stringify(debugInfo, null, 2)}
-				</pre>
-			</div>
 
-			{/* サイバーインターフェース */}
 			<CyberInterface
 				scrollProgress={scrollProgress}
 				activeIndex={activeIndex}

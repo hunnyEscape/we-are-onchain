@@ -41,46 +41,46 @@ export const cyberMessages: MessageConfig[] = [
 	},
 	{
 		id: 'message-2',
-		text: '期は熟し',
+		text: '限られた者がたどり着く',
 		position: { start: 250, end: 450 },  // 位置調整
-		style: 'vertical',
-		size: '8rem',
+		style: 'horizontal',
+		size: '4rem',
 		align: 'right',
-		glitchEffect: 'wave',
-		keywords: ['期', '熟'],
+		glitchEffect: 'jitter',
+		keywords: ['限られた', 'たどり着く'],
 	},
 	{
 		id: 'message-3',
-		text: '覚醒する',
+		text: '境地',
 		position: { start: 500, end: 700 },  // 位置調整
 		style: 'vertical',
 		size: '12rem',
 		align: 'left',
-		glitchEffect: 'slice',
-		keywords: ['覚醒'],
+		glitchEffect: 'rgb',
+		keywords: ['境地'],
 	}
 ];
 
 // グリッチエフェクト設定
 export const glitchEffects: Record<GlitchEffectType, GlitchEffectConfig> = {
 	rgb: {
-		className: 'rgb-split',
+		className: 'rgbSplit',
 		intensity: 2
 	},
 	wave: {
-		className: 'wave-distort',
+		className: 'waveDistort',  // CSSモジュールの実際のクラス名に修正
 		intensity: 1.5
 	},
 	slice: {
-		className: 'slice-glitch',
+		className: 'sliceGlitch',
 		intensity: 3
 	},
 	pulse: {
-		className: 'pulse-effect',
+		className: 'pulseEffect',
 		intensity: 2
 	},
 	jitter: {
-		className: 'jitter-effect',
+		className: 'jitterEffect',
 		intensity: 1
 	},
 	none: {

@@ -1,10 +1,9 @@
 'use client';
 
 import React, { Suspense, useState, useEffect, useRef } from 'react';
-import { Canvas } from '@react-three/fiber';
-import { ScrollControls, Preload, Scroll, Image as DreiImage } from '@react-three/drei';
-import { useFrame } from '@react-three/fiber';
-import { useScroll } from '@react-three/drei';
+import { Canvas, useFrame } from '@react-three/fiber';
+import { ScrollControls, Preload, Scroll, Image as DreiImage, useScroll } from '@react-three/drei';
+
 // 不足している型定義とサイズ定数を追加
 interface ImageItemProps {
 	image: any;  // 一時的に any 型に
@@ -28,6 +27,78 @@ const SCROLL_SETTINGS = {
 	distance: 1.0
 };
 
+// テスト用の画像データ
+const testImages = [
+	{
+		id: 1,
+		filename: '1L.webp',
+		size: 'L',
+		path: 'https://d1abhb48aypmuo.cloudfront.net/we-are-onchain/pepe/1L.webp'
+	},
+	{
+		id: 2,
+		filename: '2M.webp',
+		size: 'M',
+		path: 'https://d1abhb48aypmuo.cloudfront.net/we-are-onchain/pepe/2M.webp'
+	},
+	{
+		id: 3,
+		filename: '6L.webp',
+		size: 'L',
+		path: 'https://d1abhb48aypmuo.cloudfront.net/we-are-onchain/pepe/6L.webp'
+	}
+];
+
+// ImageItemコンポーネント - 親コンポーネントの外で定義
+const ImageItem = ({ image, position, scrollProgress, isVisible = true, index }) => {
+	const ref = useRef(null);
+	const data = useScroll();
+
+	// 画像情報処理部分（変更なし）
+	let imageUrl = '';
+	let imageSize = 'L';
+	if (typeof image === 'string') {
+		imageUrl = image;
+	} else {
+		imageUrl = image.path;
+		imageSize = image.size;
+	}
+	const scale = SIZE_SCALES[imageSize];
+	const scaleFactor = typeof scale === 'number' ? scale :
+		Array.isArray(scale) ? [scale[0], scale[1], 1] : [scale, scale, 1];
+
+	// スクロールに応じた拡大効果
+	useFrame(() => {
+		if (ref.current && ref.current.material) {
+			// 各画像に異なるスクロール範囲でズーム効果を適用
+			const startPoint = index * 0.2; // 各画像で開始点をずらす
+			const zoom = 1 + data.range(startPoint, 0.3) / 3; // スクロール範囲内でズーム効果
+
+			// 直接materialのzoomプロパティを設定
+			ref.current.material.zoom = zoom;
+
+			// または、スケールを使用する場合
+			// ref.current.scale.x = scaleFactor[0] * zoom;
+			// ref.current.scale.y = scaleFactor[1] * zoom;
+		}
+	});
+
+	if (!isVisible) {
+		return null;
+	}
+
+	return (
+		<DreiImage
+			ref={ref}
+			url={imageUrl}
+			position={position}
+			scale={scaleFactor}
+			transparent
+			opacity={1}
+		/>
+	);
+};
+
 interface PepeGalleryProps {
 	className?: string;
 }
@@ -45,78 +116,6 @@ const PepeGallery: React.FC<PepeGalleryProps> = ({ className = '' }) => {
 
 		return () => clearTimeout(timer);
 	}, []);
-
-	// テスト用の画像データ
-	const testImage = {
-		id: 1,
-		filename: '1L.webp',
-		size: 'L',
-		path: 'https://d1abhb48aypmuo.cloudfront.net/we-are-onchain/pepe/1L.webp'
-	};
-
-	// ImageItemコンポーネント
-	const ImageItem: React.FC<ImageItemProps> = ({
-		image,
-		position,
-		scrollProgress,
-		isVisible = true,
-		index
-	}) => {
-		const ref = useRef<any>(null);
-
-		// 単純化: 画像が文字列の場合の対応
-		let imageUrl = '';
-		let imageSize = 'L';
-
-		if (typeof image === 'string') {
-			imageUrl = image;
-		} else {
-			imageUrl = image.path;
-			imageSize = image.size;
-		}
-
-		const scale = SIZE_SCALES[imageSize as keyof typeof SIZE_SCALES];
-
-		// スケールのサイズに基づく調整（単純化）
-		const scaleFactor = typeof scale === 'number' ? scale :
-			Array.isArray(scale) ? [scale[0], scale[1], 1] : [scale, scale, 1];
-
-		if (!isVisible) {
-			return null;
-		}
-
-		// 単純なDreiImageの表示
-		return (
-			<DreiImage
-				ref={ref}
-				url={imageUrl}
-				position={position}
-				scale={scaleFactor}
-				transparent
-				opacity={1}
-			/>
-		);
-	};
-	const testImages = [
-		{
-			id: 1,
-			filename: '1L.webp',
-			size: 'L',
-			path: 'https://d1abhb48aypmuo.cloudfront.net/we-are-onchain/pepe/1L.webp'
-		},
-		{
-			id: 2,
-			filename: '2M.webp',
-			size: 'M',
-			path: 'https://d1abhb48aypmuo.cloudfront.net/we-are-onchain/pepe/2M.webp'
-		},
-		{
-			id: 3,
-			filename: '6L.webp',
-			size: 'L',
-			path: 'https://d1abhb48aypmuo.cloudfront.net/we-are-onchain/pepe/6L.webp'
-		}
-	];
 
 	return (
 		<div className={`w-full h-screen relative overflow-hidden ${className}`}>
@@ -149,10 +148,15 @@ const PepeGallery: React.FC<PepeGalleryProps> = ({ className = '' }) => {
 						distance={SCROLL_SETTINGS.distance}
 					>
 						<Scroll>
-							{/* テスト用のボックスは残しておくか、必要なければ削除 */}
+							{/* テスト用のボックス */}
 							<mesh position={[0, 0, 0]}>
 								<boxGeometry args={[2, 2, 2]} />
 								<meshStandardMaterial color="blue" />
+							</mesh>
+
+							<mesh position={[0, -3, 0]}>
+								<boxGeometry args={[1, 1, 1]} />
+								<meshStandardMaterial color="red" />
 							</mesh>
 
 							{/* 複数の画像を追加 */}

@@ -300,3 +300,19 @@ body::-webkit-scrollbar-thumb:hover {
     transform: scale(0.8);
   }
 }
+
+/* 斜めトランジション用のカスタムスタイル */
+.diagonal-clip {
+  clip-path: polygon(100% 0, 100% 100%, 0 100%, 45% 0);
+}
+
+@media (max-width: 768px) {
+  .diagonal-clip {
+    clip-path: polygon(100% 0, 100% 100%, 0 100%, 35% 0);
+  }
+}
+
+/* サイバーパンクっぽいテキストグロー */
+.cyber-text-glow {
+  text-shadow: 0 0 5px #00ff00, 0 0 10px #00ff00;
+}

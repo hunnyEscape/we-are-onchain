@@ -21,7 +21,7 @@ module.exports = {
 			fontFamily: {
 				sans: ['var(--font-montserrat)', 'sans-serif'],
 				heading: ['var(--font-space-grotesk)', 'sans-serif'],
-				 pixel: ['var(--font-pixel)', 'sans-serif'],
+				pixel: ['var(--font-pixel)', 'sans-serif'],
 			},
 			animation: {
 				glitch: 'glitch 0.2s ease-in-out infinite',
@@ -65,6 +65,17 @@ module.exports = {
 						width: '100%',
 					},
 				},
+			},
+			transitionProperty: {
+				'transform': 'transform',
+			},
+			transitionTimingFunction: {
+				'out-sine': 'cubic-bezier(0.39, 0.575, 0.565, 1)',
+			},
+			// クリップパスの追加（ClipPath プラグインを使わない場合）
+			clipPath: {
+				'diagonal-transition': 'polygon(100% 0, 100% 100%, 0 100%, 45% 0)',
+				'diagonal-transition-mobile': 'polygon(100% 0, 100% 100%, 0 100%, 35% 0)',
 			},
 		},
 	},

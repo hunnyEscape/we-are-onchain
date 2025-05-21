@@ -1,26 +1,44 @@
-// src/app/page.tsx
-import React from 'react';
+// src/app/components/pepe3d/PepeTop.tsx
+"use client";
+import React, { useRef } from 'react';
 import PepeModel3D from './PepeModel3D';
 import ScrollMessage from './ScrollMessage';
+import DiagonalTransition from './DiagonalTransition';
+
 const PepeTop: React.FC = () => {
+	// ScrollMessageへの参照を作成
+	const scrollMessageRef = useRef<HTMLDivElement>(null);
+
 	return (
-		<div className="relative h-[700vh]">
+		<div className="relative h-[800vh]">
+			{/* Sticky PepeModel3D */}
 			<div className="sticky top-0 h-screen w-full overflow-hidden">
 				<PepeModel3D />
+				{/* 既存の放射状グラデーション */}
 				<div
 					className="absolute inset-0 z-10 pointer-events-none"
 					style={{
 						background: `radial-gradient(
-								ellipse 100% 50% at center,
-								rgba(0, 0, 0, 0.2) 10%,
-								rgba(0, 0, 0, 0.6) 60%,
-								rgba(0, 0, 0, 0.9) 80%,
-								rgba(0, 0, 0, 1) 100%
-							)`,
+              ellipse 100% 50% at center,
+              rgba(0, 0, 0, 0.2) 10%,
+              rgba(0, 0, 0, 0.6) 60%,
+              rgba(0, 0, 0, 0.9) 80%,
+              rgba(0, 0, 0, 1) 100%
+            )`,
 					}}
 				/>
 			</div>
-			<ScrollMessage/>
+
+			{/* スクロールメッセージ（参照を追加） */}
+			<div ref={scrollMessageRef}>
+				<ScrollMessage />
+			</div>
+
+			{/* 斜めトランジション（スクロールメッセージの後に配置） */}
+			<DiagonalTransition
+				scrollTriggerRef={scrollMessageRef}
+				scrollHeight={400} // トランジションのスクロール高さを調整
+			/>
 		</div>
 	);
 };

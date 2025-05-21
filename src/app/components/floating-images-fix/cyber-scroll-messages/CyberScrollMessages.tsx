@@ -27,75 +27,82 @@ const CyberScrollMessages: React.FC = () => {
 			// まず全体のスクロール進捗を計算
 			const totalScrollProgress = scrollTop / (docHeight - winHeight);
 
-			// ページ内の全セクションを取得
-			const sections = document.querySelectorAll('section');
-			const sectionList = Array.from(sections);
-
-			// FloatingImagesFixSectionを探す
-			const targetSection = sectionList.find(
-				section => section.classList.contains('floating-images-fix-section')
-			);
+			// FloatingImagesFixSectionを特定のセレクターで検索
+			const targetSection = document.querySelector('#floating-images-fix-section') as HTMLElement;
 
 			if (!targetSection) {
-				// セクションが見つからない場合、ページの相対位置で推定
-				console.log('Target section not found, estimating position');
+				// フォールバック: クラス名でも検索
+				const fallbackSection = document.querySelector('.floating-images-fix-section') as HTMLElement;
 
-				// ページの相対位置から推定（ページの下部1/3程度と仮定）
-				const estimatedStart = docHeight * 0.66;
-				const estimatedHeight = docHeight * 0.25;
+				if (!fallbackSection) {
+					// セクションが見つからない場合、ページの相対位置で推定
+					console.log('Target section not found, estimating position');
 
-				// 相対スクロール位置を計算
-				const relativeScroll = Math.max(0, Math.min(1,
-					(scrollTop - estimatedStart) / estimatedHeight
-				));
+					// ページの相対位置から推定（調整された値）
+					const estimatedStart = docHeight * 0.5;  // 0.66から0.5に調整
+					const estimatedHeight = docHeight * 0.25;
 
-				setScrollProgress(relativeScroll);
-				setDebugInfo({
-					scrollTop,
-					docHeight,
-					estimatedStart,
-					estimatedHeight,
-					relativeScroll,
-					mode: 'estimated'
-				});
+					// 相対スクロール位置を計算
+					const relativeScroll = Math.max(0, Math.min(1,
+						(scrollTop - estimatedStart) / estimatedHeight
+					));
 
-				// メッセージ表示の判定
-				updateActiveMessage(relativeScroll * 800);
-			} else {
-				// セクションが見つかった場合、その位置を使用
-				const rect = targetSection.getBoundingClientRect();
-				const sectionTop = rect.top + scrollTop;
-				const sectionHeight = rect.height;
+					setScrollProgress(relativeScroll);
+					setDebugInfo({
+						scrollTop,
+						docHeight,
+						estimatedStart,
+						estimatedHeight,
+						relativeScroll,
+						mode: 'estimated'
+					});
 
-				// セクション内相対位置を計算
-				let relativeScroll = 0;
-				if (scrollTop < sectionTop) {
-					relativeScroll = 0;
-				} else if (scrollTop > sectionTop + sectionHeight) {
-					relativeScroll = 1;
+					// メッセージ表示の判定
+					updateActiveMessage(relativeScroll * 800);
 				} else {
-					relativeScroll = (scrollTop - sectionTop) / sectionHeight;
+					// フォールバックセクションを使用
+					processSectionScroll(fallbackSection, scrollTop);
 				}
-
-				setScrollProgress(relativeScroll);
-				setDebugInfo({
-					scrollTop,
-					sectionTop,
-					sectionHeight,
-					relativeScroll,
-					viewportOffset: rect.top,
-					mode: 'section-based'
-				});
-
-				// メッセージ表示の判定
-				updateActiveMessage(relativeScroll * 800);
+			} else {
+				// メインのIDセレクターで見つかった場合
+				processSectionScroll(targetSection, scrollTop);
 			}
 
 			// ランダムグリッチの発生
 			triggerRandomGlitch();
 		};
 
-		// メッセージのアクティブ状態を更新
+		// セクションスクロール処理を共通化
+		const processSectionScroll = (section: HTMLElement, scrollTop: number) => {
+			const rect = section.getBoundingClientRect();
+			const sectionTop = rect.top + scrollTop;
+			const sectionHeight = rect.height;
+
+			// セクション内相対位置を計算
+			let relativeScroll = 0;
+			if (scrollTop < sectionTop) {
+				relativeScroll = 0;
+			} else if (scrollTop > sectionTop + sectionHeight) {
+				relativeScroll = 1;
+			} else {
+				relativeScroll = (scrollTop - sectionTop) / sectionHeight;
+			}
+
+			setScrollProgress(relativeScroll);
+			setDebugInfo({
+				scrollTop,
+				sectionTop,
+				sectionHeight,
+				relativeScroll,
+				viewportOffset: rect.top,
+				mode: 'section-based',
+				sectionFound: section.id || section.className
+			});
+
+			// メッセージ表示の判定
+			updateActiveMessage(relativeScroll * 800);
+		};
+
 		// メッセージのアクティブ状態を更新
 		const updateActiveMessage = (currentVhPosition: number) => {
 			if (forceAllActive) {
@@ -103,10 +110,8 @@ const CyberScrollMessages: React.FC = () => {
 				return;
 			}
 
-			// 重要な変更: 開始位置のオフセットを追加
-			// FloatingImagesFixSection の最初の150vh部分を考慮
-			// 0-800の範囲ではなく、-150vh〜650vhの範囲で考える
-			const adjustedPosition = currentVhPosition - 5;
+			// セクション検出が正常に動作している場合は、オフセット調整を少なくする
+			const adjustedPosition = currentVhPosition - 50; // 150から50に調整
 
 			let foundActive = false;
 			let activeIdx = null;
@@ -166,6 +171,7 @@ const CyberScrollMessages: React.FC = () => {
 			{/* デバッグ情報 */}
 			<div className="fixed top-0 left-0 bg-black/80 text-white p-2 z-50 text-xs max-w-xs">
 				<div>Mode: {debugInfo.mode}</div>
+				<div>Section: {debugInfo.sectionFound || 'not found'}</div>
 				<div>Scroll: {Math.round(scrollProgress * 100)}%</div>
 				<div>Active: {activeIndex !== null ? cyberMessages[activeIndex].text : 'none'}</div>
 				<div>Force All: {forceAllActive ? 'ON (Press D to toggle)' : 'OFF (Press D to toggle)'}</div>

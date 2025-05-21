@@ -1,52 +1,60 @@
-// src/app/components/floating-images-fix/FloatingImageFix.tsx
-
-'use client';
-
-import { useRef } from 'react';
+import { useRef, useState, useEffect } from 'react';
 import { useFrame } from '@react-three/fiber';
 import { useTexture } from '@react-three/drei';
-import type { ImageFile, ImageSize } from './constants';
+import type { ImageFile } from './constants';
 
 interface FloatingImageFixProps {
-  image: ImageFile;
-  position: [number, number, number];
-  scale: number;
-  rotationSpeed?: number; // 画像ごとに差をつけたい場合
+	image: ImageFile;
+	position: [number, number, number];
+	scale: number;
+	rotationSpeed?: number;
 }
 
 const FloatingImageFix: React.FC<FloatingImageFixProps> = ({
-  image,
-  position,
-  scale,
-  rotationSpeed = 0.12,
+	image,
+	position,
+	scale,
+	rotationSpeed = 0.12,
 }) => {
-  const meshRef = useRef<THREE.Mesh>(null);
-  const texture = useTexture(image.path);
+	const meshRef = useRef<THREE.Mesh>(null);
+	const texture = useTexture(image.path);
 
-  useFrame((_, delta) => {
-    if (meshRef.current) {
-      // Z軸回転のみ
-      meshRef.current.rotation.z += rotationSpeed * delta;
-    }
-  });
+	// アスペクト比（幅/高さ）。初期値は1:1でOK
+	const [aspect, setAspect] = useState(1);
 
-  return (
-    <mesh
-      ref={meshRef}
-      position={position}
-      scale={[scale, scale, 1]}
-      castShadow={false}
-      receiveShadow={false}
-    >
-      <planeGeometry args={[1, 1]} />
-      <meshBasicMaterial
-        map={texture}
-        transparent
-        opacity={0.95}
-        toneMapped={false}
-      />
-    </mesh>
-  );
+	// 画像がロードできたらアスペクト比をセット
+	useEffect(() => {
+		if (texture?.image) {
+			setAspect(texture.image.width / texture.image.height);
+		}
+	}, [texture]);
+
+	useFrame((_, delta) => {
+		if (meshRef.current) {
+			meshRef.current.rotation.z += rotationSpeed * delta;
+		}
+	});
+
+	// 縦長画像の場合は、幅をscale、 高さをscale/aspect にすると歪まず正しく表示される
+	const width = scale;
+	const height = scale / aspect;
+
+	return (
+		<mesh
+			ref={meshRef}
+			position={position}
+			castShadow={false}
+			receiveShadow={false}
+		>
+			<planeGeometry args={[width, height]} />
+			<meshBasicMaterial
+				map={texture}
+				transparent
+				opacity={0.95}
+				toneMapped={false}
+			/>
+		</mesh>
+	);
 };
 
 export default FloatingImageFix;

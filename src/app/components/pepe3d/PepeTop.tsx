@@ -10,11 +10,11 @@ const PepeTop: React.FC = () => {
 	const scrollMessageRef = useRef<HTMLDivElement>(null);
 
 	return (
-		<div className="relative f-[900vh]">
+		<div className="relative f-[1000vh]">
 			{/* Sticky PepeModel3D */}
 			<div className="sticky top-0 h-screen w-full overflow-hidden">
 				<PepeModel3D />
-				{/* 既存の放射状グラデーション */}
+				{/* 既存の放射状グラデーション*/}
 				<div
 					className="absolute inset-0 z-10 pointer-events-none"
 					style={{

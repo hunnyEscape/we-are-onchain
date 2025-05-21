@@ -10,7 +10,7 @@ const PepeTop: React.FC = () => {
 	const scrollMessageRef = useRef<HTMLDivElement>(null);
 
 	return (
-		<div className="relative h-[800vh]">
+		<div className="relative f-[900vh]">
 			{/* Sticky PepeModel3D */}
 			<div className="sticky top-0 h-screen w-full overflow-hidden">
 				<PepeModel3D />
@@ -33,11 +33,17 @@ const PepeTop: React.FC = () => {
 			<div ref={scrollMessageRef}>
 				<ScrollMessage />
 			</div>
-
-			{/* 斜めトランジション（スクロールメッセージの後に配置） */}
-			<DiagonalTransition
-				scrollTriggerRef={scrollMessageRef}
-				scrollHeight={400} // トランジションのスクロール高さを調整
+			<div
+				className="absolute inset-0 z-10 pointer-events-none"
+				style={{
+					background: `radial-gradient(
+						ellipse 100% 50% at center,
+						rgba(0, 0, 0, 0.2) 10%,
+						rgba(0, 0, 0, 0.6) 60%,
+						rgba(0, 0, 0, 1) 70%,
+						rgba(0, 0, 0, 1) 100%
+           			 )`,
+				}}
 			/>
 		</div>
 	);

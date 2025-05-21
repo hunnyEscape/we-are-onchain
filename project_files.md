@@ -1204,6 +1204,882 @@ export const HeroSection: React.FC = () => {
 
 export default HeroSection;
 -e 
+### FILE: ./src/app/components/pepe-gallery/ScrollableImages.tsx
+
+'use client';
+
+import { useRef, useState, useEffect, useMemo } from 'react';
+import { useThree, useFrame } from '@react-three/fiber';
+import { useScroll, Scroll } from '@react-three/drei';
+import { imageFiles } from './utils/constants';
+import { calculateOptimalImagePositions } from './utils/imageLoader';
+import ImageItem from './ImageItem';
+
+const ScrollableImages: React.FC = () => {
+	// スクロールデータを取得
+	const data = useScroll();
+	const groupRef = useRef<THREE.Group>(null);
+
+	// ビューポートのサイズを取得
+	const { width, height } = useThree((state) => state.viewport);
+
+	// 画面に表示可能な画像数の制限（パフォーマンス最適化）
+	const [visibleRange, setVisibleRange] = useState({ start: 0, end: 12 });
+
+	// サイズに基づいた最適な画像配置を計算
+	const imagePositions = useMemo(() => {
+		return calculateOptimalImagePositions(imageFiles, width, height);
+	}, [width, height]);
+
+	// スクロール位置に基づいて表示する画像範囲を更新
+	useEffect(() => {
+		const updateVisibleRange = () => {
+			// スクロール位置に基づいて表示範囲を計算
+			const scrollOffset = Math.floor(data.offset * imageFiles.length);
+			const start = Math.max(0, scrollOffset - 6);
+			const end = Math.min(imageFiles.length, scrollOffset + 12);
+
+			setVisibleRange({ start, end });
+		};
+
+		// スクロールイベントのリスナーを追加
+		const scrollElement = data.el;
+		if (scrollElement) {
+			scrollElement.addEventListener('scroll', updateVisibleRange);
+		}
+
+		// 初期表示範囲を設定
+		updateVisibleRange();
+
+		// クリーンアップ関数
+		return () => {
+			if (scrollElement) {
+				scrollElement.removeEventListener('scroll', updateVisibleRange);
+			}
+		};
+	}, [data]);
+
+	// 各フレームでのスクロールに基づくアニメーション
+	useFrame(() => {
+		if (groupRef.current) {
+			// 各画像の状態を更新（必要に応じて）
+			if (groupRef.current.children.length > 0) {
+				// 例: スクロール範囲に基づく透明度や位置の調整
+				const scrollRange = data.range(0, 1);
+
+				// 必要に応じてここに追加のスクロールアニメーションを実装
+			}
+		}
+	});
+
+	return (
+		<Scroll>
+			<group ref={groupRef}>
+				{imageFiles.map((image, index) => {
+					// 画像の位置を取得（デフォルト位置を設定）
+					const position = imagePositions[image.id] || [
+						(index % 5 - 2) * 2,
+						-Math.floor(index / 5) * 3,
+						0
+					];
+
+					// スクロール範囲内の画像のみをレンダリング
+					const isVisible = index >= visibleRange.start && index <= visibleRange.end;
+
+					// 画像のスクロール進行状況を計算
+					const scrollProgress = data.range(
+						index / imageFiles.length,
+						1 / imageFiles.length
+					);
+
+					return (
+						<ImageItem
+							key={image.id}
+							image={image}
+							position={position}
+							scrollProgress={scrollProgress}
+							isVisible={isVisible}
+							index={index}
+						/>
+					);
+				})}
+			</group>
+		</Scroll>
+	);
+};
+
+export default ScrollableImages;-e 
+### FILE: ./src/app/components/pepe-gallery/ImageItem.tsx
+
+'use client';
+
+import { useRef, useState, useEffect } from 'react';
+import { useFrame, useThree } from '@react-three/fiber';
+import { Image as DreiImage } from '@react-three/drei';
+import { ImageFile, SIZE_SCALES } from './utils/constants';
+import styles from './styles/GalleryEffects.module.css';
+import { useImageLoader } from './utils/imageLoader';
+import { easing } from 'maath';
+
+interface ImageItemProps {
+  image: ImageFile;
+  position: [number, number, number];
+  scrollProgress: number;
+  isVisible?: boolean;
+  index: number;
+}
+
+const ImageItem: React.FC<ImageItemProps> = ({
+  image,
+  position,
+  scrollProgress,
+  isVisible = true,
+  index
+}) => {
+  const ref = useRef<any>(null);
+  const { size } = image;
+  const scale = SIZE_SCALES[size];
+  
+  // スケールのサイズに基づく調整
+  const scaleFactor = typeof scale === 'number' ? scale : 
+                     Array.isArray(scale) ? [scale[0], scale[1], 1] : [scale, scale, 1];
+  
+  // ビューポートの幅と高さを取得
+  const { width, height } = useThree((state) => state.viewport);
+  
+  // 画像の読み込み状態を取得
+  const { loading, error } = useImageLoader(image.path);
+  
+  // スクロール位置に基づく動的なズーム効果
+  const scrollBasedZoom = 1 + (scrollProgress * 0.2);
+  
+  // グレースケール効果の状態
+  const [grayscale, setGrayscale] = useState(1);
+  
+  // スクロール位置に基づいてグレースケール効果を更新
+  useEffect(() => {
+    // インデックスに基づいて異なるスクロール範囲でグレースケール効果を適用
+    const startPoint = (index % 5) * 0.1 + 0.2;
+    const endPoint = startPoint + 0.3;
+    
+    // スクロール範囲内に入ったらカラーに変化
+    if (scrollProgress > startPoint && scrollProgress < endPoint) {
+      setGrayscale(0); // カラー
+    } else {
+      setGrayscale(1); // グレースケール
+    }
+  }, [scrollProgress, index]);
+  
+  // 各フレームで適用するアニメーション
+  useFrame((state, delta) => {
+    if (ref.current) {
+      // 滑らかなホバリングエフェクト（浮遊感）
+      const time = state.clock.getElapsedTime();
+      const hoverEffect = Math.sin(time * 0.3 + index) * 0.1;
+      
+      // スクロールに応じた移動とスケール変更
+      easing.damp3(
+        ref.current.position,
+        [
+          position[0] + Math.sin(time * 0.1 + index) * 0.3,
+          position[1] + hoverEffect,
+          position[2]
+        ],
+        0.2,
+        delta
+      );
+      
+      // スクロールに応じたサイズ変化
+      easing.damp3(
+        ref.current.scale,
+        [
+          scaleFactor[0] * scrollBasedZoom,
+          scaleFactor[1] * scrollBasedZoom,
+          1
+        ],
+        0.3,
+        delta
+      );
+      
+      // スクロールに応じた回転効果
+      easing.dampE(
+        ref.current.rotation,
+        [0, 0, Math.sin(time * 0.2 + index) * 0.05],
+        0.3,
+        delta
+      );
+      
+      // グレースケール効果の滑らかな遷移
+      easing.damp(
+        ref.current.material,
+        'grayscale',
+        grayscale,
+        0.3,
+        delta
+      );
+    }
+  });
+  
+  if (!isVisible || loading || error) {
+    return null;
+  }
+  
+  return (
+    <DreiImage
+      ref={ref}
+      url={image.path}
+      position={position}
+      scale={scaleFactor}
+      transparent
+      opacity={1}
+      toneMapped={false}
+      className={`${styles.imageGlow} ${styles.parallaxLayer}`}
+    />
+  );
+};
+
+export default ImageItem;-e 
+### FILE: ./src/app/components/pepe-gallery/GalleryTypography.tsx
+
+'use client';
+
+import React, { useRef } from 'react';
+import { useFrame, useThree } from '@react-three/fiber';
+import { Text, useScroll } from '@react-three/drei';
+import { TYPOGRAPHY_POSITIONS } from './utils/constants';
+import { applyTextFadeEffect, applyFloatingAnimation } from './utils/scrollAnimation';
+
+// テキスト要素の型定義
+interface TextElement {
+  id: number;
+  text: string;
+  position: [number, number, number];
+  anchorX?: 'left' | 'center' | 'right';
+  visibleRange: [number, number]; // [表示開始位置, 表示終了位置]
+}
+
+const GalleryTypography: React.FC = () => {
+  // テキスト要素の定義
+  const textElements: TextElement[] = [
+    {
+      id: 1,
+      text: "PEPE",
+      position: TYPOGRAPHY_POSITIONS[0].position as [number, number, number],
+      anchorX: TYPOGRAPHY_POSITIONS[0].anchorX as 'left' | 'center' | 'right',
+      visibleRange: [0, 0.4] // スクロール0%〜40%の間で表示
+    },
+    {
+      id: 2,
+      text: "GALLERY",
+      position: TYPOGRAPHY_POSITIONS[1].position as [number, number, number],
+      anchorX: TYPOGRAPHY_POSITIONS[1].anchorX as 'left' | 'center' | 'right',
+      visibleRange: [0.3, 0.7] // スクロール30%〜70%の間で表示
+    },
+    {
+      id: 3,
+      text: "COLLECTION",
+      position: TYPOGRAPHY_POSITIONS[2].position as [number, number, number],
+      anchorX: TYPOGRAPHY_POSITIONS[2].anchorX as 'left' | 'center' | 'right',
+      visibleRange: [0.6, 1.0] // スクロール60%〜100%の間で表示
+    }
+  ];
+  
+  // スクロールデータを取得
+  const data = useScroll();
+  
+  // テキスト要素の参照を保持する配列
+  const textRefs = useRef<Array<React.RefObject<any>>>([]);
+  
+  // テキスト要素の参照を初期化
+  if (textRefs.current.length !== textElements.length) {
+    textRefs.current = Array(textElements.length)
+      .fill(null)
+      .map((_, i) => textRefs.current[i] || React.createRef());
+  }
+  
+  // ビューポートのサイズを取得
+  const { width, height } = useThree((state) => state.viewport);
+  
+  // テキストのスタイル設定
+  const textStyle = {
+    font: '/Inter-Regular.woff', // プロジェクトに合わせて変更
+    fontSize: width * 0.08,
+    letterSpacing: -0.05,
+    lineHeight: 1,
+    'material-toneMapped': false
+  };
+  
+  // 各フレームでのアニメーション処理
+  useFrame((state, delta) => {
+    const scrollOffset = data.offset; // スクロール位置（0-1）
+    const time = state.clock.getElapsedTime();
+    
+    // 各テキスト要素にアニメーション効果を適用
+    textElements.forEach((element, index) => {
+      const ref = textRefs.current[index];
+      if (ref && ref.current) {
+        // フェードイン/アウト効果の適用
+        applyTextFadeEffect(ref, scrollOffset, element.visibleRange, delta);
+        
+        // 浮遊アニメーションの適用
+        applyFloatingAnimation(
+          ref, 
+          time + index, 
+          element.position,
+          0.05 // 浮遊の振幅
+        );
+      }
+    });
+  });
+  
+  return (
+    <>
+      {textElements.map((element, index) => (
+        <Text
+          key={element.id}
+          ref={textRefs.current[index]}
+          position={element.position}
+          anchorX={element.anchorX || 'center'}
+          anchorY="middle"
+          color="black"
+          opacity={0} // 初期状態では非表示
+          {...textStyle}
+        >
+          {element.text}
+        </Text>
+      ))}
+    </>
+  );
+};
+
+export default GalleryTypography;-e 
+### FILE: ./src/app/components/pepe-gallery/utils/constants.ts
+
+// 画像サイズの定義
+export type ImageSize = 'S' | 'M' | 'L';
+
+// 画像ファイルの型定義
+export interface ImageFile {
+  id: number;
+  filename: string;
+  size: ImageSize;
+  path: string;
+}
+
+// CDN URL設定（必要に応じて環境変数から取得する実装に変更可能）
+export const CDN_URL = process.env.NEXT_PUBLIC_CLOUDFRONT_URL || '';
+
+// 画像サイズに応じたスケール係数の定義
+export const SIZE_SCALES = {
+  S: 1.5,
+  M: 2.5,
+  L: 4.0
+};
+
+// 画像サイズに応じたZ位置（深度）設定
+export const SIZE_Z_POSITIONS = {
+  S: 10,
+  M: 5,
+  L: 0
+};
+
+// スクロール効果の設定
+export const SCROLL_SETTINGS = {
+  damping: 0.2,  // スクロールの減衰係数
+  pages: 5,      // スクロールページ数
+  distance: 0.5  // スクロール距離係数
+};
+
+// アニメーション設定
+export const ANIMATION_SETTINGS = {
+  zoomFactor: 0.3,    // ズーム効果の強さ
+  transitionSpeed: 0.15,  // 遷移の速さ
+  rotationFactor: 0.02    // 回転効果の強さ
+};
+
+// 画像ファイルのリスト
+export const imageFiles: ImageFile[] = [
+  { id: 1, filename: '1L.webp', size: 'L', path: `${CDN_URL}/pepe/1L.webp` },
+  { id: 2, filename: '2M.webp', size: 'M', path: `${CDN_URL}/pepe/2M.webp` },
+  { id: 3, filename: '3S.webp', size: 'S', path: `${CDN_URL}/pepe/3S.webp` },
+  { id: 4, filename: '4S.webp', size: 'S', path: `${CDN_URL}/pepe/4S.webp` },
+  { id: 5, filename: '5M.webp', size: 'M', path: `${CDN_URL}/pepe/5M.webp` },
+  { id: 6, filename: '6L.webp', size: 'L', path: `${CDN_URL}/pepe/6L.webp` },
+  { id: 7, filename: '7M.webp', size: 'M', path: `${CDN_URL}/pepe/7M.webp` },
+  { id: 8, filename: '8M.webp', size: 'M', path: `${CDN_URL}/pepe/8M.webp` },
+  { id: 9, filename: '9L.webp', size: 'L', path: `${CDN_URL}/pepe/9L.webp` },
+  { id: 10, filename: '10S.webp', size: 'S', path: `${CDN_URL}/pepe/10S.webp` },
+  { id: 11, filename: '11S.webp', size: 'S', path: `${CDN_URL}/pepe/11S.webp` },
+  { id: 12, filename: '12M.webp', size: 'M', path: `${CDN_URL}/pepe/12M.webp` },
+  { id: 13, filename: '13L.webp', size: 'L', path: `${CDN_URL}/pepe/13L.webp` },
+  { id: 14, filename: '14L.webp', size: 'L', path: `${CDN_URL}/pepe/14L.webp` },
+  { id: 15, filename: '15M.webp', size: 'M', path: `${CDN_URL}/pepe/15M.webp` },
+  { id: 16, filename: '16S.webp', size: 'S', path: `${CDN_URL}/pepe/16S.webp` },
+  { id: 17, filename: '17S.webp', size: 'S', path: `${CDN_URL}/pepe/17S.webp` },
+  { id: 18, filename: '18M.webp', size: 'M', path: `${CDN_URL}/pepe/18M.webp` },
+  { id: 19, filename: '19L.webp', size: 'L', path: `${CDN_URL}/pepe/19L.webp` },
+  { id: 20, filename: '20L.webp', size: 'L', path: `${CDN_URL}/pepe/20L.webp` },
+  { id: 21, filename: '21S.webp', size: 'S', path: `${CDN_URL}/pepe/21S.webp` },
+  { id: 22, filename: '22S.webp', size: 'S', path: `${CDN_URL}/pepe/22S.webp` },
+  { id: 23, filename: '23L.webp', size: 'L', path: `${CDN_URL}/pepe/23L.webp` },
+  { id: 24, filename: '24L.webp', size: 'L', path: `${CDN_URL}/pepe/24L.webp` },
+  { id: 25, filename: '25S.webp', size: 'S', path: `${CDN_URL}/pepe/25S.webp` },
+  { id: 26, filename: '26S.webp', size: 'S', path: `${CDN_URL}/pepe/26S.webp` },
+  { id: 27, filename: '27S.webp', size: 'S', path: `${CDN_URL}/pepe/27S.webp` },
+  { id: 28, filename: '28L.webp', size: 'L', path: `${CDN_URL}/pepe/28L.webp` },
+  { id: 29, filename: '29S.webp', size: 'S', path: `${CDN_URL}/pepe/29S.webp` },
+  { id: 30, filename: '30S.webp', size: 'S', path: `${CDN_URL}/pepe/30S.webp` },
+  { id: 31, filename: '31M.webp', size: 'M', path: `${CDN_URL}/pepe/31M.webp` },
+  { id: 32, filename: '32M.webp', size: 'M', path: `${CDN_URL}/pepe/32M.webp` },
+  { id: 33, filename: '33M.webp', size: 'M', path: `${CDN_URL}/pepe/33M.webp` },
+  { id: 34, filename: '34S.webp', size: 'S', path: `${CDN_URL}/pepe/34S.webp` },
+  { id: 35, filename: '35L.webp', size: 'L', path: `${CDN_URL}/pepe/35L.webp` },
+];
+
+// テキスト要素の配置設定
+export const TYPOGRAPHY_POSITIONS = [
+  { text: "PEPE", position: [-2, 0, 12], anchorX: "left" },
+  { text: "GALLERY", position: [2, -2, 12], anchorX: "right" },
+  { text: "COLLECTION", position: [0, -4.5, 12], anchorX: "center" }
+];-e 
+### FILE: ./src/app/components/pepe-gallery/utils/imageLoader.ts
+
+import { useState, useEffect, useCallback } from 'react';
+import * as THREE from 'three';
+import { ImageFile } from './constants';
+
+/**
+ * 画像読み込み状態の型定義
+ */
+interface ImageLoadingState {
+  texture: THREE.Texture | null;
+  loading: boolean;
+  error: Error | null;
+}
+
+/**
+ * 画像読み込み用カスタムフック
+ * 指定されたURLから画像をテクスチャとして読み込む
+ */
+export const useImageLoader = (imageUrl: string): ImageLoadingState => {
+  const [state, setState] = useState<ImageLoadingState>({
+    texture: null,
+    loading: true,
+    error: null
+  });
+
+  useEffect(() => {
+    // 画像を読み込むたびに状態をリセット
+    setState({ texture: null, loading: true, error: null });
+
+    const textureLoader = new THREE.TextureLoader();
+    
+    textureLoader.load(
+      imageUrl,
+      // 読み込み成功時
+      (loadedTexture) => {
+        loadedTexture.needsUpdate = true;
+        setState({
+          texture: loadedTexture,
+          loading: false,
+          error: null
+        });
+      },
+      // 読み込み進捗時（必要に応じて実装）
+      undefined,
+      // 読み込み失敗時
+      (error) => {
+        console.error(`Error loading texture from ${imageUrl}:`, error);
+        setState({
+          texture: null,
+          loading: false,
+          error: new Error(`Failed to load image: ${error.message}`)
+        });
+      }
+    );
+
+    // クリーンアップ関数
+    return () => {
+      // コンポーネントのアンマウント時にテクスチャを破棄
+      if (state.texture) {
+        state.texture.dispose();
+      }
+    };
+  }, [imageUrl]);
+
+  return state;
+};
+
+/**
+ * 複数画像の事前読み込み用ユーティリティ
+ * 指定された画像リストを非同期で事前読み込みする
+ */
+export const preloadImages = async (images: ImageFile[]): Promise<void> => {
+  const textureLoader = new THREE.TextureLoader();
+  
+  // すべての画像を非同期で読み込む
+  const loadPromises = images.map(img => {
+    return new Promise<void>((resolve, reject) => {
+      textureLoader.load(
+        img.path,
+        () => resolve(),
+        undefined,
+        (error) => {
+          console.warn(`Failed to preload image ${img.filename}:`, error);
+          resolve(); // エラーでも続行するため、rejectではなくresolveを呼び出す
+        }
+      );
+    });
+  });
+
+  // すべての読み込みが完了するまで待機
+  await Promise.all(loadPromises);
+};
+
+/**
+ * 画像配置を最適化するためのユーティリティ
+ * サイズに基づいて画像の最適な配置を計算する
+ */
+export const calculateOptimalImagePositions = (
+  images: ImageFile[],
+  viewportWidth: number,
+  viewportHeight: number
+): { [key: number]: [number, number, number] } => {
+  // 画像IDをキーとし、位置座標[x, y, z]を値とするオブジェクト
+  const positions: { [key: number]: [number, number, number] } = {};
+  
+  // 特大画像(L)、中型画像(M)、小型画像(S)をグループ化
+  const largeImages = images.filter(img => img.size === 'L');
+  const mediumImages = images.filter(img => img.size === 'M');
+  const smallImages = images.filter(img => img.size === 'S');
+  
+  // 視覚的な配置の多様性のために使用する係数
+  const diversityFactor = 0.7;
+  
+  // Lサイズ画像の配置 - 主要な位置に配置
+  largeImages.forEach((img, index) => {
+    const xPos = (index % 3 - 1) * viewportWidth / 2.5;
+    const yPos = -Math.floor(index / 3) * viewportHeight / 1.5;
+    const zPos = 0; // 前面に配置
+    positions[img.id] = [xPos, yPos, zPos];
+  });
+  
+  // Mサイズ画像の配置 - Lサイズの間を埋める
+  mediumImages.forEach((img, index) => {
+    const xPos = ((index % 4) - 1.5) * viewportWidth / 3 * diversityFactor;
+    const yPos = -Math.floor(index / 4) * viewportHeight / 2 - viewportHeight / 4;
+    const zPos = 5; // Lの後ろに配置
+    positions[img.id] = [xPos, yPos, zPos];
+  });
+  
+  // Sサイズ画像の配置 - 埋め草的に散らす
+  smallImages.forEach((img, index) => {
+    const xPos = ((index % 5) - 2) * viewportWidth / 4 * diversityFactor;
+    const yPos = -Math.floor(index / 5) * viewportHeight / 2.5 - viewportHeight / 3;
+    const zPos = 10; // 最も後ろに配置
+    positions[img.id] = [xPos, yPos, zPos];
+  });
+  
+  return positions;
+};-e 
+### FILE: ./src/app/components/pepe-gallery/utils/scrollAnimation.ts
+
+import { MutableRefObject } from 'react';
+import { Object3D, Vector3, Euler } from 'three';
+import { easing } from 'maath';
+
+/**
+ * スクロール位置に基づくアニメーション値の計算
+ * @param start 効果の開始位置 (0-1)
+ * @param end 効果の終了位置 (0-1)
+ * @param scrollOffset 現在のスクロール位置 (0-1)
+ * @param minValue 最小値
+ * @param maxValue 最大値
+ * @returns 計算された値
+ */
+export const calculateScrollValue = (
+	start: number,
+	end: number,
+	scrollOffset: number,
+	minValue: number,
+	maxValue: number
+): number => {
+	// スクロール範囲外の場合
+	if (scrollOffset < start) return minValue;
+	if (scrollOffset > end) return maxValue;
+
+	// 範囲内の場合は線形補間
+	const normalizedOffset = (scrollOffset - start) / (end - start);
+	return minValue + normalizedOffset * (maxValue - minValue);
+};
+
+/**
+ * スクロール位置に基づく回転効果
+ */
+export const applyScrollRotation = (
+	ref: MutableRefObject<Object3D | null>,
+	scrollOffset: number,
+	delta: number,
+	intensity: number = 0.1
+): void => {
+	if (!ref.current) return;
+
+	// スクロール位置に基づく回転角度の計算
+	const targetRotation = new Euler(
+		0,
+		scrollOffset * Math.PI * intensity,
+		0
+	);
+
+	// 滑らかな回転の適用
+	easing.dampE(
+		ref.current.rotation,
+		[targetRotation.x, targetRotation.y, targetRotation.z],
+		0.3,
+		delta
+	);
+};
+
+/**
+ * スクロール位置に基づくズーム効果
+ */
+export const applyScrollZoom = (
+	ref: MutableRefObject<Object3D | null>,
+	scrollOffset: number,
+	delta: number,
+	baseScale: number | [number, number, number] = 1,
+	intensity: number = 0.2
+): void => {
+	if (!ref.current) return;
+
+	// ベーススケールの処理
+	const baseScaleVector = typeof baseScale === 'number'
+		? [baseScale, baseScale, baseScale]
+		: baseScale;
+
+	// スクロール位置に基づくスケール係数の計算
+	const zoomFactor = 1 + (scrollOffset * intensity);
+
+	// 目標スケールの計算
+	const targetScale = [
+		baseScaleVector[0] * zoomFactor,
+		baseScaleVector[1] * zoomFactor,
+		baseScaleVector[2]
+	];
+
+	// 滑らかなスケールの適用
+	easing.damp3(
+		ref.current.scale,
+		targetScale,
+		0.2,
+		delta
+	);
+};
+
+/**
+ * スクロール位置に基づく移動効果
+ */
+export const applyScrollMovement = (
+	ref: MutableRefObject<Object3D | null>,
+	scrollOffset: number,
+	delta: number,
+	basePosition: [number, number, number],
+	movementVector: [number, number, number] = [0, -1, 0],
+	intensity: number = 1
+): void => {
+	if (!ref.current) return;
+
+	// スクロール位置に基づく移動量の計算
+	const targetPosition = [
+		basePosition[0] + (movementVector[0] * scrollOffset * intensity),
+		basePosition[1] + (movementVector[1] * scrollOffset * intensity),
+		basePosition[2] + (movementVector[2] * scrollOffset * intensity)
+	];
+
+	// 滑らかな移動の適用
+	easing.damp3(
+		ref.current.position,
+		targetPosition,
+		0.15,
+		delta
+	);
+};
+
+/**
+ * テキスト表示のフェードイン/アウト効果
+ */
+export const applyTextFadeEffect = (
+	ref: MutableRefObject<any | null>,
+	scrollOffset: number,
+	visibleRange: [number, number], // [表示開始位置, 表示終了位置]
+	delta: number
+): void => {
+	if (!ref.current || !ref.current.material) return;
+
+	const [start, end] = visibleRange;
+	const targetOpacity = calculateScrollValue(start, start + 0.1, scrollOffset, 0, 1);
+	const fadeOutOpacity = calculateScrollValue(end - 0.1, end, scrollOffset, 1, 0);
+
+	// 最終的な不透明度の計算
+	const finalOpacity = Math.min(targetOpacity, fadeOutOpacity);
+
+	// 滑らかな不透明度の適用
+	easing.damp(
+		ref.current.material,
+		'opacity',
+		finalOpacity,
+		0.2,
+		delta
+	);
+};
+
+/**
+ * 浮遊効果のアニメーション（時間ベース）
+ */
+export const applyFloatingAnimation = (
+	ref: MutableRefObject<Object3D | null>,
+	time: number,
+	basePosition: [number, number, number],
+	amplitude: number = 0.1
+): void => {
+	if (!ref.current) return;
+
+	// 時間に基づく浮遊効果の計算
+	const floatingY = Math.sin(time * 0.5) * amplitude;
+
+	// 位置の更新
+	ref.current.position.set(
+		basePosition[0],
+		basePosition[1] + floatingY,
+		basePosition[2]
+	);
+};-e 
+### FILE: ./src/app/components/pepe-gallery/PepeGallery.tsx
+
+'use client';
+
+import { Suspense, useState, useEffect, useCallback } from 'react';
+import { Canvas } from '@react-three/fiber';
+import { ScrollControls, Preload, Environment, useScroll } from '@react-three/drei';
+import { imageFiles, SCROLL_SETTINGS } from './utils/constants';
+import { preloadImages } from './utils/imageLoader';
+import ScrollableImages from './ScrollableImages';
+import GalleryTypography from './GalleryTypography';
+
+interface PepeGalleryProps {
+  className?: string;
+}
+
+// スクロール進行状況を表示するコンポーネント
+const ScrollProgressBar: React.FC<{ progress: number }> = ({ progress }) => (
+  <div 
+    className="fixed top-0 left-0 h-1 bg-gradient-to-r from-gray-200 to-gray-500 z-50 transition-all duration-300 ease-out"
+    style={{ width: `${progress * 100}%` }}
+  />
+);
+
+const PepeGallery: React.FC<PepeGalleryProps> = ({ className = '' }) => {
+  const [isLoading, setIsLoading] = useState(true);
+  const [scrollProgress, setScrollProgress] = useState(0);
+
+  // コンポーネントマウント時に画像を事前読み込み
+  useEffect(() => {
+    const loadImages = async () => {
+      try {
+        await preloadImages(imageFiles);
+        setIsLoading(false);
+      } catch (error) {
+        console.error('Failed to preload images:', error);
+        setIsLoading(false);
+      }
+    };
+
+    loadImages();
+  }, []);
+
+  // スクロール進行状況を更新するコールバック
+  const handleScroll = useCallback((progress: number) => {
+    setScrollProgress(progress);
+  }, []);
+
+  // スクロール進行状況を監視するコンポーネント
+  const ScrollObserver = () => {
+    const scroll = useScroll();
+    
+    useEffect(() => {
+      // スクロールオフセットの変更を監視する関数
+      const onScroll = () => {
+        handleScroll(scroll.offset);
+      };
+      
+      // スクロールイベントのリスナーを追加
+      const scrollElement = scroll.el;
+      if (scrollElement) {
+        scrollElement.addEventListener('scroll', onScroll);
+      }
+      
+      // クリーンアップ関数
+      return () => {
+        if (scrollElement) {
+          scrollElement.removeEventListener('scroll', onScroll);
+        }
+      };
+    }, [scroll]);
+    
+    return null;
+  };
+
+  return (
+    <div className={`w-full h-screen relative overflow-hidden ${className}`}>
+      {/* ローディング状態の表示 */}
+      {isLoading && (
+        <div className="absolute inset-0 flex items-center justify-center bg-gray-900 bg-opacity-80 z-50">
+          <div className="text-white text-2xl">Loading Gallery...</div>
+        </div>
+      )}
+      
+      {/* スクロール進行状況バー */}
+      <ScrollProgressBar progress={scrollProgress} />
+      
+      <Canvas
+        camera={{ position: [0, 0, 15], fov: 15 }}
+        className="w-full h-full"
+        gl={{ antialias: true, alpha: true }}
+        dpr={[1, 2]} // 解像度の設定（標準〜高解像度デバイス）
+      >
+        <color attach="background" args={['#d8d7d7']} />
+        
+        <Suspense fallback={null}>
+          <Environment preset="city" />
+          
+          <ScrollControls
+            damping={SCROLL_SETTINGS.damping}
+            pages={SCROLL_SETTINGS.pages}
+            distance={SCROLL_SETTINGS.distance}
+          >
+            {/* スクロール可能なコンテンツ */}
+            <ScrollableImages />
+            <GalleryTypography />
+            <ScrollObserver />
+            
+            {/* 画像の事前読み込み対策 */}
+            <Preload all />
+          </ScrollControls>
+        </Suspense>
+      </Canvas>
+      
+      {/* オーバーレイ情報 */}
+      <div className="absolute bottom-4 left-4 text-black text-sm opacity-70 pointer-events-none">
+        Pepe Gallery Collection
+      </div>
+      <div className="absolute bottom-4 right-4 text-black text-sm opacity-70 pointer-events-none">
+        Scroll to explore
+      </div>
+    </div>
+  );
+};
+
+export default PepeGallery;-e 
 ### FILE: ./src/app/components/3d/PepeModelImproved.tsx
 
 'use client';
@@ -4334,7 +5210,7 @@ import SphereTop from './components/sphere/SphereTop';
 import PepeTop from './components/pepe3d/PepeTop';
 import GlowingTextSection from './components/glowing-3d-text/GlowingTextSection';
 import PulsatingComponent from './components/layout/PulsatingComponent';
-import FloatingImagesSection from './components/floating-images/FloatingImagesSection';
+import PepeGallery from '@/app/components/pepe-gallery/PepeGallery';
 export default function Home() {
 	return (
 		<main className="relative">
@@ -4343,7 +5219,7 @@ export default function Home() {
 			<PulsatingComponent/>
 			<PepeTop/>
 			<SphereTop/>
-			<FloatingImagesSection />
+			<PepeGallery className="my-custom-class" />
 			<div
 				className="h-screen w-full bg-cover bg-center"
 				style={{

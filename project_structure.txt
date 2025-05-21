@@ -72,6 +72,17 @@
 │       │   ├── matrix-scroll
 │       │   │   ├── MatrixScroll.module.css
 │       │   │   └── MatrixScrollContainer.tsx
+│       │   ├── pepe-gallery
+│       │   │   ├── GalleryTypography.tsx
+│       │   │   ├── ImageItem.tsx
+│       │   │   ├── PepeGallery.tsx
+│       │   │   ├── ScrollableImages.tsx
+│       │   │   ├── styles
+│       │   │   │   └── GalleryEffects.module.css
+│       │   │   └── utils
+│       │   │       ├── constants.ts
+│       │   │       ├── imageLoader.ts
+│       │   │       └── scrollAnimation.ts
 │       │   ├── pepe3d
 │       │   │   ├── PepeModel3D.tsx
 │       │   │   ├── PepeStyles.module.css
@@ -94,4 +105,4 @@
 ├── tailwind.config.js
 └── tsconfig.json
 
-17 directories, 77 files
+20 directories, 85 files

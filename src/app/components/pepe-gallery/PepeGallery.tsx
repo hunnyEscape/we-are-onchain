@@ -1,124 +1,183 @@
 'use client';
 
-import { Suspense, useState, useEffect, useCallback } from 'react';
+import React, { Suspense, useState, useEffect, useRef } from 'react';
 import { Canvas } from '@react-three/fiber';
-import { ScrollControls, Preload, Environment, useScroll } from '@react-three/drei';
-import { imageFiles, SCROLL_SETTINGS } from './utils/constants';
-import { preloadImages } from './utils/imageLoader';
-import ScrollableImages from './ScrollableImages';
-import GalleryTypography from './GalleryTypography';
-
-interface PepeGalleryProps {
-  className?: string;
+import { ScrollControls, Preload, Scroll, Image as DreiImage } from '@react-three/drei';
+import { useFrame } from '@react-three/fiber';
+import { useScroll } from '@react-three/drei';
+// 不足している型定義とサイズ定数を追加
+interface ImageItemProps {
+	image: any;  // 一時的に any 型に
+	position: [number, number, number];
+	scrollProgress: number;
+	isVisible?: boolean;
+	index: number;
 }
 
-// スクロール進行状況を表示するコンポーネント
-const ScrollProgressBar: React.FC<{ progress: number }> = ({ progress }) => (
-  <div 
-    className="fixed top-0 left-0 h-1 bg-gradient-to-r from-gray-200 to-gray-500 z-50 transition-all duration-300 ease-out"
-    style={{ width: `${progress * 100}%` }}
-  />
-);
+// 定数の追加
+const SIZE_SCALES = {
+	S: 1.5,
+	M: 2.5,
+	L: 4.0
+};
+
+// スクロール設定
+const SCROLL_SETTINGS = {
+	damping: 0.2,
+	pages: 3,
+	distance: 1.0
+};
+
+interface PepeGalleryProps {
+	className?: string;
+}
 
 const PepeGallery: React.FC<PepeGalleryProps> = ({ className = '' }) => {
-  const [isLoading, setIsLoading] = useState(true);
-  const [scrollProgress, setScrollProgress] = useState(0);
+	const [isLoading, setIsLoading] = useState(true);
 
-  // コンポーネントマウント時に画像を事前読み込み
-  useEffect(() => {
-    const loadImages = async () => {
-      try {
-        await preloadImages(imageFiles);
-        setIsLoading(false);
-      } catch (error) {
-        console.error('Failed to preload images:', error);
-        setIsLoading(false);
-      }
-    };
+	// 簡略化のため、画像プリロードを省略
+	useEffect(() => {
+		// ちょっとだけ待ってからローディング状態を解除
+		const timer = setTimeout(() => {
+			setIsLoading(false);
+			console.log('Loading complete');
+		}, 1000);
 
-    loadImages();
-  }, []);
+		return () => clearTimeout(timer);
+	}, []);
 
-  // スクロール進行状況を更新するコールバック
-  const handleScroll = useCallback((progress: number) => {
-    setScrollProgress(progress);
-  }, []);
+	// テスト用の画像データ
+	const testImage = {
+		id: 1,
+		filename: '1L.webp',
+		size: 'L',
+		path: 'https://d1abhb48aypmuo.cloudfront.net/we-are-onchain/pepe/1L.webp'
+	};
 
-  // スクロール進行状況を監視するコンポーネント
-  const ScrollObserver = () => {
-    const scroll = useScroll();
-    
-    useEffect(() => {
-      // スクロールオフセットの変更を監視する関数
-      const onScroll = () => {
-        handleScroll(scroll.offset);
-      };
-      
-      // スクロールイベントのリスナーを追加
-      const scrollElement = scroll.el;
-      if (scrollElement) {
-        scrollElement.addEventListener('scroll', onScroll);
-      }
-      
-      // クリーンアップ関数
-      return () => {
-        if (scrollElement) {
-          scrollElement.removeEventListener('scroll', onScroll);
-        }
-      };
-    }, [scroll]);
-    
-    return null;
-  };
+	// ImageItemコンポーネント
+	const ImageItem: React.FC<ImageItemProps> = ({
+		image,
+		position,
+		scrollProgress,
+		isVisible = true,
+		index
+	}) => {
+		const ref = useRef<any>(null);
 
-  return (
-    <div className={`w-full h-screen relative overflow-hidden ${className}`}>
-      {/* ローディング状態の表示 */}
-      {isLoading && (
-        <div className="absolute inset-0 flex items-center justify-center bg-gray-900 bg-opacity-80 z-50">
-          <div className="text-white text-2xl">Loading Gallery...</div>
-        </div>
-      )}
-      
-      {/* スクロール進行状況バー */}
-      <ScrollProgressBar progress={scrollProgress} />
-      
-      <Canvas
-        camera={{ position: [0, 0, 15], fov: 15 }}
-        className="w-full h-full"
-        gl={{ antialias: true, alpha: true }}
-        dpr={[1, 2]} // 解像度の設定（標準〜高解像度デバイス）
-      >
-        <color attach="background" args={['#d8d7d7']} />
-        
-        <Suspense fallback={null}>
-          <Environment preset="city" />
-          
-          <ScrollControls
-            damping={SCROLL_SETTINGS.damping}
-            pages={SCROLL_SETTINGS.pages}
-            distance={SCROLL_SETTINGS.distance}
-          >
-            {/* スクロール可能なコンテンツ */}
-            <ScrollableImages />
-            <GalleryTypography />
-            <ScrollObserver />
-            
-            {/* 画像の事前読み込み対策 */}
-            <Preload all />
-          </ScrollControls>
-        </Suspense>
-      </Canvas>
-      
-      {/* オーバーレイ情報 */}
-      <div className="absolute bottom-4 left-4 text-black text-sm opacity-70 pointer-events-none">
-        Pepe Gallery Collection
-      </div>
-      <div className="absolute bottom-4 right-4 text-black text-sm opacity-70 pointer-events-none">
-        Scroll to explore
-      </div>
-    </div>
-  );
+		// 単純化: 画像が文字列の場合の対応
+		let imageUrl = '';
+		let imageSize = 'L';
+
+		if (typeof image === 'string') {
+			imageUrl = image;
+		} else {
+			imageUrl = image.path;
+			imageSize = image.size;
+		}
+
+		const scale = SIZE_SCALES[imageSize as keyof typeof SIZE_SCALES];
+
+		// スケールのサイズに基づく調整（単純化）
+		const scaleFactor = typeof scale === 'number' ? scale :
+			Array.isArray(scale) ? [scale[0], scale[1], 1] : [scale, scale, 1];
+
+		if (!isVisible) {
+			return null;
+		}
+
+		// 単純なDreiImageの表示
+		return (
+			<DreiImage
+				ref={ref}
+				url={imageUrl}
+				position={position}
+				scale={scaleFactor}
+				transparent
+				opacity={1}
+			/>
+		);
+	};
+	const testImages = [
+		{
+			id: 1,
+			filename: '1L.webp',
+			size: 'L',
+			path: 'https://d1abhb48aypmuo.cloudfront.net/we-are-onchain/pepe/1L.webp'
+		},
+		{
+			id: 2,
+			filename: '2M.webp',
+			size: 'M',
+			path: 'https://d1abhb48aypmuo.cloudfront.net/we-are-onchain/pepe/2M.webp'
+		},
+		{
+			id: 3,
+			filename: '6L.webp',
+			size: 'L',
+			path: 'https://d1abhb48aypmuo.cloudfront.net/we-are-onchain/pepe/6L.webp'
+		}
+	];
+
+	return (
+		<div className={`w-full h-screen relative overflow-hidden ${className}`}>
+			{/* ローディング状態の表示 */}
+			{isLoading && (
+				<div className="absolute inset-0 flex items-center justify-center bg-gray-900 bg-opacity-80 z-50">
+					<div className="text-white text-2xl">Loading Gallery...</div>
+				</div>
+			)}
+
+			<Canvas
+				camera={{ position: [0, 0, 15], fov: 15 }}
+				className="w-full h-full"
+				gl={{
+					antialias: true,
+					alpha: true,
+					preserveDrawingBuffer: true
+				}}
+				dpr={[1, 1.5]}
+			>
+				<color attach="background" args={['#d8d7d7']} />
+
+				<ambientLight intensity={0.5} />
+				<pointLight position={[10, 10, 10]} />
+
+				<Suspense fallback={null}>
+					<ScrollControls
+						damping={SCROLL_SETTINGS.damping}
+						pages={SCROLL_SETTINGS.pages}
+						distance={SCROLL_SETTINGS.distance}
+					>
+						<Scroll>
+							{/* テスト用のボックスは残しておくか、必要なければ削除 */}
+							<mesh position={[0, 0, 0]}>
+								<boxGeometry args={[2, 2, 2]} />
+								<meshStandardMaterial color="blue" />
+							</mesh>
+
+							{/* 複数の画像を追加 */}
+							{testImages.map((img, index) => (
+								<ImageItem
+									key={img.id}
+									image={img}
+									position={[
+										(index % 2) * 4 - 2, // X座標: 左右に配置
+										-index * 3,          // Y座標: 下に配置
+										0                    // Z座標
+									]}
+									scrollProgress={0}
+									isVisible={true}
+									index={index}
+								/>
+							))}
+						</Scroll>
+					</ScrollControls>
+
+					<Preload all />
+				</Suspense>
+			</Canvas>
+		</div>
+	);
 };
 
 export default PepeGallery;

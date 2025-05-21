@@ -78,7 +78,9 @@ const MessageDisplay: React.FC<MessageDisplayProps> = ({
 	const getAlignmentStyle = (): React.CSSProperties => {
 		const style: React.CSSProperties = {};
 
+		// スクロール位置に応じて固定位置ではなく、画面内での相対位置に変更
 		if (message.style === 'vertical') {
+			// 縦書きの場合
 			if (message.align === 'right') {
 				style.right = '20vw';
 			} else if (message.align === 'center') {
@@ -87,7 +89,14 @@ const MessageDisplay: React.FC<MessageDisplayProps> = ({
 			} else {
 				style.left = '20vw';
 			}
+
+			// 中央に配置（固定ではなく、画面内の中央）
+			style.top = '50vh';
+			style.transform = style.transform
+				? `${style.transform} translateY(-50%)`
+				: 'translateY(-50%)';
 		} else {
+			// 横書きの場合
 			if (message.align === 'right') {
 				style.right = '10vw';
 				style.textAlign = 'right';
@@ -99,6 +108,9 @@ const MessageDisplay: React.FC<MessageDisplayProps> = ({
 				style.left = '10vw';
 				style.textAlign = 'left';
 			}
+
+			// 上から40%の位置に配置
+			style.top = '40vh';
 		}
 
 		return style;
@@ -138,16 +150,83 @@ const MessageDisplay: React.FC<MessageDisplayProps> = ({
 		});
 	};
 
+	// src/app/components/floating-images-fix/cyber-scroll-messages/MessageDisplay.tsx の修正部分
+
 	// ベースとなるスタイル
+	// src/app/components/floating-images-fix/cyber-scroll-messages/MessageDisplay.tsx
+
+	// ベースとなるスタイル部分を修正
 	const baseStyle: React.CSSProperties = {
-		position: 'fixed',
+		position: 'absolute',
 		zIndex: 15,
 		color: message.color || '#00ff66',
 		fontSize: message.size || '3rem',
 		fontWeight: 'bold',
 		textShadow: '0 0 10px rgba(0, 255, 102, 0.7)',
-		...getAlignmentStyle(),
 	};
+
+	// 縦書き/横書きと位置設定
+	if (message.style === 'vertical') {
+		// 縦書きの場合
+		baseStyle.writingMode = 'vertical-rl';
+		baseStyle.top = `${message.position.start}vh`; // 開始位置
+
+		if (message.align === 'right') {
+			baseStyle.right = '20vw';
+		} else if (message.align === 'center') {
+			baseStyle.left = '50%';
+			baseStyle.transform = 'translateX(-50%)';
+		} else {
+			baseStyle.left = '20vw';
+		}
+	} else {
+		// 横書きの場合
+		baseStyle.top = `${message.position.start}vh`; // 開始位置
+
+		if (message.align === 'right') {
+			baseStyle.right = '10vw';
+			baseStyle.textAlign = 'right';
+		} else if (message.align === 'center') {
+			baseStyle.left = '50%';
+			baseStyle.transform = 'translateX(-50%)';
+			baseStyle.textAlign = 'center';
+		} else {
+			baseStyle.left = '10vw';
+			baseStyle.textAlign = 'left';
+		}
+	}
+
+	// スタイルに位置を追加
+	if (message.style === 'vertical') {
+		// 縦書きの場合
+		if (message.align === 'right') {
+			baseStyle.right = '20vw';
+		} else if (message.align === 'center') {
+			baseStyle.left = '50%';
+			baseStyle.transform = 'translateX(-50%)';
+		} else {
+			baseStyle.left = '20vw';
+		}
+
+		// トップ位置を開始位置に設定
+		baseStyle.top = `${message.position.start}vh`;
+	} else {
+		// 横書きの場合
+		if (message.align === 'right') {
+			baseStyle.right = '10vw';
+			baseStyle.textAlign = 'right';
+		} else if (message.align === 'center') {
+			baseStyle.left = '50%';
+			baseStyle.transform = 'translateX(-50%)';
+			baseStyle.textAlign = 'center';
+		} else {
+			baseStyle.left = '10vw';
+			baseStyle.textAlign = 'left';
+		}
+
+		// トップ位置を開始位置に設定
+		baseStyle.top = `${message.position.start}vh`;
+	}
 
 	if (message.style === 'vertical') {
 		baseStyle.top = '50%';

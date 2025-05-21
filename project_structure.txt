@@ -41,16 +41,26 @@
 │       │   │   └── ModelDebug.tsx
 │       │   ├── floating-images
 │       │   │   ├── EffectsComposer.tsx
+│       │   │   ├── FloatingBackgroundSection.tsx
 │       │   │   ├── FloatingCanvas.tsx
 │       │   │   ├── FloatingImage.tsx
 │       │   │   ├── FloatingImages.module.css
 │       │   │   ├── FloatingImages.tsx
+│       │   │   ├── FloatingImagesFixSection.tsx
 │       │   │   ├── FloatingImagesSection.tsx
 │       │   │   ├── constants.ts
 │       │   │   ├── styles.module.css
 │       │   │   ├── types.ts
+│       │   │   ├── useCircularMotion.ts
+│       │   │   ├── useDirectMotion.ts
 │       │   │   ├── useFloatingAnimation.ts
-│       │   │   └── useImageLoader.ts
+│       │   │   ├── useImageLoader.ts
+│       │   │   └── useRadialMotion.ts
+│       │   ├── floating-images-fix
+│       │   │   ├── FloatingImageFix.tsx
+│       │   │   ├── FloatingImagesFixCanvas.tsx
+│       │   │   ├── FloatingImagesFixSection.tsx
+│       │   │   └── constants.ts
 │       │   ├── glowing-3d-text
 │       │   │   ├── GlowingText.module.css
 │       │   │   ├── GlowingTextScene.tsx
@@ -84,10 +94,12 @@
 │       │   │       ├── imageLoader.ts
 │       │   │       └── scrollAnimation.ts
 │       │   ├── pepe3d
+│       │   │   ├── CyberInterface.tsx
 │       │   │   ├── PepeModel3D.tsx
 │       │   │   ├── PepeStyles.module.css
 │       │   │   ├── PepeTop.tsx
-│       │   │   └── ScrollMessage.tsx
+│       │   │   ├── ScrollMessage.tsx
+│       │   │   └── types.d.ts
 │       │   ├── sphere
 │       │   │   ├── MessageOverlay.tsx
 │       │   │   ├── SmoothRotation.tsx
@@ -105,4 +117,4 @@
 ├── tailwind.config.js
 └── tsconfig.json
 
-20 directories, 85 files
+21 directories, 96 files

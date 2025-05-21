@@ -4,7 +4,9 @@
 
 import React from 'react';
 import FloatingImagesFixCanvas from './FloatingImagesFixCanvas';
+import CyberScrollMessages from './cyber-scroll-messages';
 
+// コンポーネント定義
 const FloatingImagesFixSection: React.FC = () => {
 	return (<>
 		<div className='relative h-[150vh] bg-black'/>
@@ -15,6 +17,7 @@ const FloatingImagesFixSection: React.FC = () => {
 						pointer-events-none"
 				/>
 				<FloatingImagesFixCanvas />
+				<CyberScrollMessages />
 				<div className="absolute bottom-0 left-0 w-full h-[100vh] z-20
 						bg-gradient-to-b from-black/0 via-black/40 to-black
 						pointer-events-none"
@@ -25,4 +28,5 @@ const FloatingImagesFixSection: React.FC = () => {
 	</>);
 };
 
+// 明示的にdefaultエクスポート
 export default FloatingImagesFixSection;

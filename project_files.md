@@ -1958,125 +1958,240 @@ export const applyFloatingAnimation = (
 
 'use client';
 
-import { Suspense, useState, useEffect, useCallback } from 'react';
-import { Canvas } from '@react-three/fiber';
-import { ScrollControls, Preload, Environment, useScroll } from '@react-three/drei';
-import { imageFiles, SCROLL_SETTINGS } from './utils/constants';
-import { preloadImages } from './utils/imageLoader';
-import ScrollableImages from './ScrollableImages';
-import GalleryTypography from './GalleryTypography';
+import React, { Suspense, useState, useEffect, useRef, useCallback } from 'react';
+import { Canvas, useFrame, useThree } from '@react-three/fiber';
+import { Image as DreiImage, Preload } from '@react-three/drei';
 
-interface PepeGalleryProps {
-  className?: string;
-}
+// サイズ定数
+const SIZE_SCALES = {
+	S: 1.5,
+	M: 2.5,
+	L: 4.0
+};
 
-// スクロール進行状況を表示するコンポーネント
-const ScrollProgressBar: React.FC<{ progress: number }> = ({ progress }) => (
-  <div 
-    className="fixed top-0 left-0 h-1 bg-gradient-to-r from-gray-200 to-gray-500 z-50 transition-all duration-300 ease-out"
-    style={{ width: `${progress * 100}%` }}
-  />
-);
+// スクロール設定
+const SCROLL_SETTINGS = {
+	pages: 3
+};
 
-const PepeGallery: React.FC<PepeGalleryProps> = ({ className = '' }) => {
-  const [isLoading, setIsLoading] = useState(true);
-  const [scrollProgress, setScrollProgress] = useState(0);
+// テスト用の画像データ
+const testImages = [
+	{
+		id: 1,
+		filename: '1L.webp',
+		size: 'L',
+		path: 'https://d1abhb48aypmuo.cloudfront.net/we-are-onchain/pepe/1L.webp'
+	},
+	{
+		id: 2,
+		filename: '2M.webp',
+		size: 'M',
+		path: 'https://d1abhb48aypmuo.cloudfront.net/we-are-onchain/pepe/2M.webp'
+	},
+	{
+		id: 3,
+		filename: '6L.webp',
+		size: 'L',
+		path: 'https://d1abhb48aypmuo.cloudfront.net/we-are-onchain/pepe/6L.webp'
+	}
+];
 
-  // コンポーネントマウント時に画像を事前読み込み
-  useEffect(() => {
-    const loadImages = async () => {
-      try {
-        await preloadImages(imageFiles);
-        setIsLoading(false);
-      } catch (error) {
-        console.error('Failed to preload images:', error);
-        setIsLoading(false);
-      }
-    };
+// スクロール位置をコンテキスト経由で共有
+const ScrollContext = React.createContext(0);
 
-    loadImages();
-  }, []);
+// ImageItemコンポーネント
+const ImageItem = ({ image, position, index }) => {
+	const ref = useRef(null);
+	const scrollOffset = React.useContext(ScrollContext);
 
-  // スクロール進行状況を更新するコールバック
-  const handleScroll = useCallback((progress: number) => {
-    setScrollProgress(progress);
-  }, []);
+	let imageUrl = '';
+	let imageSize = 'L';
 
-  // スクロール進行状況を監視するコンポーネント
-  const ScrollObserver = () => {
-    const scroll = useScroll();
-    
-    useEffect(() => {
-      // スクロールオフセットの変更を監視する関数
-      const onScroll = () => {
-        handleScroll(scroll.offset);
-      };
-      
-      // スクロールイベントのリスナーを追加
-      const scrollElement = scroll.el;
-      if (scrollElement) {
-        scrollElement.addEventListener('scroll', onScroll);
-      }
-      
-      // クリーンアップ関数
-      return () => {
-        if (scrollElement) {
-          scrollElement.removeEventListener('scroll', onScroll);
-        }
-      };
-    }, [scroll]);
-    
-    return null;
-  };
+	if (typeof image === 'string') {
+		imageUrl = image;
+	} else {
+		imageUrl = image.path;
+		imageSize = image.size;
+	}
 
-  return (
-    <div className={`w-full h-screen relative overflow-hidden ${className}`}>
-      {/* ローディング状態の表示 */}
-      {isLoading && (
-        <div className="absolute inset-0 flex items-center justify-center bg-gray-900 bg-opacity-80 z-50">
-          <div className="text-white text-2xl">Loading Gallery...</div>
-        </div>
-      )}
-      
-      {/* スクロール進行状況バー */}
-      <ScrollProgressBar progress={scrollProgress} />
-      
-      <Canvas
-        camera={{ position: [0, 0, 15], fov: 15 }}
-        className="w-full h-full"
-        gl={{ antialias: true, alpha: true }}
-        dpr={[1, 2]} // 解像度の設定（標準〜高解像度デバイス）
-      >
-        <color attach="background" args={['#d8d7d7']} />
-        
-        <Suspense fallback={null}>
-          <Environment preset="city" />
-          
-          <ScrollControls
-            damping={SCROLL_SETTINGS.damping}
-            pages={SCROLL_SETTINGS.pages}
-            distance={SCROLL_SETTINGS.distance}
-          >
-            {/* スクロール可能なコンテンツ */}
-            <ScrollableImages />
-            <GalleryTypography />
-            <ScrollObserver />
-            
-            {/* 画像の事前読み込み対策 */}
-            <Preload all />
-          </ScrollControls>
-        </Suspense>
-      </Canvas>
-      
-      {/* オーバーレイ情報 */}
-      <div className="absolute bottom-4 left-4 text-black text-sm opacity-70 pointer-events-none">
-        Pepe Gallery Collection
-      </div>
-      <div className="absolute bottom-4 right-4 text-black text-sm opacity-70 pointer-events-none">
-        Scroll to explore
-      </div>
-    </div>
-  );
+	const scale = SIZE_SCALES[imageSize];
+	const scaleFactor = typeof scale === 'number' ? scale :
+		Array.isArray(scale) ? [scale[0], scale[1], 1] : [scale, scale, 1];
+
+	// スクロールに応じた効果
+	useFrame(() => {
+		if (ref.current && ref.current.material) {
+			// 各画像に異なるスクロール範囲でズーム効果を適用
+			const startPoint = index * 0.2;
+			const duration = 0.3;
+			const endPoint = startPoint + duration;
+
+			// スクロール位置が範囲内にあるか確認
+			let progress = 0;
+			if (scrollOffset > startPoint && scrollOffset < endPoint) {
+				progress = (scrollOffset - startPoint) / duration;
+			} else if (scrollOffset >= endPoint) {
+				progress = 1;
+			}
+
+			// ズーム効果の適用
+			const zoom = 1 + (progress / 3);
+			ref.current.material.zoom = zoom;
+
+			// 視差効果 - Y位置をスクロールに応じて調整
+			const baseY = position[1];
+			const parallaxStrength = index + 1;
+			const yOffset = baseY - (scrollOffset * 3 * parallaxStrength);
+			ref.current.position.y = yOffset;
+		}
+	});
+
+	return (
+		<DreiImage
+			ref={ref}
+			url={imageUrl}
+			position={position}
+			scale={scaleFactor}
+			transparent
+			opacity={1}
+		/>
+	);
+};
+
+// メインのThree.jsシーン
+const ThreeScene = () => {
+	return (
+		<>
+			<ambientLight intensity={0.5} />
+			<pointLight position={[10, 10, 10]} />
+
+			{/* テスト用のボックス */}
+			<mesh position={[0, 0, 0]}>
+				<boxGeometry args={[2, 2, 2]} />
+				<meshStandardMaterial color="blue" />
+			</mesh>
+
+			<mesh position={[0, -3, 0]}>
+				<boxGeometry args={[1, 1, 1]} />
+				<meshStandardMaterial color="red" />
+			</mesh>
+
+			{/* 複数の画像を追加 */}
+			{testImages.map((img, index) => (
+				<ImageItem
+					key={img.id}
+					image={img}
+					position={[
+						(index % 2) * 4 - 2,
+						-index * 3,
+						0
+					]}
+					index={index}
+				/>
+			))}
+		</>
+	);
+};
+
+// メインコンポーネント
+const PepeGallery = ({ className = '' }) => {
+	const [isLoading, setIsLoading] = useState(true);
+	const [scrollOffset, setScrollOffset] = useState(0);
+	const containerRef = useRef(null);
+
+	// スクロールハンドラー
+	const handleScroll = useCallback(() => {
+		if (containerRef.current) {
+			// スクロール位置を0~1の範囲に正規化
+			const scrollHeight = containerRef.current.scrollHeight - window.innerHeight;
+			const scrollTop = containerRef.current.scrollTop;
+			const normalized = Math.max(0, Math.min(1, scrollTop / scrollHeight));
+			setScrollOffset(normalized);
+		}
+	}, []);
+
+	// コンポーネントマウント時の処理
+	useEffect(() => {
+		// 初期ロード
+		const timer = setTimeout(() => {
+			setIsLoading(false);
+		}, 1000);
+
+		// スクロールイベントの設定
+		const currentRef = containerRef.current;
+		if (currentRef) {
+			currentRef.addEventListener('scroll', handleScroll);
+		}
+
+		// クリーンアップ
+		return () => {
+			clearTimeout(timer);
+			if (currentRef) {
+				currentRef.removeEventListener('scroll', handleScroll);
+			}
+		};
+	}, [handleScroll]);
+
+	// 仮想スクロールエリアの高さ
+	const scrollHeight = `${SCROLL_SETTINGS.pages * 100}vh`;
+
+	return (
+		<div
+			ref={containerRef}
+			className={`w-full h-screen overflow-auto ${className}`}
+			style={{ scrollBehavior: 'smooth' }}
+		>
+			{/* ローディング表示 */}
+			{isLoading && (
+				<div className="fixed inset-0 flex items-center justify-center bg-gray-900 bg-opacity-80 z-50">
+					<div className="text-white text-2xl">Loading Gallery...</div>
+				</div>
+			)}
+
+			{/* スクロール可能なコンテンツエリア */}
+			<div style={{ height: scrollHeight, position: 'relative' }}>
+				{/* Three.jsコンテンツ（固定位置） */}
+				<div className="fixed inset-0">
+					<ScrollContext.Provider value={scrollOffset}>
+						<Canvas
+							camera={{ position: [0, 0, 15], fov: 15 }}
+							className="w-full h-full"
+							gl={{
+								antialias: true,
+								alpha: true,
+								preserveDrawingBuffer: true
+							}}
+							dpr={[1, 1.5]}
+						>
+							<color attach="background" args={['#d8d7d7']} />
+							<Suspense fallback={null}>
+								<ThreeScene />
+								<Preload all />
+							</Suspense>
+						</Canvas>
+					</ScrollContext.Provider>
+				</div>
+
+				{/* HTML/DOMコンテンツ（スクロール可能） */}
+				<div className="relative w-full h-full" style={{ pointerEvents: 'none' }}>
+					{/* 例：スクロールに連動するテキスト */}
+					<div
+						className="absolute top-[100vh] left-10 text-4xl font-bold"
+						style={{ pointerEvents: 'auto' }}
+					>
+						Pepe Gallery
+					</div>
+
+					<div
+						className="absolute top-[200vh] right-10 text-4xl font-bold"
+						style={{ pointerEvents: 'auto' }}
+					>
+						Collection
+					</div>
+				</div>
+			</div>
+		</div>
+	);
 };
 
 export default PepeGallery;-e 
@@ -2515,113 +2630,410 @@ export default ProteinModel;
 
 // グローバルにモデルをプリロード
 useGLTF.preload('/models/protein_powder.glb');-e 
-### FILE: ./src/app/components/pepe3d/ScrollMessage.tsx
+### FILE: ./src/app/components/pepe3d/types.d.ts
 
-'use client';
-import React, { useEffect, useRef, useState } from 'react';
+// types.d.ts
+type GlitchEffectType = 'rgb' | 'slice' | 'wave' | 'pulse' | 'jitter' | 'none';
 
-type MessageConfig = {
+interface MessageConfig {
 	id: string;
 	text: string;
 	top?: string;
 	left?: string;
 	width?: string;
 	fontSize?: string;
+	glitchEffect?: GlitchEffectType;
+	keywords?: string[];  // 特別強調するキーワード
+	delay?: number;       // 表示遅延
+}
+
+interface CyberInterfaceProps {
+	scrollProgress: number; // 0から1の間の値
+	activeIndex: number | null;
+	totalSections: number;
+}
+
+// ハイライト用のテキスト処理関連
+interface TextFragment {
+	text: string;
+	isKeyword: boolean;
+	keywordType?: string;
+}-e 
+### FILE: ./src/app/components/pepe3d/CyberInterface.tsx
+
+// CyberInterface.tsx
+'use client';
+
+import React, { useEffect, useState, useRef } from 'react';
+import styles from './PepeStyles.module.css';
+
+// バイナリデータを生成する関数
+const generateBinaryData = (length: number): string => {
+  const chars = '01';
+  return Array.from({ length }, () => chars.charAt(Math.floor(Math.random() * chars.length))).join('');
 };
 
+// 16進数データを生成する関数
+const generateHexData = (length: number): string => {
+  const chars = '0123456789ABCDEF';
+  return Array.from({ length }, () => chars.charAt(Math.floor(Math.random() * chars.length))).join('');
+};
+
+const CyberInterface: React.FC<CyberInterfaceProps> = ({ 
+  scrollProgress, 
+  activeIndex,
+  totalSections 
+}) => {
+  const [dataStream, setDataStream] = useState<string[]>([]);
+  const [systemTime, setSystemTime] = useState<string>('');
+  const [randomGlitch, setRandomGlitch] = useState<boolean>(false);
+  
+  // データストリームを生成
+  useEffect(() => {
+    // 初期データストリームを生成
+    const initialData: string[] = [];
+    for (let i = 0; i < 50; i++) {
+      if (Math.random() > 0.7) {
+        initialData.push(generateHexData(16));
+      } else {
+        initialData.push(generateBinaryData(16));
+      }
+    }
+    setDataStream(initialData);
+    
+    // 定期的にデータストリームを更新
+    const interval = setInterval(() => {
+      setDataStream(prev => {
+        const newData = [...prev];
+        // 1-3行をランダムに置き換え
+        const replaceCount = Math.floor(Math.random() * 3) + 1;
+        for (let i = 0; i < replaceCount; i++) {
+          const index = Math.floor(Math.random() * newData.length);
+          if (Math.random() > 0.7) {
+            newData[index] = generateHexData(16);
+          } else {
+            newData[index] = generateBinaryData(16);
+          }
+        }
+        return newData;
+      });
+      
+      // ランダムなグリッチ効果
+      if (Math.random() > 0.9) {
+        setRandomGlitch(true);
+        setTimeout(() => setRandomGlitch(false), 200);
+      }
+    }, 500);
+    
+    // システム時間の更新
+    const timeInterval = setInterval(() => {
+      const now = new Date();
+      setSystemTime(`SYS://GREEN_SOURCE v2.3.7 | ${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}:${now.getSeconds().toString().padStart(2, '0')}`);
+    }, 1000);
+    
+    return () => {
+      clearInterval(interval);
+      clearInterval(timeInterval);
+    };
+  }, []);
+  
+  // エネルギーレベル（スクロール進行に基づく）
+  const energyLevel = Math.max(5, Math.min(100, scrollProgress * 100));
+  
+  return (
+    <>
+      {/* スキャンライン */}
+      <div className={styles.scanline}></div>
+      
+      {/* コーナーマーカー */}
+      <div className={styles.cyberFrame}>
+        <div className={`${styles.cornerMarker} ${styles.topLeft} ${randomGlitch ? styles.jitter : ''}`}></div>
+        <div className={`${styles.cornerMarker} ${styles.topRight} ${randomGlitch ? styles.jitter : ''}`}></div>
+        <div className={`${styles.cornerMarker} ${styles.bottomLeft} ${randomGlitch ? styles.jitter : ''}`}></div>
+        <div className={`${styles.cornerMarker} ${styles.bottomRight} ${randomGlitch ? styles.jitter : ''}`}></div>
+      </div>
+      
+      {/* データストリーム */}
+      <div className={styles.dataStream}>
+        <div className={styles.dataContent}>
+          {dataStream.map((line, index) => (
+            <div key={index} className={randomGlitch && index % 5 === 0 ? styles.jitter : ''}>
+              {line}
+            </div>
+          ))}
+        </div>
+      </div>
+      
+      {/* エネルギーメーター */}
+      <div className={styles.energyMeter}>
+        <div 
+          className={styles.energyLevel} 
+          style={{ height: `${energyLevel}%` }}
+        ></div>
+      </div>
+      
+      {/* システムステータス */}
+      <div className={styles.systemStatus}>
+        {systemTime}
+        <div>SECTION: {activeIndex !== null ? activeIndex + 1 : 0}/{totalSections}</div>
+        <div>ENERGY: {Math.floor(energyLevel)}%</div>
+      </div>
+    </>
+  );
+};
+
+export default CyberInterface;-e 
+### FILE: ./src/app/components/pepe3d/ScrollMessage.tsx
+
+// ScrollMessage.tsx
+'use client';
+
+import React, { useEffect, useRef, useState } from 'react';
+import CyberInterface from './CyberInterface';
+import styles from './PepeStyles.module.css';
+
+type MessageConfig = {
+  id: string;
+  text: string;
+  top?: string;
+  left?: string;
+  width?: string;
+  fontSize?: string;
+  glitchEffect?: 'rgb' | 'slice' | 'wave' | 'pulse' | 'jitter' | 'none';
+  keywords?: string[];
+  delay?: number;
+};
+
+// テキストフラグメント処理用の型
+interface TextFragment {
+  text: string;
+  isKeyword: boolean;
+  keywordType?: string;
+}
+
 const messages: MessageConfig[] = [
-	{
-		id: 'trigger-1',
-		text: '🧪深緑の源泉 ー 古代から森にひそむ「ぺぺの泉」。',
-		top: '20vh',
-		left: '10vw',
-		width: 'auto',
-		fontSize: '2rem',
-	},
-	{
-		id: 'trigger-2',
-		text: '💎そこから湧き出るグリーンミネラルが、濃厚なコクとほどよい甘みをもたらす。',
-		top: '30vh',
-		left: '30vw',
-		width: 'max-content',
-		fontSize: '2rem',
-	},
-	{
-		id: 'trigger-3',
-		text: '一口ごとに脈打つビート、疲労を吹き飛ばし、次の挑戦へと背中を押す。',
-		top: '40vh',
-		left: '10vw',
-		width: 'max-content',
-		fontSize: '2rem',
-	},
-	{
-		id: 'trigger-4',
-		text: '次元を超えたグリーンパワーを、その手で感じよ。',
-		top: '80vh',
-		left: '30vw',
-		width: '60vw',
-		fontSize: '3rem',
-	},
+  {
+    id: 'trigger-1',
+    text: '🧪深緑の源泉 ー 古代から森にひそむ「ぺぺの泉」。',
+    top: '20vh',
+    left: '10vw',
+    width: 'auto',
+    fontSize: '2rem',
+    glitchEffect: 'rgb',
+    keywords: ['深緑の源泉', 'ぺぺの泉'],
+  },
+  {
+    id: 'trigger-2',
+    text: '💎そこから湧き出るグリーンミネラルが、濃厚なコクとほどよい甘みをもたらす。',
+    top: '30vh',
+    left: '30vw',
+    width: 'max-content',
+    fontSize: '2rem',
+    glitchEffect: 'wave',
+    keywords: ['グリーンミネラル'],
+  },
+  {
+    id: 'trigger-3',
+    text: '一口ごとに脈打つビート、疲労を吹き飛ばし、次の挑戦へと背中を押す。',
+    top: '40vh',
+    left: '10vw',
+    width: 'max-content',
+    fontSize: '2rem',
+    glitchEffect: 'pulse',
+    keywords: ['脈打つビート'],
+  },
+  {
+    id: 'trigger-4',
+    text: '次元を超えたグリーンパワーを、その手で感じよ。',
+    top: '80vh',
+    left: '30vw',
+    width: '60vw',
+    fontSize: '3rem',
+    glitchEffect: 'slice',
+    keywords: ['次元を超えた', 'グリーンパワー'],
+  },
 ];
 
 const ScrollTriggerMessages: React.FC = () => {
-	const refs = useRef<(HTMLDivElement | null)[]>([]);
-	const [activeIndex, setActiveIndex] = useState<number | null>(null);
+  const refs = useRef<(HTMLDivElement | null)[]>([]);
+  const [activeIndex, setActiveIndex] = useState<number | null>(null);
+  const [scrollProgress, setScrollProgress] = useState<number>(0);
+  const [randomTrigger, setRandomTrigger] = useState<boolean>(false);
 
-	useEffect(() => {
-		const observer = new IntersectionObserver(
-			(entries) => {
-				let found = false;
-				entries.forEach((entry) => {
-					const idx = refs.current.findIndex((r) => r === entry.target);
-					if (entry.isIntersecting) {
-						setActiveIndex(idx);
-						found = true;
-					}
-				});
-				if (!found) setActiveIndex(null);
-			},
-			{ root: null, rootMargin: '0px', threshold: 0.5 }
-		);
+  // キーワードに基づいてテキストを処理する関数
+  const processText = (text: string, keywords: string[] = []): TextFragment[] => {
+    if (!keywords || keywords.length === 0) return [{ text, isKeyword: false }];
 
-		refs.current.forEach((r) => r && observer.observe(r));
-		return () => refs.current.forEach((r) => r && observer.unobserve(r));
-	}, []);
+    const fragments: TextFragment[] = [];
+    let remainingText = text;
 
-	return (
-		<>
-			{/* トリガー用ダミーゾーン（100vh × 4つ） */}
-			{messages.map((_, i) => (
-				<div key={`zone-${i}`} ref={(el) => (refs.current[i] = el)} className="h-screen w-full" />
-			))}
+    // 各キーワードを検索して分割
+    keywords.forEach((keyword) => {
+      const parts = remainingText.split(new RegExp(`(${keyword})`, 'g'));
+      if (parts.length === 1) return; // キーワードが見つからない場合はスキップ
 
-			{/* フローティングメッセージ */}
-			{messages.map((msg, i) => {
-				const isActive = activeIndex === i;
-				return (
-					<div
-						key={msg.id}
-						className={`fixed z-50 font-pixel text-white transition-opacity duration-700 ease-in-out
-									${isActive ? 'opacity-100' : 'opacity-0'}
-									${msg.id === 'trigger-4' && isActive ? 'animate-glitch-slow' : ''}
-            					`}
-						style={{
-							top: msg.top,
-							left: msg.left,
-							width: msg.width,
-							fontSize: msg.fontSize,
-						}}
-					>
-						{msg.text}
-					</div>
-				);
-			})}
-		</>
-	);
+      // 分割された部分を処理
+      let newRemainingText = '';
+      parts.forEach((part, index) => {
+        if (part === keyword) {
+          fragments.push({
+            text: part,
+            isKeyword: true,
+            keywordType: keyword,
+          });
+        } else if (part) {
+          newRemainingText += part;
+        }
+      });
+      remainingText = newRemainingText;
+    });
+
+    // 残りのテキストがあれば追加
+    if (remainingText) {
+      fragments.push({ text: remainingText, isKeyword: false });
+    }
+
+    return fragments.length > 0 ? fragments : [{ text, isKeyword: false }];
+  };
+
+  // グリッチエフェクトに基づいてクラス名を取得
+  const getGlitchClass = (effect?: 'rgb' | 'slice' | 'wave' | 'pulse' | 'jitter' | 'none'): string => {
+    switch (effect) {
+      case 'rgb': return styles.rgbSplit;
+      case 'slice': return styles.sliceGlitch;
+      case 'wave': return styles.waveDistort;
+      case 'pulse': return styles.pulse;
+      case 'jitter': return styles.jitter;
+      default: return '';
+    }
+  };
+
+  // レンダリングされる実際のテキスト
+  const renderMessageText = (message: MessageConfig) => {
+    if (!message.keywords || message.keywords.length === 0) {
+      return <span className={getGlitchClass(message.glitchEffect)}>{message.text}</span>;
+    }
+
+    // キーワードを検出して強調
+    return message.text.split(' ').map((word, wordIndex) => {
+      const isKeyword = message.keywords?.some(keyword => keyword.includes(word) || word.includes(keyword));
+      
+      if (isKeyword) {
+        return (
+          <span 
+            key={`word-${wordIndex}`}
+            className={`${styles.keywordGlitch} ${getGlitchClass(message.glitchEffect)}`}
+            data-text={word}
+          >
+            {word}{' '}
+          </span>
+        );
+      }
+      
+      return (
+        <span 
+          key={`word-${wordIndex}`}
+          className={getGlitchClass(message.glitchEffect)}
+        >
+          {word}{' '}
+        </span>
+      );
+    });
+  };
+
+  useEffect(() => {
+    const observer = new IntersectionObserver(
+      (entries) => {
+        let found = false;
+        entries.forEach((entry) => {
+          const idx = refs.current.findIndex((r) => r === entry.target);
+          if (entry.isIntersecting) {
+            setActiveIndex(idx);
+            found = true;
+          }
+        });
+        if (!found) setActiveIndex(null);
+      },
+      { root: null, rootMargin: '0px', threshold: 0.5 }
+    );
+
+    refs.current.forEach((r) => r && observer.observe(r));
+
+    // スクロールイベントリスナー追加
+    const handleScroll = () => {
+      const scrollTop = window.scrollY;
+      const docHeight = document.documentElement.scrollHeight;
+      const winHeight = window.innerHeight;
+      const scrollPercent = scrollTop / (docHeight - winHeight);
+      setScrollProgress(scrollPercent);
+      
+      // 10%の確率でランダムなグリッチをトリガー
+      if (Math.random() < 0.01) {
+        setRandomTrigger(true);
+        setTimeout(() => setRandomTrigger(false), 150);
+      }
+    };
+    
+    window.addEventListener('scroll', handleScroll);
+
+    return () => {
+      refs.current.forEach((r) => r && observer.unobserve(r));
+      window.removeEventListener('scroll', handleScroll);
+    };
+  }, []);
+
+  return (
+    <>
+      {/* トリガー用ダミーゾーン */}
+      {messages.map((_, i) => (
+        <div key={`zone-${i}`} ref={(el) => (refs.current[i] = el)} className="h-screen w-full" />
+      ))}
+
+      {/* サイバネティックインターフェース */}
+      <CyberInterface 
+        scrollProgress={scrollProgress} 
+        activeIndex={activeIndex} 
+        totalSections={messages.length} 
+      />
+
+      {/* フローティングメッセージ */}
+      {messages.map((msg, i) => {
+        const isActive = activeIndex === i;
+        return (
+          <div
+            key={msg.id}
+            className={`fixed z-50 font-pixel text-white transition-opacity duration-700 ease-in-out
+                        ${isActive ? 'opacity-100' : 'opacity-0'} 
+                        ${randomTrigger ? styles.jitter : ''}
+                        ${msg.id === 'trigger-4' && isActive ? 'animate-pulse' : ''}
+                      `}
+            style={{
+              top: msg.top,
+              left: msg.left,
+              width: msg.width,
+              fontSize: msg.fontSize,
+              textShadow: '0 0 8px rgba(0, 255, 102, 0.7)',
+            }}
+          >
+            {renderMessageText(msg)}
+          </div>
+        );
+      })}
+
+      {/* 追加の装飾エフェクト: グリッドバックグラウンド */}
+      <div 
+        className="fixed inset-0 pointer-events-none z-0"
+        style={{
+          backgroundImage: 'linear-gradient(rgba(0, 255, 102, 0.05) 1px, transparent 1px), linear-gradient(90deg, rgba(0, 255, 102, 0.05) 1px, transparent 1px)',
+          backgroundSize: '20px 20px',
+          backgroundPosition: 'center center',
+        }}
+      />
+    </>
+  );
 };
 
-export default ScrollTriggerMessages;
--e 
+export default ScrollTriggerMessages;-e 
 ### FILE: ./src/app/components/pepe3d/PepeTop.tsx
 
 // src/app/components/pepe3d/PepeTop.tsx
@@ -3769,6 +4181,130 @@ export const animationConfig = {
 		delayRange: [0, 10000],     // 開始遅延のランダム範囲 (0-10秒)
 	}
 };-e 
+### FILE: ./src/app/components/floating-images/useDirectMotion.ts
+
+'use client';
+
+import { useRef, useState } from 'react';
+import { useFrame } from '@react-three/fiber';
+import { Vector3 } from 'three';
+import { SizeType } from '../floating-images/constants';
+
+interface DirectMotionProps {
+  size: SizeType;
+  index: number;
+  totalItems: number;
+  depth?: number;
+  speed?: number;
+}
+
+interface DirectMotionState {
+  position: Vector3;
+  scale: number;
+  opacity: number;
+}
+
+/**
+ * 奥から手前にまっすぐ向かってくるアニメーション用のカスタムフック
+ */
+export const useDirectMotion = ({
+  size,
+  index,
+  totalItems,
+  depth = 50, // 奥行きの長さ
+  speed = 0.05 // 速度
+}: DirectMotionProps): DirectMotionState => {
+  // 初期状態の設定
+  const [state, setState] = useState<DirectMotionState>({
+    position: new Vector3(0, 0, -depth),
+    scale: 0.001,
+    opacity: 0
+  });
+
+  // アニメーションパラメータ
+  const motionRef = useRef({
+    // サイズに基づいた設定
+    baseScale: size === 'S' ? 1.0 : size === 'M' ? 1.8 : 2.5,
+    baseSpeed: size === 'S' ? speed * 1.3 : size === 'M' ? speed : speed * 0.7,
+    
+    // 初期位置の設定 - グリッド状に分散配置
+    startPosition: calculateStartPosition(index, totalItems),
+    
+    // Z位置（奥行き）- 開始位置をずらす
+    zPosition: -depth + (index % 3) * (depth / 3),
+    
+    // アニメーション状態
+    time: 0
+  });
+
+  // 初期位置を計算する関数 - グリッド状に分散
+  function calculateStartPosition(index: number, total: number) {
+    // グリッドの列数（画面を均等に分割）
+    const columns = Math.ceil(Math.sqrt(total));
+    
+    // グリッド内の位置
+    const col = index % columns;
+    const row = Math.floor(index / columns);
+    
+    // グリッド内のセル位置を計算（-7.5〜7.5の範囲）
+    const cellSize = 15 / columns;
+    const x = col * cellSize - 7.5 + cellSize / 2;
+    const y = row * cellSize - 7.5 + cellSize / 2;
+    
+    // ランダム性を少し追加（セル内で少しだけランダムに）
+    const randomX = (Math.random() - 0.5) * cellSize * 0.5;
+    const randomY = (Math.random() - 0.5) * cellSize * 0.5;
+    
+    return { x: x + randomX, y: y + randomY };
+  }
+
+  // フレームごとのアニメーション更新
+  useFrame((_, delta) => {
+    // 時間の更新
+    motionRef.current.time += delta;
+    
+    // Z位置の更新（奥から手前へ直線的に移動）
+    motionRef.current.zPosition += motionRef.current.baseSpeed * delta * 20;
+    
+    // 一定の位置に達したら奥に戻す（ループ）
+    if (motionRef.current.zPosition > 15) {
+      motionRef.current.zPosition = -depth;
+    }
+    
+    // 現在のZ位置に基づくスケールと透明度
+    // 手前に来るほど大きく、奥ほど小さく
+    const zRange = depth + 15; // 奥から手前までの全範囲
+    const normalizedZ = (motionRef.current.zPosition + depth) / zRange;
+    
+    // スケールを計算（Z位置に基づいて段階的に大きく）
+    const currentScale = motionRef.current.baseScale * Math.max(0.1, normalizedZ);
+    
+    // 透明度を計算（奥と手前でフェードイン・アウト）
+    let currentOpacity = 1.0;
+    if (normalizedZ < 0.1) {
+      // 奥でフェードイン
+      currentOpacity = normalizedZ / 0.1;
+    } else if (normalizedZ > 0.9) {
+      // 手前でフェードアウト
+      currentOpacity = 1 - (normalizedZ - 0.9) / 0.1;
+    }
+    
+    // 状態の更新
+    setState({
+      position: new Vector3(
+        motionRef.current.startPosition.x,
+        motionRef.current.startPosition.y,
+        motionRef.current.zPosition
+      ),
+      scale: currentScale,
+      opacity: currentOpacity
+    });
+  });
+
+  return state;
+};
+
+export default useDirectMotion;-e 
 ### FILE: ./src/app/components/floating-images/FloatingImagesSection.tsx
 
 'use client';
@@ -3808,6 +4344,258 @@ const FloatingImagesSection = () => {
 };
 
 export default FloatingImagesSection;-e 
+### FILE: ./src/app/components/floating-images/useCircularMotion.ts
+
+'use client';
+
+import { useRef, useState } from 'react';
+import { useFrame } from '@react-three/fiber';
+import { Vector3 } from 'three';
+import { SizeType } from '../floating-images/constants';
+
+interface CircularMotionProps {
+  size: SizeType;
+  index: number;
+  totalItems: number;
+  radius?: number;
+  speed?: number;
+  height?: number;
+}
+
+interface CircularMotionState {
+  position: Vector3;
+  rotation: [number, number, number];
+  scale: number;
+  opacity: number;
+}
+
+/**
+ * 奥から手前に向かってくる3D動きを制御するカスタムフック
+ */
+export const useCircularMotion = ({
+  size,
+  index,
+  totalItems,
+  radius = 20, // より広い円運動
+  speed = 0.04, // 適切な速度
+  height = 3  // 高さの分布を制限
+}: CircularMotionProps): CircularMotionState => {
+  // 初期状態の設定
+  const [state, setState] = useState<CircularMotionState>({
+    position: new Vector3(0, 0, -radius),
+    rotation: [0, 0, 0],
+    scale: 0.001,
+    opacity: 0
+  });
+
+  // アニメーションパラメータ
+  const motionRef = useRef({
+    // サイズに基づいた設定
+    baseScale: size === 'S' ? 1.0 : size === 'M' ? 1.6 : 2.2,
+    baseSpeed: size === 'S' ? speed * 1.3 : size === 'M' ? speed : speed * 0.7,
+    
+    // アイテムの初期位置を均等に分散
+    offset: (Math.PI * 2 / totalItems) * index,
+    
+    // 最小限のランダム要素（より鮮明に）
+    randomOffset: Math.random() * 0.1 - 0.05,
+    yOffset: (Math.random() * 2 - 1) * (height / 2),
+    
+    // アニメーション状態
+    angle: (Math.PI * 2 / totalItems) * index,
+    time: 0
+  });
+
+  // フレームごとのアニメーション更新
+  useFrame((_, delta) => {
+    // 時間の更新
+    motionRef.current.time += delta;
+    
+    // 角度の更新（円運動）
+    motionRef.current.angle += motionRef.current.baseSpeed * delta;
+    
+    // 3D位置の計算（円形パス）- Z軸を強調して奥から手前に動きを強調
+    const x = Math.sin(motionRef.current.angle) * radius * 0.8; // X範囲を少し狭く
+    const z = Math.cos(motionRef.current.angle) * radius; // Z範囲はそのまま
+    
+    // 奥行きの計算 - 手前に来る時に大きく見せる効果を強調
+    const depthFactor = (Math.cos(motionRef.current.angle) + 1) / 2;
+    // より明確なスケール変化（奥から手前へ）
+    const currentScale = motionRef.current.baseScale * (0.5 + depthFactor * 0.8);
+    
+    // 透明度は手前で完全に不透明に
+    const currentOpacity = 0.6 + depthFactor * 0.4;
+    
+    // 最小限の回転（鮮明さを保つため）
+    const rotZ = motionRef.current.time * 0.05 + motionRef.current.randomOffset;
+    
+    // 状態の更新
+    setState({
+      position: new Vector3(
+        x, 
+        motionRef.current.yOffset, 
+        z
+      ),
+      rotation: [0, 0, rotZ], // X軸とY軸の回転を最小限に
+      scale: currentScale,
+      opacity: currentOpacity
+    });
+  });
+
+  return state;
+};
+
+export default useCircularMotion;-e 
+### FILE: ./src/app/components/floating-images/FloatingBackgroundSection.tsx
+
+-e 
+### FILE: ./src/app/components/floating-images/FloatingImagesFixSection.tsx
+
+'use client';
+
+import { Suspense, useState, useEffect } from 'react';
+import { Canvas } from '@react-three/fiber';
+import { Image, useTexture } from '@react-three/drei';
+import { EffectComposer, Bloom } from '@react-three/postprocessing';
+import { imageFiles } from '../floating-images/constants';
+import { useRadialMotion } from './useRadialMotion';
+
+// 個々の放射状に動く画像コンポーネント
+const RadialImage = ({ imageUrl, size, index, totalItems, maxDistance = 30, speed = 0.07 }) => {
+  const texture = useTexture(imageUrl);
+  
+  // 放射状運動のカスタムフック
+  const { position, scale, opacity } = useRadialMotion({
+    size,
+    index,
+    totalItems,
+    maxDistance,
+    speed
+  });
+
+  // 放射状の動きに合わせて画像が動くように回転を調整
+  const lookAtCamera = [0, 0, Math.atan2(position.y, position.x)];
+
+  return (
+    <Image
+      url={imageUrl}
+      position={[position.x, position.y, position.z]}
+      rotation={lookAtCamera}
+      scale={[scale, scale, 1]}
+      transparent
+      opacity={opacity}
+      toneMapped={false}
+    />
+  );
+};
+
+// 画像群コンポーネント - 画像数を増やして密度を高める
+const FloatingImagesFix = ({ maxDistance = 30, speed = 0.07 }) => {
+  // CDN_URLを取得
+  const CDN_URL = process.env.NEXT_PUBLIC_CLOUDFRONT_URL || '';
+  
+  // 画像を2倍に増やす（密度向上）
+  const duplicatedImages = [
+    ...imageFiles,
+    ...imageFiles.map(img => ({...img, id: img.id + 1000})) // IDを変えて重複を避ける
+  ];
+  
+  return (
+    <>
+      {/* 背景の設定 */}
+      <color attach="background" args={['#000000']} />
+      
+      {/* 画像の配置 - 密度を2倍に */}
+      {duplicatedImages.map((image, index) => {
+        const imagePath = `${CDN_URL}/pepe/${image.filename}`;
+        
+        return (
+          <RadialImage
+            key={`${image.id}-${index}`}
+            imageUrl={imagePath}
+            size={image.size}
+            index={index}
+            totalItems={duplicatedImages.length}
+            maxDistance={maxDistance}
+            speed={speed}
+          />
+        );
+      })}
+      
+      {/* 環境光の設定 */}
+      <ambientLight intensity={0.8} />
+      
+      {/* 中央の小さな光源（出発点を強調） */}
+      <pointLight
+        position={[0, 0, 0]}
+        intensity={5}
+        distance={5}
+        color="#ffffff"
+      />
+      
+      {/* 全体を照らすスポットライト */}
+      <spotLight
+        position={[0, 0, 10]}
+        angle={Math.PI / 2}
+        penumbra={0.5}
+        intensity={1.0}
+        castShadow={false}
+      />
+    </>
+  );
+};
+
+// メインセクションコンポーネント
+const FloatingImagesFixSection = ({ className = '' }) => {
+  // ローディング状態
+  const [isLoading, setIsLoading] = useState(true);
+  
+  // コンポーネントマウント時にローディング
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setIsLoading(false);
+    }, 800);
+    
+    return () => clearTimeout(timer);
+  }, []);
+
+  return (
+    <section className={`relative w-full h-screen bg-black overflow-hidden ${className}`}>
+      {/* キャンバス - 視点を調整 */}
+      <Canvas
+        camera={{ position: [0, 0, 5], fov: 75 }} // 広い視野角で中央からの放射を強調
+        gl={{ antialias: true, alpha: false }}
+        dpr={[1, 2]}
+      >
+        <Suspense fallback={null}>
+          <FloatingImagesFix maxDistance={30} speed={0.07} />
+        </Suspense>
+        
+        {/* ポストプロセッシングエフェクト */}
+        <EffectComposer>
+          {/* ブルームエフェクト - 中央の光源を強調 */}
+          <Bloom
+            intensity={0.4}
+            luminanceThreshold={0.1}
+            luminanceSmoothing={0.9}
+          />
+        </EffectComposer>
+      </Canvas>
+      
+      {/* ローディング表示 */}
+      {isLoading && (
+        <div className="absolute inset-0 flex items-center justify-center bg-black text-white text-opacity-70 z-20">
+          <p className="animate-pulse">Loading...</p>
+        </div>
+      )}
+      
+      {/* 中央の起点を示す小さな輝き（オプション） */}
+      <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 w-1 h-1 bg-white rounded-full opacity-70 z-10 animate-pulse"></div>
+    </section>
+  );
+};
+
+export default FloatingImagesFixSection;-e 
 ### FILE: ./src/app/components/floating-images/FloatingImages.tsx
 
 'use client';
@@ -4018,57 +4806,38 @@ export const useImageLoader = ({
 };-e 
 ### FILE: ./src/app/components/floating-images/types.ts
 
-import { Object3D } from 'three';
+import { Vector3 } from 'three';
 import { SizeType } from './constants';
 
-// FloatingImageコンポーネントのProps
-export interface FloatingImageProps {
+// 円形モーションのProps
+export interface CircularImageProps {
   imageUrl: string;
   size: SizeType;
   index: number;
-  initialDelay?: number;
+  totalItems: number;
+  radius?: number;
+  speed?: number;
+  height?: number;
 }
 
-// FloatingCanvasコンポーネントのProps
-export interface FloatingCanvasProps {
-  scrollY?: number;
-}
-
-// アニメーション状態
-export interface AnimationState {
-  position: [number, number, number];
+// 円形モーションの状態
+export interface CircularMotionState {
+  position: Vector3;
   rotation: [number, number, number];
   scale: number;
   opacity: number;
 }
 
-// イメージアイテムの設定
-export interface ImageConfig {
-  size: SizeType;
-  speed: number;
-  rotationSpeed: number;
-  scale: number;
-  zPosition: number;
-  opacity: number;
-  initialX: number;
-  initialY: number;
-  initialRotation: number;
-  delay: number;
+// FloatingImagesFixのProps
+export interface FloatingImagesFixProps {
+  radius?: number;
+  speed?: number;
+  height?: number;
 }
 
-// Three.jsオブジェクト用の型拡張
-export interface FloatingObject extends Object3D {
-  material?: {
-    opacity?: number;
-    transparent?: boolean;
-  };
-}
-
-// スクロール関連の状態
-export interface ScrollState {
-  current: number;
-  target: number;
-  ease: number;
+// FloatingImagesFixSectionのProps
+export interface FloatingImagesFixSectionProps {
+  className?: string;
 }-e 
 ### FILE: ./src/app/components/floating-images/FloatingImage.tsx
 
@@ -4200,6 +4969,128 @@ export const FloatingImage = ({
     </mesh>
   );
 };-e 
+### FILE: ./src/app/components/floating-images/useRadialMotion.ts
+
+'use client';
+
+import { useRef, useState } from 'react';
+import { useFrame } from '@react-three/fiber';
+import { Vector3 } from 'three';
+import { SizeType } from '../floating-images/constants';
+
+interface RadialMotionProps {
+	size: SizeType;
+	index: number;
+	totalItems: number;
+	maxDistance?: number;
+	speed?: number;
+}
+
+interface RadialMotionState {
+	position: Vector3;
+	scale: number;
+	opacity: number;
+}
+
+/**
+ * 中央から放射状に向かってくるアニメーション用のカスタムフック
+ */
+export const useRadialMotion = ({
+	size,
+	index,
+	totalItems,
+	maxDistance = 30, // 最大移動距離
+	speed = 0.07 // 速度を上げる
+}: RadialMotionProps): RadialMotionState => {
+	// 初期状態の設定
+	const [state, setState] = useState<RadialMotionState>({
+		position: new Vector3(0, 0, -0.1), // 中央近くからスタート
+		scale: 0.001,
+		opacity: 0
+	});
+
+	// アニメーションパラメータ
+	const motionRef = useRef({
+		// サイズに基づいた設定
+		baseScale: size === 'S' ? 0.9 : size === 'M' ? 1.5 : 2.2,
+		baseSpeed: size === 'S' ? speed * 1.3 : size === 'M' ? speed : speed * 0.7,
+
+		// 方向ベクトル（ランダムな方向）- より多くの方向を用意
+		direction: getRandomDirection(index, totalItems),
+
+		// 現在の距離
+		distance: 0.1 + (index % 5) * 0.5, // 様々な距離からスタート（密度向上）
+
+		// アニメーション状態
+		time: 0
+	});
+
+	// ランダムな方向を取得する関数 - より複雑な分布
+	function getRandomDirection(index: number, total: number) {
+		// 黄金比を使用してより均等に分布させる
+		const goldenRatio = 1.618033988749895;
+		const goldenAngle = Math.PI * 2 * (1 - 1 / goldenRatio);
+
+		// 基本方向
+		let phi = index * goldenAngle;
+		let theta = Math.acos(1 - 2 * ((index % 20) / 20));
+
+		// 少しランダム性を加える
+		phi += (Math.random() - 0.5) * 0.2;
+		theta += (Math.random() - 0.5) * 0.2;
+
+		// 球面座標から直交座標へ変換
+		const x = Math.sin(theta) * Math.cos(phi);
+		const y = Math.sin(theta) * Math.sin(phi);
+		const z = Math.cos(theta);
+
+		return new Vector3(x, y, Math.abs(z)); // Z軸は常に正（前方へ）
+	}
+
+	// フレームごとのアニメーション更新
+	useFrame((_, delta) => {
+		// 時間の更新
+		motionRef.current.time += delta;
+
+		// 距離の更新（中央から外へ）
+		motionRef.current.distance += motionRef.current.baseSpeed * delta * 15;
+
+		// 一定の距離に達したら中央付近に戻す（ループ）
+		if (motionRef.current.distance > maxDistance) {
+			motionRef.current.distance = 0.1 + Math.random() * 0.5;
+			motionRef.current.direction = getRandomDirection(index + Math.floor(Math.random() * 100), totalItems);
+		}
+
+		// 現在の距離に基づく位置ベクトル
+		const position = motionRef.current.direction.clone().multiplyScalar(motionRef.current.distance);
+
+		// 距離に基づくスケール
+		// 近いほど小さく、遠いほど大きく
+		const normalizedDistance = Math.min(1, motionRef.current.distance / maxDistance);
+		const currentScale = motionRef.current.baseScale * normalizedDistance;
+
+		// 透明度（近い/遠いでフェード）
+		let currentOpacity = 1.0;
+		if (normalizedDistance < 0.1) {
+			// 近くでフェードイン
+			currentOpacity = normalizedDistance / 0.1;
+		} else if (normalizedDistance > 0.85) {
+			// 遠くでフェードアウト
+			currentOpacity = 1 - (normalizedDistance - 0.85) / 0.15;
+		}
+
+		// 状態の更新
+		setState({
+			position,
+			scale: currentScale,
+			opacity: currentOpacity
+		});
+	});
+
+	return state;
+};
+
+export default useRadialMotion;-e 
 ### FILE: ./src/app/components/floating-images/FloatingCanvas.tsx
 
 'use client';
@@ -5156,6 +6047,254 @@ function GLBModel() {
 }
 
 export default ModelDebug;-e 
+### FILE: ./src/app/components/floating-images-fix/constants.ts
+
+// src/app/components/floating-images-fix/constants.ts
+
+export type ImageSize = 'L' | 'M' | 'S';
+
+export interface ImageFile {
+  id: number;
+  filename: string;
+  size: ImageSize;
+  path: string;
+}
+
+// CDNパス
+const CDN_URL = process.env.NEXT_PUBLIC_CLOUDFRONT_URL || "";
+
+// 画像ファイルリスト
+export const imageFiles: ImageFile[] = [
+  { id: 1, filename: '1L.webp', size: 'L', path: `${CDN_URL}/pepe/1L.webp` },
+  { id: 2, filename: '2M.webp', size: 'M', path: `${CDN_URL}/pepe/2M.webp` },
+  { id: 3, filename: '3S.webp', size: 'S', path: `${CDN_URL}/pepe/3S.webp` },
+  { id: 4, filename: '4S.webp', size: 'S', path: `${CDN_URL}/pepe/4S.webp` },
+  { id: 5, filename: '5M.webp', size: 'M', path: `${CDN_URL}/pepe/5M.webp` },
+  { id: 6, filename: '6L.webp', size: 'L', path: `${CDN_URL}/pepe/6L.webp` },
+  { id: 7, filename: '7M.webp', size: 'M', path: `${CDN_URL}/pepe/7M.webp` },
+  { id: 8, filename: '8M.webp', size: 'M', path: `${CDN_URL}/pepe/8M.webp` },
+  { id: 9, filename: '9L.webp', size: 'L', path: `${CDN_URL}/pepe/9L.webp` },
+  { id: 10, filename: '10S.webp', size: 'S', path: `${CDN_URL}/pepe/10S.webp` },
+  { id: 11, filename: '11S.webp', size: 'S', path: `${CDN_URL}/pepe/11S.webp` },
+  { id: 12, filename: '12M.webp', size: 'M', path: `${CDN_URL}/pepe/12M.webp` },
+  { id: 13, filename: '13L.webp', size: 'L', path: `${CDN_URL}/pepe/13L.webp` },
+  { id: 14, filename: '14L.webp', size: 'L', path: `${CDN_URL}/pepe/14L.webp` },
+  { id: 15, filename: '15M.webp', size: 'M', path: `${CDN_URL}/pepe/15M.webp` },
+  { id: 16, filename: '16S.webp', size: 'S', path: `${CDN_URL}/pepe/16S.webp` },
+  { id: 17, filename: '17S.webp', size: 'S', path: `${CDN_URL}/pepe/17S.webp` },
+  { id: 18, filename: '18M.webp', size: 'M', path: `${CDN_URL}/pepe/18M.webp` },
+  { id: 19, filename: '19L.webp', size: 'L', path: `${CDN_URL}/pepe/19L.webp` },
+  { id: 20, filename: '20L.webp', size: 'L', path: `${CDN_URL}/pepe/20L.webp` },
+  { id: 21, filename: '21S.webp', size: 'S', path: `${CDN_URL}/pepe/21S.webp` },
+  { id: 22, filename: '22S.webp', size: 'S', path: `${CDN_URL}/pepe/22S.webp` },
+  { id: 23, filename: '23L.webp', size: 'L', path: `${CDN_URL}/pepe/23L.webp` },
+  { id: 24, filename: '24L.webp', size: 'L', path: `${CDN_URL}/pepe/24L.webp` },
+  { id: 25, filename: '25S.webp', size: 'S', path: `${CDN_URL}/pepe/25S.webp` },
+  { id: 26, filename: '26S.webp', size: 'S', path: `${CDN_URL}/pepe/26S.webp` },
+  { id: 27, filename: '27S.webp', size: 'S', path: `${CDN_URL}/pepe/27S.webp` },
+  { id: 28, filename: '28L.webp', size: 'L', path: `${CDN_URL}/pepe/28L.webp` },
+  { id: 29, filename: '29S.webp', size: 'S', path: `${CDN_URL}/pepe/29S.webp` },
+  { id: 30, filename: '30S.webp', size: 'S', path: `${CDN_URL}/pepe/30S.webp` },
+  { id: 31, filename: '31M.webp', size: 'M', path: `${CDN_URL}/pepe/31M.webp` },
+  { id: 32, filename: '32M.webp', size: 'M', path: `${CDN_URL}/pepe/32M.webp` },
+  { id: 33, filename: '33M.webp', size: 'M', path: `${CDN_URL}/pepe/33M.webp` },
+  { id: 34, filename: '34S.webp', size: 'S', path: `${CDN_URL}/pepe/34S.webp` },
+  { id: 35, filename: '35L.webp', size: 'L', path: `${CDN_URL}/pepe/35L.webp` },
+];
+
+// サイズに応じたスケール
+export const SCALE_MAP: Record<ImageSize, number> = {
+  L: 4,
+  M: 3,
+  S: 2,
+};
+-e 
+### FILE: ./src/app/components/floating-images-fix/FloatingImageFix.tsx
+
+import { useRef, useState, useEffect } from 'react';
+import { useFrame } from '@react-three/fiber';
+import { useTexture } from '@react-three/drei';
+import type { ImageFile } from './constants';
+
+interface FloatingImageFixProps {
+  image: ImageFile;
+  position: [number, number, number];
+  scale: number;
+  rotationSpeed?: number;
+}
+
+const FloatingImageFix: React.FC<FloatingImageFixProps> = ({
+  image,
+  position,
+  scale,
+  rotationSpeed = 0.005,
+}) => {
+  const meshRef = useRef<THREE.Mesh>(null);
+  const texture = useTexture(image.path);
+
+  // 最新のrotationSpeedを参照するref
+  const speedRef = useRef(rotationSpeed);
+  useEffect(() => {
+    speedRef.current = rotationSpeed;
+  }, [rotationSpeed]);
+
+  // アスペクト比（幅/高さ）
+  const [aspect, setAspect] = useState(1);
+  useEffect(() => {
+    if (texture?.image) {
+      setAspect(texture.image.width / texture.image.height);
+    }
+  }, [texture]);
+
+  useFrame((_, delta) => {
+    if (meshRef.current) {
+      meshRef.current.rotation.z += (speedRef.current ?? 0.06) * delta;
+    }
+  });
+
+  const width = scale;
+  const height = scale / aspect;
+
+  return (
+    <mesh
+      ref={meshRef}
+      position={position}
+      castShadow={false}
+      receiveShadow={false}
+    >
+      <planeGeometry args={[width, height]} />
+      <meshBasicMaterial
+        map={texture}
+        transparent
+        opacity={0.5}
+        toneMapped={false}
+      />
+    </mesh>
+  );
+};
+
+export default FloatingImageFix;
+-e 
+### FILE: ./src/app/components/floating-images-fix/FloatingImagesFixSection.tsx
+
+// src/app/components/floating-images-fix/FloatingImagesFixSection.tsx
+
+'use client';
+
+import React from 'react';
+import FloatingImagesFixCanvas from './FloatingImagesFixCanvas';
+
+const FloatingImagesFixSection: React.FC = () => {
+	return (<>
+		<div className='relative h-[150vh] bg-black'/>
+		<section className="w-screen h-[800vh] relative overflow-hidden bg-black">
+			<div className="w-screen h-full sticky top-0 left-0 pointer-events-none z-10">
+				<div className="absolute top-0 left-0 w-full h-[100vh] z-20
+						bg-gradient-to-b from-black via-black/40 to-black/0
+						pointer-events-none"
+				/>
+				<FloatingImagesFixCanvas />
+				<div className="absolute bottom-0 left-0 w-full h-[100vh] z-20
+						bg-gradient-to-b from-black/0 via-black/40 to-black
+						pointer-events-none"
+				/>
+			</div>
+		</section>
+		<div className='relative h-[150vh] bg-black' />
+	</>);
+};
+
+export default FloatingImagesFixSection;
+-e 
+### FILE: ./src/app/components/floating-images-fix/FloatingImagesFixCanvas.tsx
+
+'use client';
+
+import React, { useMemo } from 'react';
+import { Canvas, useThree } from '@react-three/fiber';
+import FloatingImageFix from './FloatingImageFix';
+import { imageFiles, SCALE_MAP, ImageSize } from './constants';
+
+const CANVAS_DEPTH = 5; // 奥行き全体の幅
+const PADDING_X = 0.5;  // 横方向パディング
+const PADDING_Y = 2;  // 縦方向パディング
+
+const getZBySize = (size: ImageSize) => {
+	if (size === 'L') return CANVAS_DEPTH * 0.42 + Math.random();
+	if (size === 'M') return Math.random() * 2 - 1;
+	return -CANVAS_DEPTH * 0.42 + Math.random();
+};
+
+const FloatingImagesFixInner: React.FC = () => {
+	const { viewport } = useThree();
+	const count = imageFiles.length;
+	const cols = Math.ceil(Math.sqrt(count));
+	const rows = Math.ceil(count / cols);
+
+	const positions = useMemo(() => {
+		const arr: [number, number, number][] = [];
+		const images = imageFiles.slice().reverse();
+
+		for (let i = 0; i < count; i++) {
+			const col = i % cols;
+			const row = Math.floor(i / cols);
+			const image = images[i];
+
+			// パディングX/Yをそれぞれ使用
+			const x =
+				((col + 0.5) / cols) * (viewport.width - PADDING_X * 2) +
+				PADDING_X -
+				viewport.width / 2;
+			const y =
+				((row + 0.5) / rows) * (viewport.height - PADDING_Y * 2) +
+				PADDING_Y -
+				viewport.height / 2;
+
+			const z = getZBySize(image.size);
+			arr.push([x, y, z]);
+		}
+		return arr;
+	}, [count, cols, rows, viewport.width, viewport.height]);
+
+	const speeds = useMemo(
+		() => imageFiles.map(() => 0.03 + Math.random() * 0.05),
+		[]
+	);
+
+	const images = useMemo(() => imageFiles.slice().reverse(), []);
+
+	return (
+		<>
+			{images.map((image, i) => (
+				<FloatingImageFix
+					key={image.id}
+					image={image}
+					position={positions[i]}
+					scale={SCALE_MAP[image.size]}
+					rotationSpeed={speeds[i]}
+				/>
+			))}
+			<ambientLight intensity={0.8} />
+		</>
+	);
+};
+
+const FloatingImagesFixCanvas: React.FC = () => {
+	return (
+		<Canvas
+			camera={{ position: [0, 0, 32], fov: 40 }}
+			style={{ width: '100%', height: '100%' }}
+			gl={{ antialias: true, alpha: false }}
+			dpr={[1, 2]}
+		>
+			<color attach="background" args={['#070c12']} />
+			<FloatingImagesFixInner />
+		</Canvas>
+	);
+};
+
+export default FloatingImagesFixCanvas;
+-e 
 ### FILE: ./src/app/layout.tsx
 
 import { Montserrat, Space_Grotesk, DotGothic16 } from 'next/font/google';
@@ -5210,25 +6349,19 @@ import SphereTop from './components/sphere/SphereTop';
 import PepeTop from './components/pepe3d/PepeTop';
 import GlowingTextSection from './components/glowing-3d-text/GlowingTextSection';
 import PulsatingComponent from './components/layout/PulsatingComponent';
-import PepeGallery from '@/app/components/pepe-gallery/PepeGallery';
+import FloatingImagesFixSection from './components/floating-images-fix/FloatingImagesFixSection';
 export default function Home() {
 	return (
 		<main className="relative">
-			<HeroSection/>
-			<GlowingTextSection /> 
-			<PulsatingComponent/>
-			<PepeTop/>
-			<SphereTop/>
-			<PepeGallery className="my-custom-class" />
-			<div
-				className="h-screen w-full bg-cover bg-center"
-				style={{
-					backgroundImage: `url('${process.env.NEXT_PUBLIC_CLOUDFRONT_URL}/pepe-cyberpunk.webp')`,
-				}}
-			/>
+			<HeroSection />
+			<GlowingTextSection />
+			<PulsatingComponent />
+			<PepeTop />
+			<SphereTop />
+			<FloatingImagesFixSection />
 		</main>
 	);
-}//<FloatingImagesSection />
+}
 -e 
 ### FILE: ./tailwind.config.js
 

@@ -1,0 +1,81 @@
+/* Tailwindで実現しづらい特殊効果用のCSSモジュール */
+
+/* 画像ホバー時のグロー効果 */
+.imageGlow {
+  filter: drop-shadow(0 0 0.5rem rgba(255, 255, 255, 0.5));
+  transition: filter 0.3s ease;
+}
+
+.imageGlow:hover {
+  filter: drop-shadow(0 0 1rem rgba(255, 255, 255, 0.8));
+}
+
+/* グレースケール⇔カラー遷移効果 */
+.grayscaleTransition {
+  transition: filter 0.5s ease;
+}
+
+.grayscaleTransition.grayscale {
+  filter: grayscale(100%);
+}
+
+.grayscaleTransition.color {
+  filter: grayscale(0%);
+}
+
+/* フェードイン効果 */
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.fadeIn {
+  animation: fadeIn 1s ease-in-out;
+}
+
+/* スクロール時の視差効果（3D空間での補助） */
+.parallaxLayer {
+  will-change: transform;
+  transition: transform 0.2s ease-out;
+}
+
+/* ズーム効果（Tailwindのscaleだけでは表現しづらい場合用） */
+.zoomEffect {
+  transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.zoomEffect:hover {
+  transform: scale(1.05);
+}
+
+/* 滑らかな回転効果 */
+@keyframes gentleRotate {
+  0% {
+    transform: rotate(0deg);
+  }
+  50% {
+    transform: rotate(1deg);
+  }
+  100% {
+    transform: rotate(0deg);
+  }
+}
+
+.gentleRotate {
+  animation: gentleRotate 5s infinite ease-in-out;
+}
+
+/* スクロール進行インジケーター */
+.scrollProgress {
+  position: fixed;
+  top: 0;
+  left: 0;
+  height: 3px;
+  background: linear-gradient(90deg, #ffffff, #999999);
+  z-index: 1000;
+  transition: width 0.2s ease;
+}

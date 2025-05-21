@@ -3,7 +3,7 @@ import SphereTop from './components/sphere/SphereTop';
 import PepeTop from './components/pepe3d/PepeTop';
 import GlowingTextSection from './components/glowing-3d-text/GlowingTextSection';
 import PulsatingComponent from './components/layout/PulsatingComponent';
-import FloatingImagesSection from './components/floating-images/FloatingImagesSection';
+import PepeGallery from '@/app/components/pepe-gallery/PepeGallery';
 export default function Home() {
 	return (
 		<main className="relative">
@@ -12,7 +12,7 @@ export default function Home() {
 			<PulsatingComponent/>
 			<PepeTop/>
 			<SphereTop/>
-			<FloatingImagesSection />
+			<PepeGallery className="my-custom-class" />
 			<div
 				className="h-screen w-full bg-cover bg-center"
 				style={{

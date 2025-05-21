@@ -12,27 +12,31 @@ export const HeroTitle: React.FC<HeroTitleProps> = ({ style }) => {
 			{/* メインタイトル */}
 			<div className={styles.titleGroup}>
 				<GlitchText
-					text="PAY"
+					text="NO BANKS"
 					className="text-7xl sm:text-8xl lg:text-9xl"
 					color="text-neonOrange"
 					glitchIntensity="high"
 					isMainTitle={true}
 				/>
 				<GlitchText
-					text="PUMP"
+					text="NO MIDDLEMEN"
 					className="text-7xl sm:text-8xl lg:text-9xl"
 					color="text-neonGreen"
 					glitchIntensity="medium"
 					isMainTitle={true}
 				/>
 				<GlitchText
-					text="LIVE"
+					text="JUST PROTEIN"
 					className="text-7xl sm:text-8xl lg:text-9xl"
 					color="text-white"
 					glitchIntensity="high"
 					isMainTitle={true}
 				/>
 			</div>
+			<p className="mt-6 text-sm md:text-lg text-white">
+				Only non-custodial wallets accepted.<br />
+				Built for the chain. Priced for the degens.
+			</p>
 		</div>
 	);
 };

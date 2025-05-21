@@ -42,30 +42,38 @@ const GlowingTextSection = () => {
 				</div>
 			</div>
 			<p className="text-center text-white">
-				ただのプロテインではない。それは、ぺぺが紡ぐ「勇気」と「ユーモア」の物語。
+				Not just protein. It’s a story of courage and humor - encrypted in every scoop.
 			</p>
 			<div className="text-xs mt-8 w-full max-w-sm px-4">
 				<table className="w-full table-auto border-collapse border border-white text-white">
 					<tbody>
 						<tr>
-							<td className="border border-white px-2 py-1 text-center">たんぱくしつ</td>
+							<td className="border border-white px-2 py-1 text-center">Nutritional Profile</td>
+							<td className="border border-white px-2 py-1 text-left"> per 50g</td>
+						</tr>
+						<tr>
+							<td className="border border-white px-2 py-1 text-center">Protein</td>
 							<td className="border border-white px-2 py-1 text-left">25 g</td>
 						</tr>
 						<tr>
-							<td className="border border-white px-2 py-1 text-center">ししつ</td>
+							<td className="border border-white px-2 py-1 text-center">Fat</td>
 							<td className="border border-white px-2 py-1 text-left">1.5 g</td>
 						</tr>
 						<tr>
-							<td className="border border-white px-2 py-1 text-center">たんすいかぶつ</td>
+							<td className="border border-white px-2 py-1 text-center">Carbs</td>
 							<td className="border border-white px-2 py-1 text-left">2 g</td>
 						</tr>
 						<tr>
-							<td className="border border-white px-2 py-1 text-center">しょくもつせんい</td>
+							<td className="border border-white px-2 py-1 text-center">Minerals</td>
 							<td className="border border-white px-2 py-1 text-left">1 g</td>
 						</tr>
 						<tr>
-							<td className="border border-white px-2 py-1 text-center">あれるげん</td>
-							<td className="border border-white px-2 py-1 text-left">乳</td>
+							<td className="border border-white px-2 py-1 text-center">allergen</td>
+							<td className="border border-white px-2 py-1 text-left">Milk</td>
+						</tr>
+						<tr>
+							<td className="border border-white px-2 py-1 text-center">勇気</td>
+							<td className="border border-white px-2 py-1 text-left">1%</td>
 						</tr>
 					</tbody>
 				</table>

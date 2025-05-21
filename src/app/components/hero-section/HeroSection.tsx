@@ -5,8 +5,6 @@ import styles from './HeroSection.module.css';
 import { useGlitchEffect } from './GlitchEffects';
 import HeroBackground from './HeroBackground';
 import HeroTitle from './HeroTitle';
-import HeroModel from './HeroModel';
-import ScrollSpace from '../glowing-3d-text/ScrollSpace';
 
 export const HeroSection: React.FC = () => {
 	const [mousePosition, setMousePosition] = useState({ x: 0, y: 0 });
@@ -38,7 +36,7 @@ export const HeroSection: React.FC = () => {
   `;
 
 	return (
-		<div className="sticky top-0 h-screen overflow-hidden">
+		<div className="sticky top-0 h-[90vh] overflow-hidden">
 			{/* 背景 & エフェクト */}
 			<HeroBackground
 				backgroundTransform={backgroundTransform}

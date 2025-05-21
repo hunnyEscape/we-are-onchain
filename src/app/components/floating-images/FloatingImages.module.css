@@ -1,0 +1,145 @@
+/* TailwindCSSでは実現が難しい特殊なスタイル */
+
+/* フェードインアニメーション */
+.fadeIn {
+	opacity: 0;
+	animation: fadeInAnimation 1.5s ease forwards;
+}
+
+@keyframes fadeInAnimation {
+	0% {
+		opacity: 0;
+	}
+
+	100% {
+		opacity: 1;
+	}
+}
+
+/* スキャンラインエフェクト */
+.scanlines {
+	position: absolute;
+	top: 0;
+	left: 0;
+	width: 100%;
+	height: 100%;
+	overflow: hidden;
+	pointer-events: none;
+	z-index: 15;
+	opacity: 0.3;
+}
+
+.scanlines::before {
+	content: "";
+	position: absolute;
+	width: 100%;
+	height: 100%;
+	top: 0;
+	left: 0;
+	background: linear-gradient(to bottom,
+			transparent 50%,
+			rgba(0, 0, 0, 0.5) 51%,
+			transparent 51%);
+	background-size: 100% 4px;
+	pointer-events: none;
+}
+
+/* グリッチエフェクト */
+.glitch {
+	position: relative;
+}
+
+.glitch::before,
+.glitch::after {
+	content: attr(data-text);
+	position: absolute;
+	top: 0;
+	left: 0;
+	width: 100%;
+	height: 100%;
+	clip: rect(0, 0, 0, 0);
+}
+
+.glitch::before {
+	left: 2px;
+	text-shadow: -1px 0 #00ffea;
+	animation: glitch-animation-1 2s infinite linear alternate-reverse;
+}
+
+.glitch::after {
+	left: -2px;
+	text-shadow: 2px 0 #ff00c1;
+	animation: glitch-animation-2 3s infinite linear alternate-reverse;
+}
+
+@keyframes glitch-animation-1 {
+	0% {
+		clip: rect(36px, 9999px, 9px, 0);
+	}
+
+	20% {
+		clip: rect(25px, 9999px, 99px, 0);
+	}
+
+	40% {
+		clip: rect(50px, 9999px, 102px, 0);
+	}
+
+	60% {
+		clip: rect(62px, 9999px, 78px, 0);
+	}
+
+	80% {
+		clip: rect(91px, 9999px, 14px, 0);
+	}
+
+	100% {
+		clip: rect(27px, 9999px, 37px, 0);
+	}
+}
+
+@keyframes glitch-animation-2 {
+	0% {
+		clip: rect(4px, 9999px, 29px, 0);
+	}
+
+	20% {
+		clip: rect(31px, 9999px, 75px, 0);
+	}
+
+	40% {
+		clip: rect(39px, 9999px, 31px, 0);
+	}
+
+	60% {
+		clip: rect(73px, 9999px, 5px, 0);
+	}
+
+	80% {
+		clip: rect(27px, 9999px, 22px, 0);
+	}
+
+	100% {
+		clip: rect(86px, 9999px, 80px, 0);
+	}
+}
+
+/* 画像の回転によるパラレルエフェクト */
+.rotate3D {
+	transform-style: preserve-3d;
+	perspective: 1000px;
+}
+
+.rotate3D>div {
+	will-change: transform;
+	transition: transform 0.2s ease-out;
+}
+
+/* サイバーパンク風のテキストグロー */
+.cyberGlow {
+	text-shadow:
+		0 0 5px rgba(0, 255, 255, 0.7),
+		0 0 10px rgba(0, 255, 255, 0.5),
+		0 0 15px rgba(0, 255, 255, 0.3),
+		0 0 20px rgba(0, 255, 255, 0.2);
+}

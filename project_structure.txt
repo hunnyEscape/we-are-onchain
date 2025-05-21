@@ -39,6 +39,18 @@
 │       │   │   └── TextParticleEffect.tsx
 │       │   ├── debug
 │       │   │   └── ModelDebug.tsx
+│       │   ├── floating-images
+│       │   │   ├── EffectsComposer.tsx
+│       │   │   ├── FloatingCanvas.tsx
+│       │   │   ├── FloatingImage.tsx
+│       │   │   ├── FloatingImages.module.css
+│       │   │   ├── FloatingImages.tsx
+│       │   │   ├── FloatingImagesSection.tsx
+│       │   │   ├── constants.ts
+│       │   │   ├── styles.module.css
+│       │   │   ├── types.ts
+│       │   │   ├── useFloatingAnimation.ts
+│       │   │   └── useImageLoader.ts
 │       │   ├── glowing-3d-text
 │       │   │   ├── GlowingText.module.css
 │       │   │   ├── GlowingTextScene.tsx
@@ -82,4 +94,4 @@
 ├── tailwind.config.js
 └── tsconfig.json
 
-16 directories, 66 files
+17 directories, 77 files

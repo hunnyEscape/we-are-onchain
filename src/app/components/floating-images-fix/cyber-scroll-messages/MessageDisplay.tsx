@@ -59,14 +59,14 @@ const MessageDisplay: React.FC<MessageDisplayProps> = ({
 		});
 	};
 
-	// スタイルの計算を簡略化し、デバッグを追加
+	// スタイルの計算
 	const getStyleProps = () => {
 		// 基本スタイル
 		let styleProps: React.CSSProperties = {
-			color: message.color || '#00ff66',
+			color: message.color || '#ffffff', // 白色をデフォルトに
 			fontSize: message.size || '3rem',
 			fontWeight: 'bold',
-			textShadow: '0 0 10px rgba(0, 255, 102, 0.7)',
+			textShadow: '0 0 10px rgba(255, 255, 255, 0.7), 0 0 20px rgba(255, 255, 255, 0.5)', // 白いグロー
 			opacity: isActive ? 1 : 0,
 			transition: 'opacity 0.7s ease-in-out',
 			zIndex: 25,
@@ -97,23 +97,20 @@ const MessageDisplay: React.FC<MessageDisplayProps> = ({
 			styleProps.position = 'fixed';
 			styleProps.top = '20vh';
 		} else if (message.id === 'message-2') {
-			// 「期は熟し」- 縦書き、中央右寄り
+			// 「限られた者がたどり着く」- 横書き、中央右寄り
 			styleProps.position = 'fixed';
 			styleProps.top = '50vh';
 			styleProps.transform = styleProps.transform
 				? `${styleProps.transform} translateY(-50%)`
 				: 'translateY(-50%)';
 		} else if (message.id === 'message-3') {
-			// 「覚醒する」- 縦書き、中央左寄り
+			// 「境地」- 縦書き、中央左寄り
 			styleProps.position = 'fixed';
 			styleProps.top = '50vh';
 			styleProps.transform = styleProps.transform
 				? `${styleProps.transform} translateY(-50%)`
 				: 'translateY(-50%)';
 		}
-
-		// デバッグボーダー（確認用）
-		styleProps.border = isActive ? '1px solid rgba(0, 255, 102, 0.3)' : 'none';
 
 		return styleProps;
 	};
@@ -129,7 +126,6 @@ const MessageDisplay: React.FC<MessageDisplayProps> = ({
 			data-active={isActive}
 		>
 			{renderWords()}
-
 		</div>
 	);
 };

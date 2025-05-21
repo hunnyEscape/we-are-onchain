@@ -11,8 +11,8 @@ export default function Home() {
 			<GlowingTextSection />
 			<PulsatingComponent />
 			<PepeTop />
-			<SphereTop />
 			<FloatingImagesFixSection />
+			<SphereTop />
 		</main>
 	);
 }

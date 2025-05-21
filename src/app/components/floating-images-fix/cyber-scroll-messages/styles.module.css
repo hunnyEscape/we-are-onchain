@@ -13,10 +13,22 @@
   100% { transform: translate(0); text-shadow: 0 0 0 #0f0, 0 0 0 #f00, 0 0 0 #00f; }
 }
 
-/* 特殊キーワード強調グリッチ */
+/* 虹色アニメーション */
+@keyframes rainbow {
+  0% { color: #ffd0d0; }   /* 赤 */
+  16.66% { color: #ffead3; } /* オレンジ */
+  33.33% { color: #ffffd0; } /* 黄 */
+  50% { color: #d4ffd4; }    /* 緑 */
+  66.66% { color: #cde7ff; } /* 青 */
+  83.33% { color: #f1e1ff; } /* 紫 */
+  100% { color: #ffdddd; }   /* 赤に戻る */
+}
+
+/* 特殊キーワード強調グリッチ（虹色版） */
 .keywordGlitch {
   position: relative;
   display: inline-block;
+  animation: rainbow 3s linear infinite;
 }
 
 .keywordGlitch::before,
@@ -32,15 +44,15 @@
 
 .keywordGlitch::before {
   left: 2px;
-  text-shadow: -1px 0 #00ff66;
-  animation: glitch-1 2s infinite linear alternate-reverse;
+  text-shadow: -1px 0 #ffffff;
+  animation: glitch-1 2s infinite linear alternate-reverse, rainbow 3s linear infinite;
   clip-path: polygon(0 0, 100% 0, 100% 45%, 0 45%);
 }
 
 .keywordGlitch::after {
   left: -2px;
-  text-shadow: -1px 0 #ff00ff;
-  animation: glitch-2 3s infinite linear alternate-reverse;
+  text-shadow: -1px 0 #ffffff;
+  animation: glitch-2 3s infinite linear alternate-reverse, rainbow 3s linear infinite reverse;
   clip-path: polygon(0 55%, 100% 55%, 100% 100%, 0 100%);
 }
 
@@ -63,23 +75,25 @@
   100% { transform: translateX(0); }
 }
 
-/* RGB分離効果 */
+/* RGB分離効果（白ベース） */
 .rgbSplit {
   position: relative;
-  text-shadow: -2px 0 #ff0000, 2px 0 #00ffff;
-  animation: rgb-shift 0.4s ease-in-out infinite alternate;
+  color: #ffffff;
+  text-shadow: -2px 0 #ff4444, 2px 0 #44ffff;
+  animation: rgb-shift 0.4s ease-in-out infinite alternate, rainbow 4s linear infinite;
 }
 
 @keyframes rgb-shift {
-  0% { text-shadow: -2px 0 #ff0000, 2px 0 #00ffff; }
-  50% { text-shadow: -3px 0 #ff0000, 3px 0 #00ffff; }
-  100% { text-shadow: -2px 0 #ff0000, 2px 0 #00ffff; }
+  0% { text-shadow: -2px 0 #ff4444, 2px 0 #44ffff; }
+  50% { text-shadow: -3px 0 #ff4444, 3px 0 #44ffff; }
+  100% { text-shadow: -2px 0 #ff4444, 2px 0 #44ffff; }
 }
 
-/* 波形歪みエフェクト */
+/* 波形歪みエフェクト（白+虹色） */
 .waveDistort {
   display: inline-block;
-  animation: wave 2s ease-in-out infinite;
+  color: #ffffff;
+  animation: wave 2s ease-in-out infinite, rainbow 3s linear infinite;
 }
 
 @keyframes wave {
@@ -87,9 +101,10 @@
   50% { transform: translateY(-5px) }
 }
 
-/* パルス効果 */
+/* パルス効果（白+虹色） */
 .pulseEffect {
-  animation: pulse-effect 1.5s ease-in-out infinite;
+  color: #ffffff;
+  animation: pulse-effect 1.5s ease-in-out infinite, rainbow 2.5s linear infinite;
 }
 
 @keyframes pulse-effect {
@@ -97,10 +112,12 @@
   50% { transform: scale(1.05); opacity: 0.9; }
 }
 
-/* スライスグリッチ */
+/* スライスグリッチ（白+虹色） */
 .sliceGlitch {
   position: relative;
   overflow: hidden;
+  color: #ffffff;
+  animation: rainbow 2s linear infinite;
 }
 
 .sliceGlitch::before {
@@ -111,7 +128,8 @@
   width: 100%;
   height: 100%;
   background: rgb(8, 8, 8);
-  animation: slice 3s ease-in-out infinite;
+  color: #ffffff;
+  animation: slice 3s ease-in-out infinite, rainbow 2s linear infinite reverse;
 }
 
 @keyframes slice {
@@ -122,9 +140,10 @@
   25% { height: 0; top: 0; }
 }
 
-/* ジッターエフェクト */
+/* ジッターエフェクト（白+虹色） */
 .jitterEffect {
-  animation: jitter 0.1s linear infinite;
+  color: #ffffff;
+  animation: jitter 0.1s linear infinite, rainbow 1.5s linear infinite;
 }
 
 @keyframes jitter {
@@ -142,7 +161,7 @@
   left: 0;
   width: 100%;
   height: 100%;
-  background: linear-gradient(to bottom, transparent, rgba(0, 255, 102, 0.2) 50%, transparent);
+  background: linear-gradient(to bottom, transparent, rgba(255, 255, 255, 0.1) 50%, transparent);
   background-size: 100% 8px;
   pointer-events: none;
   z-index: 10;
@@ -169,7 +188,7 @@
   position: absolute;
   width: 30px;
   height: 30px;
-  border: 2px solid #00ff66;
+  border: 2px solid #ffffff;
   opacity: 0.8;
 }
 
@@ -207,8 +226,8 @@
   right: 20px;
   height: 60vh;
   width: 10px;
-  background: rgba(0, 51, 17, 0.5);
-  border: 1px solid #00ff66;
+  background: rgba(255, 255, 255, 0.2);
+  border: 1px solid #ffffff;
   bottom: 20vh;
   z-index: 5;
   pointer-events: none;
@@ -218,7 +237,7 @@
   position: absolute;
   bottom: 0;
   width: 100%;
-  background: linear-gradient(to top, #00ff66, #00aa44);
+  background: linear-gradient(to top, #ffffff, #cccccc);
   transition: height 0.5s ease;
 }
 
@@ -229,7 +248,7 @@
   bottom: 10px;
   font-family: monospace;
   font-size: 12px;
-  color: #00ff66;
+  color: #ffffff;
   z-index: 5;
   pointer-events: none;
 }
@@ -258,7 +277,7 @@
   font-family: monospace;
   font-size: 14px;
   line-height: 14px;
-  color: #00ff66;
+  color: #ffffff;
   animation: data-fall 20s linear infinite;
 }
 
@@ -273,7 +292,7 @@
   left: 20px;
   bottom: 20px;
   font-size: 12px;
-  color: #00ff66;
+  color: #ffffff;
   z-index: 5;
 }
 
@@ -284,7 +303,7 @@
   left: 0;
   width: 100%;
   height: 100%;
-  background: rgba(0, 255, 102, 0.2);
+  background: rgba(255, 255, 255, 0.2);
   opacity: 0;
   pointer-events: none;
   z-index: 100;

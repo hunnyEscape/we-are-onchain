@@ -26,38 +26,39 @@ export interface GlitchEffectConfig {
 }
 
 // メッセージ定義
-// constants.ts の修正部分
-// 位置範囲を調整（セクションの開始時点から表示されるように）
 export const cyberMessages: MessageConfig[] = [
 	{
 		id: 'message-1',
-		text: '受け継がれし、神秘の奇跡',
-		position: { start: 0, end: 200 },  // 開始位置を0に
+		text: '受け継がれた神秘の奇跡',
+		position: { start: 0, end: 200 },
 		style: 'horizontal',
 		size: '4rem',
 		align: 'left',
 		glitchEffect: 'rgb',
 		keywords: ['神秘', '奇跡'],
+		color: '#ffffff', // 白色ベース
 	},
 	{
 		id: 'message-2',
 		text: '限られた者がたどり着く',
-		position: { start: 250, end: 450 },  // 位置調整
+		position: { start: 200, end: 400 },
 		style: 'horizontal',
 		size: '4rem',
 		align: 'right',
-		glitchEffect: 'jitter',
+		glitchEffect: 'wave',
 		keywords: ['限られた', 'たどり着く'],
+		color: '#ffffff', // 白色ベース
 	},
 	{
 		id: 'message-3',
 		text: '境地',
-		position: { start: 500, end: 700 },  // 位置調整
+		position: { start: 400, end: 700 },
 		style: 'vertical',
 		size: '12rem',
 		align: 'left',
-		glitchEffect: 'rgb',
+		glitchEffect: 'slice',
 		keywords: ['境地'],
+		color: '#ffffff', // 白色ベース
 	}
 ];
 
@@ -68,7 +69,7 @@ export const glitchEffects: Record<GlitchEffectType, GlitchEffectConfig> = {
 		intensity: 2
 	},
 	wave: {
-		className: 'waveDistort',  // CSSモジュールの実際のクラス名に修正
+		className: 'waveDistort',
 		intensity: 1.5
 	},
 	slice: {

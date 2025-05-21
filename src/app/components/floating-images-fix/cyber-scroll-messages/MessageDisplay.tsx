@@ -130,12 +130,6 @@ const MessageDisplay: React.FC<MessageDisplayProps> = ({
 		>
 			{renderWords()}
 
-			{/* デバッグ情報（開発時のみ表示） */}
-			{false && (
-				<div className="absolute top-full left-0 bg-black/80 text-white text-xs p-1 z-50 whitespace-nowrap">
-					ID: {message.id}, Active: {isActive ? 'YES' : 'NO'}
-				</div>
-			)}
 		</div>
 	);
 };

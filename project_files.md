@@ -2793,244 +2793,276 @@ import CyberInterface from './CyberInterface';
 import styles from './PepeStyles.module.css';
 
 type MessageConfig = {
-  id: string;
-  text: string;
-  top?: string;
-  left?: string;
-  width?: string;
-  fontSize?: string;
-  glitchEffect?: 'rgb' | 'slice' | 'wave' | 'pulse' | 'jitter' | 'none';
-  keywords?: string[];
-  delay?: number;
+	id: string;
+	text: string;
+	top?: string;
+	left?: string;
+	width?: string;
+	fontSize?: string;
+	glitchEffect?: 'rgb' | 'slice' | 'wave' | 'pulse' | 'jitter' | 'none';
+	keywords?: string[];
+	delay?: number;
 };
 
 // テキストフラグメント処理用の型
 interface TextFragment {
-  text: string;
-  isKeyword: boolean;
-  keywordType?: string;
+	text: string;
+	isKeyword: boolean;
+	keywordType?: string;
 }
 
 const messages: MessageConfig[] = [
-  {
-    id: 'trigger-1',
-    text: '🧪深緑の源泉 ー 古代から森にひそむ「ぺぺの泉」。',
-    top: '20vh',
-    left: '10vw',
-    width: 'auto',
-    fontSize: '2rem',
-    glitchEffect: 'rgb',
-    keywords: ['深緑の源泉', 'ぺぺの泉'],
-  },
-  {
-    id: 'trigger-2',
-    text: '💎そこから湧き出るグリーンミネラルが、濃厚なコクとほどよい甘みをもたらす。',
-    top: '30vh',
-    left: '30vw',
-    width: 'max-content',
-    fontSize: '2rem',
-    glitchEffect: 'wave',
-    keywords: ['グリーンミネラル'],
-  },
-  {
-    id: 'trigger-3',
-    text: '一口ごとに脈打つビート、疲労を吹き飛ばし、次の挑戦へと背中を押す。',
-    top: '40vh',
-    left: '10vw',
-    width: 'max-content',
-    fontSize: '2rem',
-    glitchEffect: 'pulse',
-    keywords: ['脈打つビート'],
-  },
-  {
-    id: 'trigger-4',
-    text: '次元を超えたグリーンパワーを、その手で感じよ。',
-    top: '80vh',
-    left: '30vw',
-    width: '60vw',
-    fontSize: '3rem',
-    glitchEffect: 'slice',
-    keywords: ['次元を超えた', 'グリーンパワー'],
-  },
+	{
+		id: 'trigger-1',
+		text: '🧪深緑の源泉 ー 古代から森にひそむ「ぺぺの泉」。',
+		top: '20vh',
+		left: '10vw',
+		width: 'auto',
+		fontSize: '2rem',
+		glitchEffect: 'rgb',
+		keywords: ['深緑の源泉', 'ぺぺの泉'],
+	},
+	{
+		id: 'trigger-2',
+		text: '💎そこから湧き出るグリーンミネラルが、濃厚なコクとほどよい甘みをもたらす。',
+		top: '30vh',
+		left: '30vw',
+		width: 'max-content',
+		fontSize: '2rem',
+		glitchEffect: 'wave',
+		keywords: ['グリーンミネラル'],
+	},
+	{
+		id: 'trigger-3',
+		text: '一口ごとに脈打つビート、疲労を吹き飛ばし、次の挑戦へと背中を押す。',
+		top: '40vh',
+		left: '10vw',
+		width: 'max-content',
+		fontSize: '2rem',
+		glitchEffect: 'pulse',
+		keywords: ['脈打つビート'],
+	},
+	{
+		id: 'trigger-4',
+		text: '次元を超えたグリーンパワーを、その手で感じよ。',
+		top: '80vh',
+		left: '30vw',
+		width: '60vw',
+		fontSize: '3rem',
+		glitchEffect: 'slice',
+		keywords: ['次元を超えた', 'グリーンパワー'],
+	},
 ];
 
 const ScrollTriggerMessages: React.FC = () => {
-  const refs = useRef<(HTMLDivElement | null)[]>([]);
-  const [activeIndex, setActiveIndex] = useState<number | null>(null);
-  const [scrollProgress, setScrollProgress] = useState<number>(0);
-  const [randomTrigger, setRandomTrigger] = useState<boolean>(false);
+	const refs = useRef<(HTMLDivElement | null)[]>([]);
+	const [activeIndex, setActiveIndex] = useState<number | null>(null);
+	const [scrollProgress, setScrollProgress] = useState<number>(0);
+	const [randomTrigger, setRandomTrigger] = useState<boolean>(false);
 
-  // キーワードに基づいてテキストを処理する関数
-  const processText = (text: string, keywords: string[] = []): TextFragment[] => {
-    if (!keywords || keywords.length === 0) return [{ text, isKeyword: false }];
+	// キーワードに基づいてテキストを処理する関数
+	const processText = (text: string, keywords: string[] = []): TextFragment[] => {
+		if (!keywords || keywords.length === 0) return [{ text, isKeyword: false }];
 
-    const fragments: TextFragment[] = [];
-    let remainingText = text;
+		const fragments: TextFragment[] = [];
+		let remainingText = text;
 
-    // 各キーワードを検索して分割
-    keywords.forEach((keyword) => {
-      const parts = remainingText.split(new RegExp(`(${keyword})`, 'g'));
-      if (parts.length === 1) return; // キーワードが見つからない場合はスキップ
+		// 各キーワードを検索して分割
+		keywords.forEach((keyword) => {
+			const parts = remainingText.split(new RegExp(`(${keyword})`, 'g'));
+			if (parts.length === 1) return; // キーワードが見つからない場合はスキップ
 
-      // 分割された部分を処理
-      let newRemainingText = '';
-      parts.forEach((part, index) => {
-        if (part === keyword) {
-          fragments.push({
-            text: part,
-            isKeyword: true,
-            keywordType: keyword,
-          });
-        } else if (part) {
-          newRemainingText += part;
-        }
-      });
-      remainingText = newRemainingText;
-    });
+			// 分割された部分を処理
+			let newRemainingText = '';
+			parts.forEach((part, index) => {
+				if (part === keyword) {
+					fragments.push({
+						text: part,
+						isKeyword: true,
+						keywordType: keyword,
+					});
+				} else if (part) {
+					newRemainingText += part;
+				}
+			});
+			remainingText = newRemainingText;
+		});
 
-    // 残りのテキストがあれば追加
-    if (remainingText) {
-      fragments.push({ text: remainingText, isKeyword: false });
-    }
+		// 残りのテキストがあれば追加
+		if (remainingText) {
+			fragments.push({ text: remainingText, isKeyword: false });
+		}
 
-    return fragments.length > 0 ? fragments : [{ text, isKeyword: false }];
-  };
+		return fragments.length > 0 ? fragments : [{ text, isKeyword: false }];
+	};
 
-  // グリッチエフェクトに基づいてクラス名を取得
-  const getGlitchClass = (effect?: 'rgb' | 'slice' | 'wave' | 'pulse' | 'jitter' | 'none'): string => {
-    switch (effect) {
-      case 'rgb': return styles.rgbSplit;
-      case 'slice': return styles.sliceGlitch;
-      case 'wave': return styles.waveDistort;
-      case 'pulse': return styles.pulse;
-      case 'jitter': return styles.jitter;
-      default: return '';
-    }
-  };
+	// グリッチエフェクトに基づいてクラス名を取得
+	const getGlitchClass = (effect?: 'rgb' | 'slice' | 'wave' | 'pulse' | 'jitter' | 'none'): string => {
+		switch (effect) {
+			case 'rgb': return styles.rgbSplit;
+			case 'slice': return styles.sliceGlitch;
+			case 'wave': return styles.waveDistort;
+			case 'pulse': return styles.pulse;
+			case 'jitter': return styles.jitter;
+			default: return '';
+		}
+	};
 
-  // レンダリングされる実際のテキスト
-  const renderMessageText = (message: MessageConfig) => {
-    if (!message.keywords || message.keywords.length === 0) {
-      return <span className={getGlitchClass(message.glitchEffect)}>{message.text}</span>;
-    }
+	// レンダリングされる実際のテキスト
+	const renderMessageText = (message: MessageConfig) => {
+		if (!message.keywords || message.keywords.length === 0) {
+			return <span className={getGlitchClass(message.glitchEffect)}>{message.text}</span>;
+		}
 
-    // キーワードを検出して強調
-    return message.text.split(' ').map((word, wordIndex) => {
-      const isKeyword = message.keywords?.some(keyword => keyword.includes(word) || word.includes(keyword));
-      
-      if (isKeyword) {
-        return (
-          <span 
-            key={`word-${wordIndex}`}
-            className={`${styles.keywordGlitch} ${getGlitchClass(message.glitchEffect)}`}
-            data-text={word}
-          >
-            {word}{' '}
-          </span>
-        );
-      }
-      
-      return (
-        <span 
-          key={`word-${wordIndex}`}
-          className={getGlitchClass(message.glitchEffect)}
-        >
-          {word}{' '}
-        </span>
-      );
-    });
-  };
+		// キーワードを検出して強調
+		return message.text.split(' ').map((word, wordIndex) => {
+			const isKeyword = message.keywords?.some(keyword => keyword.includes(word) || word.includes(keyword));
 
-  useEffect(() => {
-    const observer = new IntersectionObserver(
-      (entries) => {
-        let found = false;
-        entries.forEach((entry) => {
-          const idx = refs.current.findIndex((r) => r === entry.target);
-          if (entry.isIntersecting) {
-            setActiveIndex(idx);
-            found = true;
-          }
-        });
-        if (!found) setActiveIndex(null);
-      },
-      { root: null, rootMargin: '0px', threshold: 0.5 }
-    );
+			if (isKeyword) {
+				return (
+					<span
+						key={`word-${wordIndex}`}
+						className={`${styles.keywordGlitch} ${getGlitchClass(message.glitchEffect)}`}
+						data-text={word}
+					>
+						{word}{' '}
+					</span>
+				);
+			}
 
-    refs.current.forEach((r) => r && observer.observe(r));
+			return (
+				<span
+					key={`word-${wordIndex}`}
+					className={getGlitchClass(message.glitchEffect)}
+				>
+					{word}{' '}
+				</span>
+			);
+		});
+	};
 
-    // スクロールイベントリスナー追加
-    const handleScroll = () => {
-      const scrollTop = window.scrollY;
-      const docHeight = document.documentElement.scrollHeight;
-      const winHeight = window.innerHeight;
-      const scrollPercent = scrollTop / (docHeight - winHeight);
-      setScrollProgress(scrollPercent);
-      
-      // 10%の確率でランダムなグリッチをトリガー
-      if (Math.random() < 0.01) {
-        setRandomTrigger(true);
-        setTimeout(() => setRandomTrigger(false), 150);
-      }
-    };
-    
-    window.addEventListener('scroll', handleScroll);
+	useEffect(() => {
+		// IntersectionObserverのオプションを調整
+		const observer = new IntersectionObserver(
+			(entries) => {
+				let found = false;
+				entries.forEach((entry) => {
+					const idx = refs.current.findIndex((r) => r === entry.target);
+					// 閾値を下げて、要素が少しでも見えたら検出するように
+					if (entry.isIntersecting) {
+						setActiveIndex(idx);
+						found = true;
+					}
+				});
+				if (!found) setActiveIndex(null);
+			},
+			{
+				root: null,
+				// rootMarginを調整してセクション開始時（上部が見えるとき）から検出
+				rootMargin: '100px 0px',
+				// thresholdを下げて少しでも見えたら反応するように
+				threshold: 0.1
+			}
+		);
 
-    return () => {
-      refs.current.forEach((r) => r && observer.unobserve(r));
-      window.removeEventListener('scroll', handleScroll);
-    };
-  }, []);
+		refs.current.forEach((r) => r && observer.observe(r));
 
-  return (
-    <>
-      {/* トリガー用ダミーゾーン */}
-      {messages.map((_, i) => (
-        <div key={`zone-${i}`} ref={(el) => (refs.current[i] = el)} className="h-screen w-full" />
-      ))}
+		// スクロールイベントリスナー追加
+		const handleScroll = () => {
+			const scrollTop = window.scrollY;
+			const docHeight = document.documentElement.scrollHeight;
+			const winHeight = window.innerHeight;
 
-      {/* サイバネティックインターフェース */}
-      <CyberInterface 
-        scrollProgress={scrollProgress} 
-        activeIndex={activeIndex} 
-        totalSections={messages.length} 
-      />
+			// FloatingImagesFixSection の位置を取得
+			const section = document.querySelector('.floating-images-fix-section');
+			if (section) {
+				const rect = section.getBoundingClientRect();
+				const sectionTop = rect.top + scrollTop;
+				const sectionHeight = rect.height;
 
-      {/* フローティングメッセージ */}
-      {messages.map((msg, i) => {
-        const isActive = activeIndex === i;
-        return (
-          <div
-            key={msg.id}
-            className={`fixed z-50 font-pixel text-white transition-opacity duration-700 ease-in-out
+				// セクション内のスクロール位置（0-1）を計算
+				let progress = 0;
+
+				// セクションが画面に入ったらカウント開始（オフセット調整）
+				if (scrollTop < sectionTop - winHeight) {
+					// セクションがまだ画面下方向に見えていない
+					progress = 0;
+				} else if (scrollTop > sectionTop + sectionHeight) {
+					// セクションを通り過ぎた
+					progress = 1;
+				} else {
+					// セクション内または接近中
+					// 開始位置を少し手前（viewport height分）にオフセット
+					progress = (scrollTop - (sectionTop - winHeight)) / (sectionHeight + winHeight);
+				}
+
+				setScrollProgress(progress);
+			} else {
+				// セクションが見つからない場合は通常通り計算
+				const scrollPercent = scrollTop / (docHeight - winHeight);
+				setScrollProgress(scrollPercent);
+			}
+
+			// ランダムなグリッチをトリガー
+			if (Math.random() < 0.01) {
+				setRandomTrigger(true);
+				setTimeout(() => setRandomTrigger(false), 150);
+			}
+		};
+
+		window.addEventListener('scroll', handleScroll);
+		// 初期化時に一度実行
+		handleScroll();
+
+		return () => {
+			refs.current.forEach((r) => r && observer.unobserve(r));
+			window.removeEventListener('scroll', handleScroll);
+		};
+	}, []);
+
+	return (
+		<>
+			{/* トリガー用ダミーゾーン */}
+			{messages.map((_, i) => (
+				<div key={`zone-${i}`} ref={(el) => (refs.current[i] = el)} className="h-screen w-full" />
+			))}
+
+
+			{/* フローティングメッセージ */}
+			{messages.map((msg, i) => {
+				const isActive = activeIndex === i;
+				return (
+					<div
+						key={msg.id}
+						className={`fixed z-50 font-pixel text-white transition-opacity duration-700 ease-in-out
                         ${isActive ? 'opacity-100' : 'opacity-0'} 
                         ${randomTrigger ? styles.jitter : ''}
                         ${msg.id === 'trigger-4' && isActive ? 'animate-pulse' : ''}
                       `}
-            style={{
-              top: msg.top,
-              left: msg.left,
-              width: msg.width,
-              fontSize: msg.fontSize,
-              textShadow: '0 0 8px rgba(0, 255, 102, 0.7)',
-            }}
-          >
-            {renderMessageText(msg)}
-          </div>
-        );
-      })}
+						style={{
+							top: msg.top,
+							left: msg.left,
+							width: msg.width,
+							fontSize: msg.fontSize,
+							textShadow: '0 0 8px rgba(0, 255, 102, 0.7)',
+						}}
+					>
+						{renderMessageText(msg)}
+					</div>
+				);
+			})}
 
-      {/* 追加の装飾エフェクト: グリッドバックグラウンド */}
-      <div 
-        className="fixed inset-0 pointer-events-none z-0"
-        style={{
-          backgroundImage: 'linear-gradient(rgba(0, 255, 102, 0.05) 1px, transparent 1px), linear-gradient(90deg, rgba(0, 255, 102, 0.05) 1px, transparent 1px)',
-          backgroundSize: '20px 20px',
-          backgroundPosition: 'center center',
-        }}
-      />
-    </>
-  );
+			{/* 追加の装飾エフェクト: グリッドバックグラウンド */}
+			<div
+				className="fixed inset-0 pointer-events-none z-0"
+				style={{
+					backgroundImage: 'linear-gradient(rgba(0, 255, 102, 0.05) 1px, transparent 1px), linear-gradient(90deg, rgba(0, 255, 102, 0.05) 1px, transparent 1px)',
+					backgroundSize: '20px 20px',
+					backgroundPosition: 'center center',
+				}}
+			/>
+		</>
+	);
 };
 
 export default ScrollTriggerMessages;-e 
@@ -6109,6 +6141,613 @@ export const SCALE_MAP: Record<ImageSize, number> = {
   S: 2,
 };
 -e 
+### FILE: ./src/app/components/floating-images-fix/cyber-scroll-messages/constants.ts
+
+// src/app/components/floating-images-fix/cyber-scroll-messages/constants.ts
+
+export type GlitchEffectType = 'rgb' | 'slice' | 'wave' | 'pulse' | 'jitter' | 'none';
+export type TextDirection = 'horizontal' | 'vertical';
+export type TextAlignment = 'left' | 'center' | 'right';
+
+export interface MessageConfig {
+	id: string;
+	text: string;
+	position: {
+		start: number; // vh単位での開始位置
+		end: number;   // vh単位での終了位置
+	};
+	style: TextDirection;
+	size: string;
+	align?: TextAlignment;
+	glitchEffect?: GlitchEffectType;
+	keywords?: string[]; // 特別強調するキーワード
+	delay?: number;      // 表示遅延 (ms)
+	color?: string;      // オーバーライド色
+}
+
+export interface GlitchEffectConfig {
+	className: string;
+	intensity: number;
+}
+
+// メッセージ定義
+// constants.ts の修正部分
+// 位置範囲を調整（セクションの開始時点から表示されるように）
+export const cyberMessages: MessageConfig[] = [
+	{
+		id: 'message-1',
+		text: '受け継がれし、神秘の奇跡',
+		position: { start: 0, end: 200 },  // 開始位置を0に
+		style: 'horizontal',
+		size: '4rem',
+		align: 'left',
+		glitchEffect: 'rgb',
+		keywords: ['神秘', '奇跡'],
+	},
+	{
+		id: 'message-2',
+		text: '期は熟し',
+		position: { start: 250, end: 450 },  // 位置調整
+		style: 'vertical',
+		size: '8rem',
+		align: 'right',
+		glitchEffect: 'wave',
+		keywords: ['期', '熟'],
+	},
+	{
+		id: 'message-3',
+		text: '覚醒する',
+		position: { start: 500, end: 700 },  // 位置調整
+		style: 'vertical',
+		size: '12rem',
+		align: 'left',
+		glitchEffect: 'slice',
+		keywords: ['覚醒'],
+	}
+];
+
+// グリッチエフェクト設定
+export const glitchEffects: Record<GlitchEffectType, GlitchEffectConfig> = {
+	rgb: {
+		className: 'rgb-split',
+		intensity: 2
+	},
+	wave: {
+		className: 'wave-distort',
+		intensity: 1.5
+	},
+	slice: {
+		className: 'slice-glitch',
+		intensity: 3
+	},
+	pulse: {
+		className: 'pulse-effect',
+		intensity: 2
+	},
+	jitter: {
+		className: 'jitter-effect',
+		intensity: 1
+	},
+	none: {
+		className: '',
+		intensity: 0
+	}
+};
+
+// システムステータス表示用テキスト
+export const systemStatusText = {
+	loading: 'システム読み込み中...',
+	ready: '神秘モード：アクティブ',
+	awakening: '覚醒シーケンス開始...',
+	complete: '覚醒完了：無限の可能性が解放されました'
+};
+
+// 装飾用ランダムバイナリ生成
+export const generateRandomBinary = (length: number): string => {
+	return Array.from({ length }, () => Math.round(Math.random())).join('');
+};
+
+// 装飾用16進数生成
+export const generateRandomHex = (length: number): string => {
+	const hexChars = '0123456789ABCDEF';
+	return Array.from(
+		{ length },
+		() => hexChars[Math.floor(Math.random() * hexChars.length)]
+	).join('');
+};-e 
+### FILE: ./src/app/components/floating-images-fix/cyber-scroll-messages/CyberInterface.tsx
+
+// src/app/components/floating-images-fix/cyber-scroll-messages/CyberInterface.tsx
+
+'use client';
+
+import React, { useEffect, useState } from 'react';
+import styles from './styles.module.css';
+import {
+	generateRandomBinary,
+	generateRandomHex,
+	systemStatusText,
+	cyberMessages
+} from './constants';
+
+interface CyberInterfaceProps {
+	scrollProgress: number; // 0から1の間の値
+	activeIndex: number | null;
+	isFlashActive: boolean;
+}
+
+const CyberInterface: React.FC<CyberInterfaceProps> = ({
+	scrollProgress,
+	activeIndex,
+	isFlashActive
+}) => {
+	const [dataStream, setDataStream] = useState<string[]>([]);
+	const [systemTime, setSystemTime] = useState<string>('');
+	const [randomGlitch, setRandomGlitch] = useState<boolean>(false);
+
+	// システムステータステキスト
+	const getStatusText = () => {
+		if (activeIndex === null) return systemStatusText.loading;
+		if (activeIndex === 0) return systemStatusText.ready;
+		if (activeIndex === 1) return systemStatusText.awakening;
+		if (activeIndex === 2) return systemStatusText.complete;
+		return systemStatusText.loading;
+	};
+
+	// データストリームを生成
+	useEffect(() => {
+		// 初期データストリームを生成
+		const initialData: string[] = [];
+		for (let i = 0; i < 50; i++) {
+			if (Math.random() > 0.7) {
+				initialData.push(generateRandomHex(16));
+			} else {
+				initialData.push(generateRandomBinary(16));
+			}
+		}
+		setDataStream(initialData);
+
+		// 定期的にデータストリームを更新
+		const interval = setInterval(() => {
+			setDataStream(prev => {
+				const newData = [...prev];
+				// 1-3行をランダムに置き換え
+				const replaceCount = Math.floor(Math.random() * 3) + 1;
+				for (let i = 0; i < replaceCount; i++) {
+					const index = Math.floor(Math.random() * newData.length);
+					if (Math.random() > 0.7) {
+						newData[index] = generateRandomHex(16);
+					} else {
+						newData[index] = generateRandomBinary(16);
+					}
+				}
+				return newData;
+			});
+
+			// ランダムなグリッチ効果
+			if (Math.random() > 0.9) {
+				setRandomGlitch(true);
+				setTimeout(() => setRandomGlitch(false), 200);
+			}
+		}, 500);
+
+		// システム時間の更新
+		const timeInterval = setInterval(() => {
+			const now = new Date();
+			setSystemTime(`SYS://AWAKENING_SEQUENCE v2.4.7 | ${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}:${now.getSeconds().toString().padStart(2, '0')}`);
+		}, 1000);
+
+		return () => {
+			clearInterval(interval);
+			clearInterval(timeInterval);
+		};
+	}, []);
+
+	// エネルギーレベル（スクロール進行に基づく）
+	const energyLevel = Math.max(5, Math.min(100, scrollProgress * 100));
+
+	return (
+		<>
+			{/* スキャンライン */}
+			<div className={styles.scanline}></div>
+
+			{/* フラッシュエフェクト */}
+			<div className={`${styles.flashEffect} ${isFlashActive ? styles.flashActive : ''}`}></div>
+
+			{/* コーナーマーカー */}
+			<div className={styles.cyberFrame}>
+				<div className={`${styles.cornerMarker} ${styles.topLeft} ${randomGlitch ? styles.jitterEffect : ''}`}></div>
+				<div className={`${styles.cornerMarker} ${styles.topRight} ${randomGlitch ? styles.jitterEffect : ''}`}></div>
+				<div className={`${styles.cornerMarker} ${styles.bottomLeft} ${randomGlitch ? styles.jitterEffect : ''}`}></div>
+				<div className={`${styles.cornerMarker} ${styles.bottomRight} ${randomGlitch ? styles.jitterEffect : ''}`}></div>
+			</div>
+
+			{/* データストリーム */}
+			<div className={styles.dataStream}>
+				<div className={styles.dataContent}>
+					{dataStream.map((line, index) => (
+						<div key={index} className={randomGlitch && index % 5 === 0 ? styles.jitterEffect : ''}>
+							{line}
+						</div>
+					))}
+				</div>
+			</div>
+
+			{/* エネルギーメーター */}
+			<div className={styles.energyMeter}>
+				<div
+					className={styles.energyLevel}
+					style={{ height: `${energyLevel}%` }}
+				></div>
+			</div>
+
+			{/* システムステータス */}
+			<div className={styles.systemStatus}>
+				<div>{systemTime}</div>
+				<div>SECTION: {activeIndex !== null ? activeIndex + 1 : 0}/{cyberMessages.length}</div>
+				<div>ENERGY: {Math.floor(energyLevel)}%</div>
+				<div>{getStatusText()}</div>
+			</div>
+
+			{/* セクションインジケーター */}
+			<div className={styles.sectionIndicator}>
+				<div>SCROLL DEPTH: {Math.floor(scrollProgress * 100)}%</div>
+			</div>
+		</>
+	);
+};
+
+export default CyberInterface;-e 
+### FILE: ./src/app/components/floating-images-fix/cyber-scroll-messages/MessageDisplay.tsx
+
+// src/app/components/floating-images-fix/cyber-scroll-messages/MessageDisplay.tsx
+
+'use client';
+
+import React, { useEffect, useState, useRef } from 'react';
+import styles from './styles.module.css';
+import { MessageConfig, GlitchEffectType } from './constants';
+
+interface MessageDisplayProps {
+	message: MessageConfig;
+	isActive: boolean;
+	scrollProgress: number;
+	randomGlitch: boolean;
+}
+
+const MessageDisplay: React.FC<MessageDisplayProps> = ({
+	message,
+	isActive,
+	scrollProgress,
+	randomGlitch
+}) => {
+	const messageRef = useRef<HTMLDivElement>(null);
+
+	// グリッチエフェクトに対応するクラス名を取得
+	const getGlitchClass = (effect?: GlitchEffectType): string => {
+		switch (effect) {
+			case 'rgb': return styles.rgbSplit;
+			case 'slice': return styles.sliceGlitch;
+			case 'wave': return styles.waveDistort;
+			case 'pulse': return styles.pulseEffect;
+			case 'jitter': return styles.jitterEffect;
+			default: return '';
+		}
+	};
+
+	// 単語がキーワードかどうかチェック
+	const isKeyword = (word: string): boolean => {
+		if (!message.keywords) return false;
+		return message.keywords.some(keyword =>
+			word.includes(keyword) || keyword.includes(word)
+		);
+	};
+
+	// 単語ごとに分割してキーワードを強調
+	const renderWords = () => {
+		return message.text.split(' ').map((word, index) => {
+			const isKeywordWord = isKeyword(word);
+
+			return (
+				<span
+					key={`word-${index}`}
+					className={`${isKeywordWord ? styles.keywordGlitch : ''} ${getGlitchClass(message.glitchEffect)}`}
+					data-text={word}
+				>
+					{word}
+					{index < message.text.split(' ').length - 1 ? ' ' : ''}
+				</span>
+			);
+		});
+	};
+
+	// スタイルの計算を簡略化し、デバッグを追加
+	const getStyleProps = () => {
+		// 基本スタイル
+		let styleProps: React.CSSProperties = {
+			color: message.color || '#00ff66',
+			fontSize: message.size || '3rem',
+			fontWeight: 'bold',
+			textShadow: '0 0 10px rgba(0, 255, 102, 0.7)',
+			opacity: isActive ? 1 : 0,
+			transition: 'opacity 0.7s ease-in-out',
+			zIndex: 25,
+		};
+
+		// 縦書き/横書きの設定
+		if (message.style === 'vertical') {
+			styleProps.writingMode = 'vertical-rl';
+			styleProps.textOrientation = 'upright';
+		}
+
+		// 配置の設定
+		if (message.align === 'right') {
+			styleProps.right = message.style === 'vertical' ? '20vw' : '10vw';
+			styleProps.textAlign = 'right';
+		} else if (message.align === 'center') {
+			styleProps.left = '50%';
+			styleProps.transform = 'translateX(-50%)';
+			styleProps.textAlign = 'center';
+		} else {
+			styleProps.left = message.style === 'vertical' ? '20vw' : '10vw';
+			styleProps.textAlign = 'left';
+		}
+
+		// メッセージごとに固定位置を指定
+		if (message.id === 'message-1') {
+			// 「受け継がれし、神秘の奇跡」- 横書き、上部
+			styleProps.position = 'fixed';
+			styleProps.top = '20vh';
+		} else if (message.id === 'message-2') {
+			// 「期は熟し」- 縦書き、中央右寄り
+			styleProps.position = 'fixed';
+			styleProps.top = '50vh';
+			styleProps.transform = styleProps.transform
+				? `${styleProps.transform} translateY(-50%)`
+				: 'translateY(-50%)';
+		} else if (message.id === 'message-3') {
+			// 「覚醒する」- 縦書き、中央左寄り
+			styleProps.position = 'fixed';
+			styleProps.top = '50vh';
+			styleProps.transform = styleProps.transform
+				? `${styleProps.transform} translateY(-50%)`
+				: 'translateY(-50%)';
+		}
+
+		// デバッグボーダー（確認用）
+		styleProps.border = isActive ? '1px solid rgba(0, 255, 102, 0.3)' : 'none';
+
+		return styleProps;
+	};
+
+	return (
+		<div
+			ref={messageRef}
+			className={`
+        ${randomGlitch ? styles.jitterEffect : ''}
+      `}
+			style={getStyleProps()}
+			data-message-id={message.id}
+			data-active={isActive}
+		>
+			{renderWords()}
+
+		</div>
+	);
+};
+
+export default MessageDisplay;-e 
+### FILE: ./src/app/components/floating-images-fix/cyber-scroll-messages/index.tsx
+
+// src/app/components/floating-images-fix/cyber-scroll-messages/index.tsx
+
+'use client';
+
+import CyberScrollMessages from './CyberScrollMessages';
+
+// 明示的にデフォルトエクスポート
+export default CyberScrollMessages;
+-e 
+### FILE: ./src/app/components/floating-images-fix/cyber-scroll-messages/CyberScrollMessages.tsx
+
+// src/app/components/floating-images-fix/cyber-scroll-messages/CyberScrollMessages.tsx
+
+'use client';
+
+import React, { useEffect, useState, useRef } from 'react';
+import { cyberMessages } from './constants';
+import CyberInterface from './CyberInterface';
+import MessageDisplay from './MessageDisplay';
+
+const CyberScrollMessages: React.FC = () => {
+	const [scrollProgress, setScrollProgress] = useState<number>(0);
+	const [activeIndex, setActiveIndex] = useState<number | null>(null);
+	const [randomGlitch, setRandomGlitch] = useState<boolean>(false);
+	const [isFlashActive, setIsFlashActive] = useState<boolean>(false);
+	const [debugInfo, setDebugInfo] = useState<{ [key: string]: any }>({});
+
+	// 強制的に全てのメッセージをアクティブにする（デバッグ用）
+	const [forceAllActive, setForceAllActive] = useState<boolean>(false);
+
+	useEffect(() => {
+		const handleScroll = () => {
+			// 現在のページ全体のスクロール位置
+			const scrollTop = window.scrollY;
+			const winHeight = window.innerHeight;
+			const docHeight = document.documentElement.scrollHeight;
+
+			// まず全体のスクロール進捗を計算
+			const totalScrollProgress = scrollTop / (docHeight - winHeight);
+
+			// ページ内の全セクションを取得
+			const sections = document.querySelectorAll('section');
+			const sectionList = Array.from(sections);
+
+			// FloatingImagesFixSectionを探す
+			const targetSection = sectionList.find(
+				section => section.classList.contains('floating-images-fix-section')
+			);
+
+			if (!targetSection) {
+				// セクションが見つからない場合、ページの相対位置で推定
+				console.log('Target section not found, estimating position');
+
+				// ページの相対位置から推定（ページの下部1/3程度と仮定）
+				const estimatedStart = docHeight * 0.66;
+				const estimatedHeight = docHeight * 0.25;
+
+				// 相対スクロール位置を計算
+				const relativeScroll = Math.max(0, Math.min(1,
+					(scrollTop - estimatedStart) / estimatedHeight
+				));
+
+				setScrollProgress(relativeScroll);
+				setDebugInfo({
+					scrollTop,
+					docHeight,
+					estimatedStart,
+					estimatedHeight,
+					relativeScroll,
+					mode: 'estimated'
+				});
+
+				// メッセージ表示の判定
+				updateActiveMessage(relativeScroll * 800);
+			} else {
+				// セクションが見つかった場合、その位置を使用
+				const rect = targetSection.getBoundingClientRect();
+				const sectionTop = rect.top + scrollTop;
+				const sectionHeight = rect.height;
+
+				// セクション内相対位置を計算
+				let relativeScroll = 0;
+				if (scrollTop < sectionTop) {
+					relativeScroll = 0;
+				} else if (scrollTop > sectionTop + sectionHeight) {
+					relativeScroll = 1;
+				} else {
+					relativeScroll = (scrollTop - sectionTop) / sectionHeight;
+				}
+
+				setScrollProgress(relativeScroll);
+				setDebugInfo({
+					scrollTop,
+					sectionTop,
+					sectionHeight,
+					relativeScroll,
+					viewportOffset: rect.top,
+					mode: 'section-based'
+				});
+
+				// メッセージ表示の判定
+				updateActiveMessage(relativeScroll * 800);
+			}
+
+			// ランダムグリッチの発生
+			triggerRandomGlitch();
+		};
+
+		// メッセージのアクティブ状態を更新
+		// メッセージのアクティブ状態を更新
+		const updateActiveMessage = (currentVhPosition: number) => {
+			if (forceAllActive) {
+				setActiveIndex(0);
+				return;
+			}
+
+			// 重要な変更: 開始位置のオフセットを追加
+			// FloatingImagesFixSection の最初の150vh部分を考慮
+			// 0-800の範囲ではなく、-150vh〜650vhの範囲で考える
+			const adjustedPosition = currentVhPosition - 150;
+
+			let foundActive = false;
+			let activeIdx = null;
+
+			cyberMessages.forEach((msg, idx) => {
+				// 調整した位置で判定
+				if (adjustedPosition >= msg.position.start && adjustedPosition <= msg.position.end) {
+					activeIdx = idx;
+					foundActive = true;
+
+					if (idx === 2 && !isFlashActive &&
+						adjustedPosition >= msg.position.start &&
+						adjustedPosition <= msg.position.start + 20) {
+						triggerFlashEffect();
+					}
+				}
+			});
+
+			setActiveIndex(foundActive ? activeIdx : null);
+		};
+
+		// フラッシュエフェクトをトリガー
+		const triggerFlashEffect = () => {
+			setIsFlashActive(true);
+			setTimeout(() => setIsFlashActive(false), 300);
+		};
+
+		// ランダムなグリッチエフェクトをトリガー
+		const triggerRandomGlitch = () => {
+			if (Math.random() > 0.95) {
+				setRandomGlitch(true);
+				setTimeout(() => setRandomGlitch(false), 150);
+			}
+		};
+
+		window.addEventListener('scroll', handleScroll);
+		handleScroll(); // 初期化時に一度実行
+
+		// キーボードショートカット：Dキーでデバッグモード切替
+		const handleKeyDown = (e: KeyboardEvent) => {
+			if (e.key === 'd' || e.key === 'D') {
+				setForceAllActive(prev => !prev);
+				console.log('Debug mode:', !forceAllActive);
+			}
+		};
+
+		window.addEventListener('keydown', handleKeyDown);
+
+		return () => {
+			window.removeEventListener('scroll', handleScroll);
+			window.removeEventListener('keydown', handleKeyDown);
+		};
+	}, [forceAllActive, isFlashActive]);
+
+	return (
+		<div className="absolute inset-0 pointer-events-none z-15 h-[800vh]">
+			{/* デバッグ情報 */}
+			<div className="fixed top-0 left-0 bg-black/80 text-white p-2 z-50 text-xs max-w-xs">
+				<div>Mode: {debugInfo.mode}</div>
+				<div>Scroll: {Math.round(scrollProgress * 100)}%</div>
+				<div>Active: {activeIndex !== null ? cyberMessages[activeIndex].text : 'none'}</div>
+				<div>Force All: {forceAllActive ? 'ON (Press D to toggle)' : 'OFF (Press D to toggle)'}</div>
+				<pre className="text-[8px] mt-1 max-h-20 overflow-auto">
+					{JSON.stringify(debugInfo, null, 2)}
+				</pre>
+			</div>
+
+			{/* サイバーインターフェース */}
+			<CyberInterface
+				scrollProgress={scrollProgress}
+				activeIndex={activeIndex}
+				isFlashActive={isFlashActive}
+			/>
+
+			{/* メッセージ表示 */}
+			{cyberMessages.map((message, index) => (
+				<MessageDisplay
+					key={message.id}
+					message={message}
+					isActive={forceAllActive || activeIndex === index}
+					scrollProgress={scrollProgress}
+					randomGlitch={randomGlitch}
+				/>
+			))}
+		</div>
+	);
+};
+
+export default CyberScrollMessages;-e 
 ### FILE: ./src/app/components/floating-images-fix/FloatingImageFix.tsx
 
 import { useRef, useState, useEffect } from 'react';
@@ -6183,7 +6822,9 @@ export default FloatingImageFix;
 
 import React from 'react';
 import FloatingImagesFixCanvas from './FloatingImagesFixCanvas';
+import CyberScrollMessages from './cyber-scroll-messages';
 
+// コンポーネント定義
 const FloatingImagesFixSection: React.FC = () => {
 	return (<>
 		<div className='relative h-[150vh] bg-black'/>
@@ -6194,6 +6835,7 @@ const FloatingImagesFixSection: React.FC = () => {
 						pointer-events-none"
 				/>
 				<FloatingImagesFixCanvas />
+				<CyberScrollMessages />
 				<div className="absolute bottom-0 left-0 w-full h-[100vh] z-20
 						bg-gradient-to-b from-black/0 via-black/40 to-black
 						pointer-events-none"
@@ -6204,8 +6846,8 @@ const FloatingImagesFixSection: React.FC = () => {
 	</>);
 };
 
-export default FloatingImagesFixSection;
--e 
+// 明示的にdefaultエクスポート
+export default FloatingImagesFixSection;-e 
 ### FILE: ./src/app/components/floating-images-fix/FloatingImagesFixCanvas.tsx
 
 'use client';

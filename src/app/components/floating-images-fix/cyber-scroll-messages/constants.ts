@@ -27,11 +27,12 @@ export interface GlitchEffectConfig {
 
 // メッセージ定義
 // constants.ts の修正部分
+// 位置範囲を調整（セクションの開始時点から表示されるように）
 export const cyberMessages: MessageConfig[] = [
 	{
 		id: 'message-1',
 		text: '受け継がれし、神秘の奇跡',
-		position: { start: 100, end: 300 },  // 0-800の範囲内
+		position: { start: 0, end: 200 },  // 開始位置を0に
 		style: 'horizontal',
 		size: '4rem',
 		align: 'left',
@@ -41,7 +42,7 @@ export const cyberMessages: MessageConfig[] = [
 	{
 		id: 'message-2',
 		text: '期は熟し',
-		position: { start: 400, end: 600 },  // 0-800の範囲内
+		position: { start: 250, end: 450 },  // 位置調整
 		style: 'vertical',
 		size: '8rem',
 		align: 'right',
@@ -51,7 +52,7 @@ export const cyberMessages: MessageConfig[] = [
 	{
 		id: 'message-3',
 		text: '覚醒する',
-		position: { start: 700, end: 800 },  // 700-800に調整（範囲縮小）
+		position: { start: 500, end: 700 },  // 位置調整
 		style: 'vertical',
 		size: '12rem',
 		align: 'left',

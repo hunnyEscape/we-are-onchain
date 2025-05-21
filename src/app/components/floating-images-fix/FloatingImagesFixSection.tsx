@@ -7,7 +7,7 @@ import FloatingImagesFixCanvas from './FloatingImagesFixCanvas';
 
 const FloatingImagesFixSection: React.FC = () => {
 	return (<>
-		<div className='relative h-[150vh] bg-black' />
+		<div className='relative h-[150vh] bg-black'/>
 		<section className="w-screen h-[800vh] relative overflow-hidden bg-black">
 			<div className="w-screen h-full sticky top-0 left-0 pointer-events-none z-10">
 				<div className="absolute top-0 left-0 w-full h-[100vh] z-20

@@ -25,7 +25,7 @@ const SphereTop: React.FC = () => {
 				<Sphere
 					enableControls={false}
 					rotationSpeed={0.3}
-					backgroundImage={`${process.env.NEXT_PUBLIC_CLOUDFRONT_URL}/cyberpunk-cityscape.webp`}
+					backgroundImage={`${process.env.NEXT_PUBLIC_CLOUDFRONT_URL}/pepe/cyberpunk-cityscape.webp`}
 					useDefaultEnvironment={false}
 				/>
 			</div>

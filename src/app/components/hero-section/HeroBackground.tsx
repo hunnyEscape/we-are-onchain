@@ -22,7 +22,7 @@ export const HeroBackground: React.FC<HeroBackgroundProps> = ({
       <div
         className={`${styles.backgroundImage} ${glitchState.active ? styles.glitchActive : ''}`}
         style={{
-          backgroundImage: `url('${process.env.NEXT_PUBLIC_CLOUDFRONT_URL}/pepe-cyberpunk.webp')`,
+          backgroundImage: `url('${process.env.NEXT_PUBLIC_CLOUDFRONT_URL}/pepe/pepe-cyberpunk.webp')`,
           ...(!glitchState.active
             ? {
               filter: 'contrast(1.1) brightness(0.9)',
@@ -74,7 +74,7 @@ export const HeroBackground: React.FC<HeroBackgroundProps> = ({
         <div
           className={styles.glitchBlocks}
           style={{
-            backgroundImage: `url(''${process.env.NEXT_PUBLIC_CLOUDFRONT_URL}/pepe-cyberpunk.webp')`,
+            backgroundImage: `url(''${process.env.NEXT_PUBLIC_CLOUDFRONT_URL}/pepe/pepe-cyberpunk.webp')`,
             opacity: 0.4 + (glitchState.intensity * 0.05),
           }}
         />
@@ -86,14 +86,14 @@ export const HeroBackground: React.FC<HeroBackgroundProps> = ({
           <div
             className={styles.rgbSliceRed}
             style={{
-              backgroundImage: `url('${process.env.NEXT_PUBLIC_CLOUDFRONT_URL}/pepe-cyberpunk.webp')`,
+              backgroundImage: `url('${process.env.NEXT_PUBLIC_CLOUDFRONT_URL}/pepe/pepe-cyberpunk.webp')`,
               transform: `translateX(${glitchState.intensity * 1.5}px)`,
             }}
           />
           <div
             className={styles.rgbSliceBlue}
             style={{
-              backgroundImage: `url('${process.env.NEXT_PUBLIC_CLOUDFRONT_URL}/pepe-cyberpunk.webp')`,
+              backgroundImage: `url('${process.env.NEXT_PUBLIC_CLOUDFRONT_URL}/pepe/pepe-cyberpunk.webp')`,
               transform: `translateX(-${glitchState.intensity * 1.5}px)`,
             }}
           />

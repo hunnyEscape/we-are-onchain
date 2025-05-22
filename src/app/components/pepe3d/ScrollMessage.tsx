@@ -27,43 +27,43 @@ interface TextFragment {
 const messages: MessageConfig[] = [
 	{
 		id: 'trigger-1',
-		text: '🧪深緑の源泉 ー 古代から森にひそむ「ぺぺの泉」。',
+		text: 'The Deep Green Source — a legendary spring hidden within an ancient forest.',
 		top: '20vh',
 		left: '10vw',
 		width: 'auto',
 		fontSize: '2rem',
 		glitchEffect: 'rgb',
-		keywords: ['深緑の源泉', 'ぺぺの泉'],
+		keywords: ['Deep Green Source', 'legendary spring'],
 	},
 	{
 		id: 'trigger-2',
-		text: '💎そこから湧き出るグリーンミネラルが、濃厚なコクとほどよい甘みをもたらす。',
+		text: 'The Green Source — rich, deep, and sweet.',
 		top: '30vh',
 		left: '30vw',
 		width: 'max-content',
 		fontSize: '2rem',
-		glitchEffect: 'wave',
-		keywords: ['グリーンミネラル'],
+		glitchEffect: 'rgb',
+		keywords: ['green source'],
 	},
 	{
 		id: 'trigger-3',
-		text: '一口ごとに脈打つビート、疲労を吹き飛ばし、次の挑戦へと背中を押す。',
+		text: 'It pushes you toward your next challenge.',
 		top: '40vh',
 		left: '10vw',
 		width: 'max-content',
 		fontSize: '2rem',
-		glitchEffect: 'pulse',
-		keywords: ['脈打つビート'],
+		glitchEffect: 'rgb',
+		keywords: ['pulse', 'blasting away fatigue'],
 	},
 	{
 		id: 'trigger-4',
-		text: '次元を超えたグリーンパワーを、その手で感じよ。',
+		text: 'Feel the green power — right in your hands.',
 		top: '80vh',
 		left: '30vw',
 		width: '60vw',
 		fontSize: '3rem',
 		glitchEffect: 'slice',
-		keywords: ['次元を超えた', 'グリーンパワー'],
+		keywords: ['green power', 'transcends dimensions'],
 	},
 ];
 
@@ -248,10 +248,11 @@ const ScrollTriggerMessages: React.FC = () => {
 					<div
 						key={msg.id}
 						className={`fixed z-50 font-pixel text-white transition-opacity duration-700 ease-in-out
-                        ${isActive ? 'opacity-100' : 'opacity-0'} 
-                        ${randomTrigger ? styles.jitter : ''}
-                        ${msg.id === 'trigger-4' && isActive ? 'animate-pulse' : ''}
-                      `}
+							${isActive ? 'opacity-100' : 'opacity-0'} 
+							${randomTrigger ? styles.jitter : ''}
+							${msg.id === 'trigger-4' && isActive ? 'animate-pulse' : ''}
+							whitespace-pre-wrap
+						`}
 						style={{
 							top: msg.top,
 							left: msg.left,

@@ -43,17 +43,22 @@ const MessageDisplay: React.FC<MessageDisplayProps> = ({
 
 	// 単語ごとに分割してキーワードを強調
 	const renderWords = () => {
-		return message.text.split(' ').map((word, index) => {
-			const isKeywordWord = isKeyword(word);
+		const parts = message.text.split(/(<br\s*\/?>)/i); // 改行タグも含めて分割
+
+		return parts.map((part, index) => {
+			if (part.match(/<br\s*\/?>/i)) {
+				return <br key={`br-${index}`} />;
+			}
+
+			const isKeywordWord = isKeyword(part.trim());
 
 			return (
 				<span
 					key={`word-${index}`}
 					className={`${isKeywordWord ? styles.keywordGlitch : ''} ${getGlitchClass(message.glitchEffect)}`}
-					data-text={word}
+					data-text={part}
 				>
-					{word}
-					{index < message.text.split(' ').length - 1 ? ' ' : ''}
+					{part}
 				</span>
 			);
 		});
@@ -70,6 +75,7 @@ const MessageDisplay: React.FC<MessageDisplayProps> = ({
 			opacity: isActive ? 1 : 0,
 			transition: 'opacity 0.7s ease-in-out',
 			zIndex: 25,
+			lineHeight: 0.9,
 		};
 
 		// 縦書き/横書きの設定

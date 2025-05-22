@@ -29,34 +29,34 @@ export interface GlitchEffectConfig {
 export const cyberMessages: MessageConfig[] = [
 	{
 		id: 'message-1',
-		text: '受け継がれた神秘の奇跡',
+		text: 'The Innovator rises.',
 		position: { start: 0, end: 200 },
 		style: 'horizontal',
 		size: '4rem',
 		align: 'left',
 		glitchEffect: 'rgb',
-		keywords: ['神秘', '奇跡'],
+		keywords: ['mystery', 'miracle'],
 		color: '#ffffff', // 白色ベース
 	},
 	{
 		id: 'message-2',
-		text: '限られた者がたどり着く',
+		text: 'The code read us here.',
 		position: { start: 200, end: 400 },
 		style: 'horizontal',
 		size: '4rem',
 		align: 'right',
-		glitchEffect: 'wave',
+		glitchEffect: 'slice',
 		keywords: ['限られた', 'たどり着く'],
 		color: '#ffffff', // 白色ベース
 	},
 	{
 		id: 'message-3',
-		text: '境地',
+		text: 'The<br/>Awakening',
 		position: { start: 400, end: 700 },
-		style: 'vertical',
-		size: '12rem',
+		style: 'horizontal',
+		size: '10rem',
 		align: 'left',
-		glitchEffect: 'slice',
+		glitchEffect: 'rgb',
 		keywords: ['境地'],
 		color: '#ffffff', // 白色ベース
 	}
@@ -92,10 +92,10 @@ export const glitchEffects: Record<GlitchEffectType, GlitchEffectConfig> = {
 
 // システムステータス表示用テキスト
 export const systemStatusText = {
-	loading: 'システム読み込み中...',
-	ready: '神秘モード：アクティブ',
-	awakening: '覚醒シーケンス開始...',
-	complete: '覚醒完了：無限の可能性が解放されました'
+	loading: 'Loading...',
+	ready: 'Activate',
+	awakening: 'Start...',
+	complete: 'END'
 };
 
 // 装飾用ランダムバイナリ生成

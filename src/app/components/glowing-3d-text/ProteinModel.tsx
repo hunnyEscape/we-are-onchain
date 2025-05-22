@@ -75,7 +75,7 @@ const ProteinContainer: React.FC<ProteinContainerProps> = ({ autoRotate = true, 
 interface ProteinModelProps extends ProteinContainerProps {
 	className?: string;
 }
-const ProteinModel: React.FC<ProteinModelProps> = ({ className = '', autoRotate = true, scale = 1, rotationSpeed = 0.5 }) => {
+const ProteinModel: React.FC<ProteinModelProps> = ({ className = '', autoRotate = true, scale = 1}) => {
 	const controlsRef = useRef<any>(null);
 	return (
 		<div className={`w-full h-full ${className}`}>

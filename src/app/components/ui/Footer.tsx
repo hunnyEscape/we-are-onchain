@@ -62,7 +62,7 @@ const Footer = () => {
 									<div className="w-10 h-10 bg-gradient-to-br from-neonGreen to-neonOrange rounded-sm animate-pulse-fast"></div>
 									<div className="absolute inset-0 w-10 h-10 bg-gradient-to-br from-neonGreen to-neonOrange rounded-sm blur-md opacity-50"></div>
 								</div>
-								<span className="text-2xl font-heading font-bold text-white animate-glitch-slow">
+								<span className="text-2xl font-heading font-bold text-white md:animate-glitch-slow">
 									We are on-chain
 								</span>
 							</div>
@@ -156,7 +156,7 @@ const Footer = () => {
 						</div>
 					</div>
 
-					{/* Bottom Section */}
+			
 					<div className="flex flex-col lg:flex-row justify-between items-center space-y-4 lg:space-y-0">
 						{/* Legal Links */}
 						<div className="flex flex-wrap items-center space-x-6">

@@ -35,7 +35,7 @@ export const HeroSection: React.FC = () => {
   `;
 
 	return (
-		<div className="sticky w-full top-0 h-[90vh] overflow-hidden">
+		<div className="sticky w-full top-0 h-[80vh] md:h-[90vh] overflow-hidden">
 			{/* 背景 & エフェクト */}
 			<HeroBackground
 				backgroundTransform={backgroundTransform}

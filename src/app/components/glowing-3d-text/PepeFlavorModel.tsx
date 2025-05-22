@@ -1,5 +1,5 @@
 'use client';
-import { useRef, useEffect } from 'react';
+import { useRef, useEffect, useState } from 'react';
 import { useGLTF } from '@react-three/drei';
 import { useFrame } from '@react-three/fiber';
 import { MotionValue } from 'framer-motion';
@@ -17,6 +17,25 @@ const PepeFlavorModel: React.FC<PepeFlavorModelProps> = ({
 	// GLBモデルをロード
 	const { scene, nodes, materials } = useGLTF(`${process.env.NEXT_PUBLIC_CLOUDFRONT_URL}/pepe/pepe_flavor.glb`);
 	const modelRef = useRef<THREE.Group>(null);
+	
+	// 画面サイズの状態管理
+	const [isMobile, setIsMobile] = useState(false);
+
+	// 画面サイズの監視
+	useEffect(() => {
+		const checkMobile = () => {
+			setIsMobile(window.innerWidth <= 768); // 768px以下をモバイルと判定
+		};
+
+		// 初期チェック
+		checkMobile();
+
+		// リサイズイベントリスナーを追加
+		window.addEventListener('resize', checkMobile);
+
+		// クリーンアップ
+		return () => window.removeEventListener('resize', checkMobile);
+	}, []);
 
 	// モデルの初期設定
 	useEffect(() => {
@@ -34,8 +53,7 @@ const PepeFlavorModel: React.FC<PepeFlavorModelProps> = ({
 				
 				if (preserveOriginalMaterials) {
 					// オリジナルのマテリアルを保持しつつ、設定を最適化
-					if (object.material instanceof THREE.Material) {
-
+					if (object.material instanceof THREE.Material) { 
 						
 						// トーンマッピングを無効化して色変換を防止
 						object.material.toneMapped = false;
@@ -75,30 +93,52 @@ const PepeFlavorModel: React.FC<PepeFlavorModelProps> = ({
 		});
 	}, [scene, preserveOriginalMaterials]);
 
-	const INITIAL_Y = Math.PI / 4; 
+	const INITIAL_Y = Math.PI / 4;
+
 	// スクロール位置に応じたアニメーション
 	useFrame((state, delta) => {
 		if (!modelRef.current) return;
 
 		// 現在のスクロール位置を取得
 		const progress = scrollProgress.get();
+		
+		if (isMobile) {
+			// モバイルの場合：スクロールに反応せず固定
+			// 基本的な浮遊アニメーションのみ
+			modelRef.current.rotation.y = THREE.MathUtils.lerp(
+				modelRef.current.rotation.y,
+				Math.sin(state.clock.elapsedTime * 0.1) * 0.1, // スクロール連動を削除
+				0.05
+			);
 
-		 //モデルの回転 - スクロールに応じて回転
-		modelRef.current.rotation.y = THREE.MathUtils.lerp(
-			modelRef.current.rotation.y,
-			Math.sin(state.clock.elapsedTime * 0.1) * 0.1 - progress * Math.PI * 0.1,
-			0.05
-		);
+			// わずかな浮遊アニメーション
+			modelRef.current.position.y = Math.sin(state.clock.elapsedTime * 0.5) * 0.05;
 
-		// わずかな浮遊アニメーション
-		modelRef.current.position.y = Math.sin(state.clock.elapsedTime * 0.5) * 0.05;
+			// Z位置を固定
+			modelRef.current.position.z = THREE.MathUtils.lerp(
+				modelRef.current.position.z,
+				0, // 固定位置
+				0.05
+			);
+		} else {
+			// デスクトップの場合：元のスクロール連動アニメーション
+			// モデルの回転 - スクロールに応じて回転
+			modelRef.current.rotation.y = THREE.MathUtils.lerp(
+				modelRef.current.rotation.y,
+				Math.sin(state.clock.elapsedTime * 0.1) * 0.1 - progress * Math.PI * 0.1,
+				0.05
+			);
 
-		// スクロールに応じたZ位置の調整
-		modelRef.current.position.z = THREE.MathUtils.lerp(
-			modelRef.current.position.z,
-			-2 + progress * 5, // 奥から手前に移動
-			0.05
-		);
+			// わずかな浮遊アニメーション
+			modelRef.current.position.y = Math.sin(state.clock.elapsedTime * 0.5) * 0.05;
+
+			// スクロールに応じたZ位置の調整
+			modelRef.current.position.z = THREE.MathUtils.lerp(
+				modelRef.current.position.z,
+				-2 + progress * 5, // 奥から手前に移動
+				0.05
+			);
+		}
 	});
 
 	return (

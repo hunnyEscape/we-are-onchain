@@ -52,7 +52,7 @@ const Header = () => {
 							<div className="w-8 h-8 bg-gradient-to-br from-neonGreen to-neonOrange rounded-sm animate-pulse-fast"></div>
 							<div className="absolute inset-0 w-8 h-8 bg-gradient-to-br from-neonGreen to-neonOrange rounded-sm blur-sm opacity-50"></div>
 						</div>
-						<span className="text-xl font-heading font-bold text-white group-hover:text-neonGreen transition-colors duration-200 animate-glitch-slow">
+						<span className="text-xl font-heading font-bold text-white group-hover:text-neonGreen transition-colors duration-200 md:animate-glitch-slow">
 							We are on-chain
 						</span>
 					</Link>

@@ -23,22 +23,22 @@ const GlowingTextSection = () => {
 				animate={{ opacity: 1, y: 0 }}
 				transition={{ delay: 0.5, duration: 0.8, repeat: Infinity, repeatType: "reverse" }}
 			>
-				<div className="text-xl text-center mb-2 mt-10">↓</div>
+				<div className="text-xl text-center mb-2 mt-5">↓</div>
 				<div className="text-sm font-mono">SCROLL DOWN</div>
 			</motion.div>
 
 
-			<div className="flex justify-center mt-40">
+			<div className="flex w-full justify-center mt-40">
 				<div className="relative w-full h-[110px] md:w-[800px] md:h-[150px] lg:w-[1200px] lg:h-[200px] pointer-events-auto">
 					<GlowingTextScene scrollProgress={scrollYProgress} />
 				</div>
 			</div>
-			<div className="flex justify-center">
+			<div className="flex w-full justify-center">
 				<div className="w-[300px] h-[400px] md:w-[400px] md:h-[500px] lg:w-[500px] lg:h-[600px] pointer-events-auto">
 					<HeroModel scale={1.2} />
 				</div>
 			</div>
-			<p className="text-center text-white">
+			<p className="text-center w-full text-white">
 				Not just protein. It’s a story of courage and humor - encrypted in every scoop.
 			</p>
 			<div className="text-xs mt-8 w-full max-w-sm px-4">

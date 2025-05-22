@@ -98,7 +98,7 @@ const BackgroundSphere: React.FC<BackgroundSphereProps> = ({ backgroundImage }) 
 		// @ts-expect-error React Three Fiber JSX elements
 		<mesh>
 			{/* @ts-expect-error React Three Fiber JSX elements */}
-			<sphereGeometry args={[2, 32, 32]} />
+			<sphereGeometry args={[2, 16, 16]} />
 			{/* @ts-expect-error React Three Fiber JSX elements */}
 			<meshBasicMaterial map={texture} side={THREE.BackSide} />
 			{/* @ts-expect-error React Three Fiber JSX elements */}
@@ -174,8 +174,6 @@ const Sphere: React.FC<SphereProps> = ({
 							</div>
 						}
 					>
-
-
 						{/* 回転制御コンポーネントで背景を囲む */}
 						<RotatingGroup
 							rotationY={manualRotation}

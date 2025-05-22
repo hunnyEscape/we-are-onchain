@@ -14,13 +14,19 @@ export default function Home() {
 			<CyberInterface/>
 			<Header/>
 			<HeroSection />
-			<GlowingTextSection />
-			<PulsatingComponent />
-			<PepeTop />
-			<FloatingImagesFixSection />
+
 			<SphereTop />
 			<div className='w-full relative h-[100vh] bg-black z-10' />
 			<Footer />
 		</main>
 	);
 }
+/*
+
+
+			<GlowingTextSection />
+			<PulsatingComponent />
+			<PepeTop />
+			<FloatingImagesFixSection />
+
+*/

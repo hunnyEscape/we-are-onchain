@@ -64,7 +64,7 @@ const FloatingImagesFixInner: React.FC = () => {
 					rotationSpeed={speeds[i]}
 				/>
 			))}
-			<ambientLight intensity={0.8} />
+	
 		</>
 	);
 };
@@ -77,7 +77,7 @@ const FloatingImagesFixCanvas: React.FC = () => {
 			gl={{ antialias: true, alpha: false }}
 			dpr={[1, 2]}
 		>
-			<color attach="background" args={['#070c12']} />
+
 			<FloatingImagesFixInner />
 		</Canvas>
 	);

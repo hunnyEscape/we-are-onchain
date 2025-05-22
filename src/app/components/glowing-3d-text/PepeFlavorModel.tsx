@@ -114,6 +114,6 @@ const PepeFlavorModel: React.FC<PepeFlavorModelProps> = ({
 };
 
 // モデルの事前ロード
-useGLTF.preload('/models/pepe_flavor.glb');
+useGLTF.preload(`${process.env.NEXT_PUBLIC_CLOUDFRONT_URL}/pepe/pepe_flavor.glb`);
 
 export default PepeFlavorModel;

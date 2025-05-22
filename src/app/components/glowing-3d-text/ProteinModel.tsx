@@ -36,14 +36,14 @@ class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoundarySta
 // プロテインモデルコンテナ
 interface ProteinContainerProps {
 	autoRotate?: boolean;
-	mouseControl?: boolean;
 	scale?: number;
+	rotationSpeed?: number; // 回転速度を調整可能に
 }
 
 const ProteinContainer: React.FC<ProteinContainerProps> = ({
 	autoRotate = true,
-	mouseControl = false,
-	scale = 1
+	scale = 1,
+	rotationSpeed = 0.5
 }) => {
 	const groupRef = useRef<THREE.Group>(null);
 
@@ -55,35 +55,13 @@ const ProteinContainer: React.FC<ProteinContainerProps> = ({
 		console.log('Model scene:', scene);
 	}, [scene]);
 
-	// マウス位置に基づいた回転
-	const [mousePosition, setMousePosition] = useState({ x: 0, y: 0 });
-
-	// コンポーネントがマウントされたらマウス位置のリスナーを追加
-	useEffect(() => {
-		const handleMouseMove = (e: MouseEvent) => {
-			setMousePosition({
-				x: (e.clientX / window.innerWidth) * 2 - 1,
-				y: -(e.clientY / window.innerHeight) * 2 + 1
-			});
-		};
-
-		window.addEventListener('mousemove', handleMouseMove);
-		return () => window.removeEventListener('mousemove', handleMouseMove);
-	}, []);
-
-	// フレームごとの処理（回転アニメーション）
+	// フレームごとの処理（自動回転のみ）
 	useFrame((state, delta) => {
 		if (!groupRef.current) return;
 
-		// 自動回転
+		// 自動回転のみ（マウスコントロールは削除）
 		if (autoRotate) {
-			groupRef.current.rotation.y += delta * 0.5; // 回転速度
-		}
-
-		// マウス位置に基づく追加の回転（マウスコントロールが有効な場合）
-		if (mouseControl) {
-			groupRef.current.rotation.x = mousePosition.y * 0.3;
-			groupRef.current.rotation.y += (mousePosition.x * 0.5 - groupRef.current.rotation.y) * 0.1;
+			groupRef.current.rotation.y += delta * rotationSpeed;
 		}
 	});
 
@@ -130,26 +108,25 @@ const ProteinModelWithErrorBoundary: React.FC<ProteinContainerProps> = (props) =
 interface ProteinModelProps extends ProteinContainerProps {
 	className?: string;
 }
+
 const ProteinModel: React.FC<ProteinModelProps> = ({ 
   className = '', 
   autoRotate = true, 
-  mouseControl = true, 
-  scale = 1 
+  scale = 1,
+  rotationSpeed = 0.5
 }) => {
   return (
     <div className={`w-full h-full ${className}`}>
       <Canvas shadows>
-
-        
         <ProteinModelWithErrorBoundary 
           autoRotate={autoRotate} 
-          mouseControl={mouseControl} 
-          scale={scale} 
+          scale={scale}
+          rotationSpeed={rotationSpeed}
         />
         
         <Environment preset="city" />
-        {mouseControl && <OrbitControls enableZoom={false} enablePan={false} />}
-        <PerspectiveCamera makeDefault position={[0, 0, 3]} fov={40} /> {/* カメラを近づけてfovを狭く */}
+        {/* OrbitControlsを削除してユーザー操作を無効化 */}
+        <PerspectiveCamera makeDefault position={[0, 0, 3]} fov={40} />
       </Canvas>
     </div>
   );
@@ -157,5 +134,7 @@ const ProteinModel: React.FC<ProteinModelProps> = ({
 
 export default ProteinModel;
 
-// グローバルにモデルをプリロード
-useGLTF.preload('/models/protein_powder.glb');
+// グローバルにモデルをプリロード（正しいURLを使用）
+if (typeof window !== 'undefined' && process.env.NEXT_PUBLIC_CLOUDFRONT_URL) {
+  useGLTF.preload(`${process.env.NEXT_PUBLIC_CLOUDFRONT_URL}/pepe/protein_powder.glb`);
+}

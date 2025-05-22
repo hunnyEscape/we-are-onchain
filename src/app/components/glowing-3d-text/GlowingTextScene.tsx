@@ -1,9 +1,8 @@
 import { Canvas } from '@react-three/fiber';
 import { Suspense } from 'react';
 import { MotionValue } from 'framer-motion';
-import { OrbitControls, PerspectiveCamera } from '@react-three/drei';
+import { PerspectiveCamera } from '@react-three/drei';
 import PepeFlavorModel from './PepeFlavorModel';
-import LightingSetup from './LightingSetup';
 
 interface GlowingTextSceneProps {
 	scrollProgress: MotionValue<number>;

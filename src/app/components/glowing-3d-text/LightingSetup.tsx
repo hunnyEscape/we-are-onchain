@@ -26,7 +26,7 @@ const LightingSetup = () => {
   return (
     <>
       {/* 環境光 - 暗めの基本照明 */}
-      <ambientLight intensity={0.1} color="#222222" />
+
       
       {/* メインのスポットライト - テキストを照らす */}
     </>

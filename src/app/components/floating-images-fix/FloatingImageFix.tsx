@@ -2,7 +2,7 @@ import { useRef, useState, useEffect } from 'react';
 import { useFrame } from '@react-three/fiber';
 import { useTexture } from '@react-three/drei';
 import type { ImageFile } from './constants';
-
+import * as THREE from 'three'; 
 interface FloatingImageFixProps {
 	image: ImageFile;
 	position: [number, number, number];

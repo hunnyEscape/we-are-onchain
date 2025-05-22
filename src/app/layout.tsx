@@ -1,4 +1,4 @@
-import { Montserrat, Space_Grotesk, DotGothic16 } from 'next/font/google';
+import { Montserrat, Space_Grotesk } from 'next/font/google';
 import './globals.css';
 import type { Metadata } from 'next';
 // フォントの設定
@@ -13,13 +13,6 @@ const spaceGrotesk = Space_Grotesk({
 	variable: '--font-space-grotesk',
 	display: 'swap',
 });
-const pixel = DotGothic16({
-  weight: '400',
-  subsets: ['latin', 'latin-ext'],
-  variable: '--font-pixel',
-  display: 'swap',
-});
-
 // メタデータ設定
 export const metadata: Metadata = {
 	title: 'We Are On-Chain | Pepe Protein',
@@ -33,7 +26,7 @@ export default function RootLayout({
 	children: React.ReactNode;
 }) {
 	return (
-		<html lang="en" className={`${montserrat.variable} ${spaceGrotesk.variable} ${pixel.variable}`}>
+		<html lang="en" className={`${montserrat.variable} ${spaceGrotesk.variable}`}>
 			<body className="bg-black text-white min-h-screen font-sans antialiased">
 
 				{children}

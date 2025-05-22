@@ -35,11 +35,7 @@ const PepeFlavorModel: React.FC<PepeFlavorModelProps> = ({
 				if (preserveOriginalMaterials) {
 					// オリジナルのマテリアルを保持しつつ、設定を最適化
 					if (object.material instanceof THREE.Material) {
-						// 発光を強化
-						if ('emissive' in object.material && object.material.emissive) {
-							// Blenderの色をそのまま使用しつつ発光を強化
-							object.material.emissiveIntensity = 1.2;
-						}
+
 						
 						// トーンマッピングを無効化して色変換を防止
 						object.material.toneMapped = false;

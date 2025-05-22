@@ -1,5 +1,5 @@
 'use client';
-import React, { useRef, useState, useEffect } from 'react';
+import React, { useRef, useState, useEffect, ReactNode } from 'react';
 import { Environment, PerspectiveCamera, OrbitControls } from '@react-three/drei';
 import { useFrame, Canvas } from '@react-three/fiber';
 import * as THREE from 'three';
@@ -35,7 +35,19 @@ class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoundarySta
 }
 
 // 回転制御コンポーネント
-const RotatingGroup = ({ rotationY = 0, rotationSpeed = 0.3, autoRotate = true, children }) => {
+type RotatingGroupProps = {
+	rotationY?: number;
+	rotationSpeed?: number;
+	autoRotate?: boolean;
+	children: ReactNode;
+};
+
+const RotatingGroup: React.FC<RotatingGroupProps> = ({
+	rotationY = 0,
+	rotationSpeed = 0.3,
+	autoRotate = true,
+	children,
+}) => {
 	const groupRef = useRef<THREE.Group>(null);
 
 	useFrame((_, delta) => {
@@ -60,34 +72,34 @@ const RotatingGroup = ({ rotationY = 0, rotationSpeed = 0.3, autoRotate = true, 
 };
 
 interface BackgroundSphereProps {
-    backgroundImage?: string;
+	backgroundImage?: string;
 }
 
 // 背景用の球体コンポーネント
 const BackgroundSphere: React.FC<BackgroundSphereProps> = ({ backgroundImage }) => {
-    const [texture, setTexture] = useState<THREE.Texture | null>(null);
+	const [texture, setTexture] = useState<THREE.Texture | null>(null);
 
-    useEffect(() => {
-        if (backgroundImage) {
-            const textureLoader = new THREE.TextureLoader();
-            const loadedTexture = textureLoader.load(backgroundImage);
-            loadedTexture.mapping = THREE.EquirectangularReflectionMapping;
-            
-            // Use colorSpace instead of deprecated encoding
-            loadedTexture.colorSpace = THREE.SRGBColorSpace;
-            
-            setTexture(loadedTexture);
-        }
-    }, [backgroundImage]);
+	useEffect(() => {
+		if (backgroundImage) {
+			const textureLoader = new THREE.TextureLoader();
+			const loadedTexture = textureLoader.load(backgroundImage);
+			loadedTexture.mapping = THREE.EquirectangularReflectionMapping;
 
-    if (!texture) return null;
+			// Use colorSpace instead of deprecated encoding
+			loadedTexture.colorSpace = THREE.SRGBColorSpace;
+
+			setTexture(loadedTexture);
+		}
+	}, [backgroundImage]);
+
+	if (!texture) return null;
 
 	return (
 		// @ts-expect-error React Three Fiber JSX elements
 		<mesh>
-			 {/* @ts-expect-error React Three Fiber JSX elements */}
+			{/* @ts-expect-error React Three Fiber JSX elements */}
 			<sphereGeometry args={[2, 64, 64]} />
-			 {/* @ts-expect-error React Three Fiber JSX elements */}
+			{/* @ts-expect-error React Three Fiber JSX elements */}
 			<meshBasicMaterial map={texture} side={THREE.BackSide} />
 			{/* @ts-expect-error React Three Fiber JSX elements */}
 		</mesh>

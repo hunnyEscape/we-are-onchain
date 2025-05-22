@@ -16,7 +16,7 @@ export const CDN_URL = process.env.NEXT_PUBLIC_CLOUDFRONT_URL || '';
 export const SIZE_SCALES = {
   S: 1.5,
   M: 2.5,
-  L: 4.0
+  L: 3
 };
 
 // 画像サイズに応じたZ位置（深度）設定

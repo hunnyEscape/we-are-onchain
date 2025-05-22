@@ -1,6 +1,6 @@
 // src/app/components/hero-section/HeroModel.tsx
 import React from 'react';
-import ProteinModel from '../3d/ProteinModel';
+import ProteinModel from './ProteinModel';
 
 interface HeroModelProps {
 	style?: React.CSSProperties;

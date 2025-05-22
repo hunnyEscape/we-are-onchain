@@ -3,7 +3,7 @@ import { useRef } from 'react';
 import { useScroll } from 'framer-motion';
 import GlowingTextScene from './GlowingTextScene';
 import { motion } from 'framer-motion';
-import HeroModel from '../hero-section/HeroModel';
+import HeroModel from './HeroModel';
 const GlowingTextSection = () => {
 	const sectionRef = useRef<HTMLDivElement>(null);
 

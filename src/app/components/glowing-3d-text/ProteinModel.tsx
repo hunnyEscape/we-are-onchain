@@ -53,12 +53,17 @@ const ProteinContainer: React.FC<ProteinContainerProps> = ({
 	// 画面サイズの監視
 	useEffect(() => {
 		const checkMobile = () => {
-			setIsMobile(window.innerWidth <= 768);
+			if (typeof window !== 'undefined') {
+				setIsMobile(window.innerWidth <= 768);
+			}
 		};
 
 		checkMobile();
-		window.addEventListener('resize', checkMobile);
-		return () => window.removeEventListener('resize', checkMobile);
+		
+		if (typeof window !== 'undefined') {
+			window.addEventListener('resize', checkMobile);
+			return () => window.removeEventListener('resize', checkMobile);
+		}
 	}, []);
 
 	// GLTFモデルの読み込み
@@ -171,7 +176,6 @@ const CustomOrbitControls: React.FC<{ isMobile: boolean }> = ({ isMobile }) => {
 	}, [isMobile]);
 
 	return (
-	
 		<OrbitControls
 			ref={controlsRef}
 			enableZoom={false}
@@ -203,20 +207,31 @@ const ProteinModel: React.FC<ProteinModelProps> = ({
 	rotationSpeed = 0.5
 }) => {
 	const [isMobile, setIsMobile] = useState(false);
+	const [isClient, setIsClient] = useState(false);
 	const canvasRef = useRef<HTMLDivElement>(null);
 
 	useEffect(() => {
+		// クライアントサイドでのみ実行
+		setIsClient(true);
+		
 		const checkMobile = () => {
-			setIsMobile(window.innerWidth <= 768);
+			if (typeof window !== 'undefined') {
+				setIsMobile(window.innerWidth <= 768);
+			}
 		};
 
 		checkMobile();
-		window.addEventListener('resize', checkMobile);
-		return () => window.removeEventListener('resize', checkMobile);
+		
+		if (typeof window !== 'undefined') {
+			window.addEventListener('resize', checkMobile);
+			return () => window.removeEventListener('resize', checkMobile);
+		}
 	}, []);
 
 	// タッチイベントの処理を改善
 	useEffect(() => {
+		if (!isClient) return; // クライアントサイドでのみ実行
+		
 		const canvasElement = canvasRef.current;
 		if (!canvasElement || !isMobile) return;
 
@@ -262,7 +277,16 @@ const ProteinModel: React.FC<ProteinModelProps> = ({
 			canvasElement.removeEventListener('touchmove', handleTouchMove);
 			canvasElement.removeEventListener('touchend', handleTouchEnd);
 		};
-	}, [isMobile]);
+	}, [isMobile, isClient]);
+
+	// クライアントサイドでのみレンダリング
+	if (!isClient) {
+		return (
+			<div className={`w-full h-full ${className} flex items-center justify-center`}>
+				<div>Loading...</div>
+			</div>
+		);
+	}
 
 	return (
 		<div 
@@ -280,7 +304,7 @@ const ProteinModel: React.FC<ProteinModelProps> = ({
 					alpha: true,
 					premultipliedAlpha: false
 				}}
-				dpr={Math.min(window.devicePixelRatio, 2)} // デバイスピクセル比を制限
+				dpr={typeof window !== 'undefined' ? Math.min(window.devicePixelRatio, 2) : 1}
 				shadows={false}
 				frameloop="always"
 				style={{ 

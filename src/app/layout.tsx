@@ -1,7 +1,6 @@
 import { Montserrat, Space_Grotesk, DotGothic16 } from 'next/font/google';
 import './globals.css';
 import type { Metadata } from 'next';
-import SmoothScroll from './components/layout/SmoothScroll';
 // フォントの設定
 const montserrat = Montserrat({
 	subsets: ['latin'],

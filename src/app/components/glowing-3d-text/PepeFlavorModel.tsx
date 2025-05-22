@@ -106,6 +106,7 @@ const PepeFlavorModel: React.FC<PepeFlavorModelProps> = ({
 	});
 
 	return (
+		// @ts-expect-error React Three Fiber JSX elements
 		<primitive
 			ref={modelRef}
 			object={scene}

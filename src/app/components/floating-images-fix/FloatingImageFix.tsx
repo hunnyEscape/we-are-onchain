@@ -1,8 +1,15 @@
 import { useRef, useState, useEffect } from 'react';
-import { useFrame } from '@react-three/fiber';
+import { useFrame,extend } from '@react-three/fiber';
 import { useTexture } from '@react-three/drei';
 import type { ImageFile } from './constants';
 import * as THREE from 'three'; 
+
+extend({ 
+    Mesh: THREE.Mesh, 
+    PlaneGeometry: THREE.PlaneGeometry, 
+    MeshBasicMaterial: THREE.MeshBasicMaterial 
+});
+
 interface FloatingImageFixProps {
 	image: ImageFile;
 	position: [number, number, number];
@@ -43,19 +50,23 @@ const FloatingImageFix: React.FC<FloatingImageFixProps> = ({
 	const height = scale / aspect;
 
 	return (
+		// @ts-expect-error React Three Fiber JSX elements
 		<mesh
 			ref={meshRef}
 			position={position}
 			castShadow={false}
 			receiveShadow={false}
 		>
+			{/* @ts-expect-error React Three Fiber JSX elements */}
 			<planeGeometry args={[width, height]} />
+			{/* @ts-expect-error React Three Fiber JSX elements */}
 			<meshBasicMaterial
 				map={texture}
 				transparent
 				opacity={0.5}
 				toneMapped={false}
 			/>
+			{/* @ts-expect-error React Three Fiber JSX elements */}
 		</mesh>
 	);
 };

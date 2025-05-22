@@ -1,6 +1,5 @@
 .
 ├── README.md
-├── custom.d.ts
 ├── eslint.config.mjs
 ├── next-env.d.ts
 ├── next.config.js
@@ -20,6 +19,7 @@
 │   ├── next.svg
 │   ├── vercel.svg
 │   └── window.svg
+├── r3f-jsx.d.ts
 ├── src
 │   └── app
 │       ├── components
@@ -27,6 +27,7 @@
 │       │   │   ├── FloatingImageFix.tsx
 │       │   │   ├── FloatingImagesFixCanvas.tsx
 │       │   │   ├── FloatingImagesFixSection.tsx
+│       │   │   ├── TestThree.tsx
 │       │   │   ├── constants.ts
 │       │   │   └── cyber-scroll-messages
 │       │   │       ├── CyberInterface.tsx
@@ -92,6 +93,8 @@
 │       ├── layout.tsx
 │       └── page.tsx
 ├── tailwind.config.js
-└── tsconfig.json
+├── tsconfig.json
+└── types
+    └── react-three-fiber.d.ts
 
-18 directories, 76 files
+19 directories, 78 files

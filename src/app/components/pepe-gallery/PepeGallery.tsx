@@ -104,19 +104,11 @@ const ImageItem = ({ image, position, index }) => {
 const ThreeScene = () => {
 	return (
 		<>
-			<ambientLight intensity={0.5} />
-			<pointLight position={[10, 10, 10]} />
 
-			{/* テスト用のボックス */}
-			<mesh position={[0, 0, 0]}>
-				<boxGeometry args={[2, 2, 2]} />
-				<meshStandardMaterial color="blue" />
-			</mesh>
 
-			<mesh position={[0, -3, 0]}>
-				<boxGeometry args={[1, 1, 1]} />
-				<meshStandardMaterial color="red" />
-			</mesh>
+
+
+
 
 			{/* 複数の画像を追加 */}
 			{testImages.map((img, index) => (
@@ -205,7 +197,6 @@ const PepeGallery = ({ className = '' }) => {
 							}}
 							dpr={[1, 1.5]}
 						>
-							<color attach="background" args={['#d8d7d7']} />
 							<Suspense fallback={null}>
 								<ThreeScene />
 								<Preload all />

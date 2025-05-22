@@ -1,6 +1,7 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
+  transpilePackages: ['three', '@react-three/fiber', '@react-three/drei'], // この行を追加
   images: {
     domains: [],
     formats: ["image/avif", "image/webp"],
@@ -18,6 +19,7 @@ const nextConfig = {
   experimental: {
     optimizeCss: true,
     scrollRestoration: true,
+    esmExternals: 'loose', // この行も追加
   },
 };
 

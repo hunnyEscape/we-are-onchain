@@ -6,6 +6,7 @@ import { useScroll, Scroll } from '@react-three/drei';
 import { imageFiles } from './utils/constants';
 import { calculateOptimalImagePositions } from './utils/imageLoader';
 import ImageItem from './ImageItem';
+import * as THREE from 'three'
 
 const ScrollableImages: React.FC = () => {
 	// スクロールデータを取得
@@ -66,6 +67,7 @@ const ScrollableImages: React.FC = () => {
 
 	return (
 		<Scroll>
+			{/* @ts-expect-error React Three Fiber JSX elements */}
 			<group ref={groupRef}>
 				{imageFiles.map((image, index) => {
 					// 画像の位置を取得（デフォルト位置を設定）
@@ -95,6 +97,7 @@ const ScrollableImages: React.FC = () => {
 						/>
 					);
 				})}
+				{/* @ts-expect-error React Three Fiber JSX elements */}
 			</group>
 		</Scroll>
 	);

@@ -51,8 +51,10 @@ const RotatingGroup = ({ rotationY = 0, rotationSpeed = 0.3, autoRotate = true, 
 	});
 
 	return (
+		// @ts-expect-error React Three Fiber JSX elements
 		<group ref={groupRef}>
 			{children}
+			{/* @ts-expect-error React Three Fiber JSX elements */}
 		</group>
 	);
 };
@@ -64,9 +66,13 @@ const BackgroundSphere = ({ backgroundImage }) => {
 	texture.encoding = THREE.sRGBEncoding;
 
 	return (
+		// @ts-expect-error React Three Fiber JSX elements
 		<mesh>
+			 {/* @ts-expect-error React Three Fiber JSX elements */}
 			<sphereGeometry args={[2, 64, 64]} />
+			 {/* @ts-expect-error React Three Fiber JSX elements */}
 			<meshBasicMaterial map={texture} side={THREE.BackSide} />
+			 {/* @ts-expect-error React Three Fiber JSX elements */}
 		</mesh>
 	);
 };

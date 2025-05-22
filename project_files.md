@@ -3649,9 +3649,8 @@ export default PepeFlavorModel;-e
 import { Canvas } from '@react-three/fiber';
 import { Suspense } from 'react';
 import { MotionValue } from 'framer-motion';
-import { OrbitControls, PerspectiveCamera } from '@react-three/drei';
+import { PerspectiveCamera } from '@react-three/drei';
 import PepeFlavorModel from './PepeFlavorModel';
-import LightingSetup from './LightingSetup';
 
 interface GlowingTextSceneProps {
 	scrollProgress: MotionValue<number>;
@@ -3923,7 +3922,7 @@ const GlowingTextSection = () => {
 
 	// スクロール位置の検出
 	const { scrollYProgress } = useScroll({
-		target: sectionRef,
+		target: sectionRef as React.RefObject<HTMLElement>,
 		offset: ["start end", "end start"]
 	});
 
@@ -3933,17 +3932,16 @@ const GlowingTextSection = () => {
 			className="relative w-full overflow-hidden bg-black flex flex-col items-center justify-center"
 		>
 			<motion.div
-				className="mt-5 mb-40 left-1/2 transform text-neonGreen text-center"
 				initial={{ opacity: 0, y: -10 }}
 				animate={{ opacity: 1, y: 0 }}
 				transition={{ delay: 0.5, duration: 0.8, repeat: Infinity, repeatType: "reverse" }}
 			>
-				<div className="text-xl mb-2">↓</div>
+				<div className="text-xl text-center mb-2 mt-10">↓</div>
 				<div className="text-sm font-mono">SCROLL DOWN</div>
 			</motion.div>
 
 
-			<div className="flex justify-center">
+			<div className="flex justify-center mt-40">
 				<div className="relative w-full h-[110px] md:w-[800px] md:h-[150px] lg:w-[1200px] lg:h-[200px] pointer-events-auto">
 					<GlowingTextScene scrollProgress={scrollYProgress} />
 				</div>
@@ -4027,7 +4025,7 @@ const LightingSetup = () => {
   return (
     <>
       {/* 環境光 - 暗めの基本照明 */}
-      <ambientLight intensity={0.1} color="#222222" />
+
       
       {/* メインのスポットライト - テキストを照らす */}
     </>
@@ -4704,65 +4702,72 @@ export default CyberScrollMessages;-e
 ### FILE: ./src/app/components/floating-images-fix/FloatingImageFix.tsx
 
 import { useRef, useState, useEffect } from 'react';
-import { useFrame } from '@react-three/fiber';
+import { useFrame,extend } from '@react-three/fiber';
 import { useTexture } from '@react-three/drei';
 import type { ImageFile } from './constants';
+import * as THREE from 'three'; 
+
+extend({ 
+    Mesh: THREE.Mesh, 
+    PlaneGeometry: THREE.PlaneGeometry, 
+    MeshBasicMaterial: THREE.MeshBasicMaterial 
+});
 
 interface FloatingImageFixProps {
-  image: ImageFile;
-  position: [number, number, number];
-  scale: number;
-  rotationSpeed?: number;
+	image: ImageFile;
+	position: [number, number, number];
+	scale: number;
+	rotationSpeed?: number;
 }
 
 const FloatingImageFix: React.FC<FloatingImageFixProps> = ({
-  image,
-  position,
-  scale,
-  rotationSpeed = 0.005,
+	image,
+	position,
+	scale,
+	rotationSpeed = 0.005,
 }) => {
-  const meshRef = useRef<THREE.Mesh>(null);
-  const texture = useTexture(image.path);
+	const meshRef = useRef<THREE.Mesh>(null);
+	const texture = useTexture(image.path);
 
-  // 最新のrotationSpeedを参照するref
-  const speedRef = useRef(rotationSpeed);
-  useEffect(() => {
-    speedRef.current = rotationSpeed;
-  }, [rotationSpeed]);
+	// 最新のrotationSpeedを参照するref
+	const speedRef = useRef(rotationSpeed);
+	useEffect(() => {
+		speedRef.current = rotationSpeed;
+	}, [rotationSpeed]);
 
-  // アスペクト比（幅/高さ）
-  const [aspect, setAspect] = useState(1);
-  useEffect(() => {
-    if (texture?.image) {
-      setAspect(texture.image.width / texture.image.height);
-    }
-  }, [texture]);
+	// アスペクト比（幅/高さ）
+	const [aspect, setAspect] = useState(1);
+	useEffect(() => {
+		if (texture?.image) {
+			setAspect(texture.image.width / texture.image.height);
+		}
+	}, [texture]);
 
-  useFrame((_, delta) => {
-    if (meshRef.current) {
-      meshRef.current.rotation.z += (speedRef.current ?? 0.06) * delta;
-    }
-  });
+	useFrame((_, delta) => {
+		if (meshRef.current) {
+			meshRef.current.rotation.z += (speedRef.current ?? 0.06) * delta;
+		}
+	});
 
-  const width = scale;
-  const height = scale / aspect;
+	const width = scale;
+	const height = scale / aspect;
 
-  return (
-    <mesh
-      ref={meshRef}
-      position={position}
-      castShadow={false}
-      receiveShadow={false}
-    >
-      <planeGeometry args={[width, height]} />
-      <meshBasicMaterial
-        map={texture}
-        transparent
-        opacity={0.5}
-        toneMapped={false}
-      />
-    </mesh>
-  );
+	return (
+		<mesh
+			ref={meshRef}
+			position={position}
+			castShadow={false}
+			receiveShadow={false}
+		>
+			<planeGeometry args={[width, height]} />
+			<meshBasicMaterial
+				map={texture}
+				transparent
+				opacity={0.5}
+				toneMapped={false}
+			/>
+		</mesh>
+	);
 };
 
 export default FloatingImageFix;
@@ -4872,7 +4877,7 @@ const FloatingImagesFixInner: React.FC = () => {
 					rotationSpeed={speeds[i]}
 				/>
 			))}
-			<ambientLight intensity={0.8} />
+	
 		</>
 	);
 };
@@ -4885,7 +4890,7 @@ const FloatingImagesFixCanvas: React.FC = () => {
 			gl={{ antialias: true, alpha: false }}
 			dpr={[1, 2]}
 		>
-			<color attach="background" args={['#070c12']} />
+
 			<FloatingImagesFixInner />
 		</Canvas>
 	);
@@ -4893,6 +4898,22 @@ const FloatingImagesFixCanvas: React.FC = () => {
 
 export default FloatingImagesFixCanvas;
 -e 
+### FILE: ./src/app/components/floating-images-fix/TestThree.tsx
+
+import { Canvas } from '@react-three/fiber'
+
+export default function TestThree() {
+  return (
+    <div style={{ width: '100px', height: '100px' }}>
+      <Canvas>
+        <mesh>
+          <boxGeometry args={[1, 1, 1]} />
+          <meshBasicMaterial color="red" />
+        </mesh>
+      </Canvas>
+    </div>
+  )
+}-e 
 ### FILE: ./src/app/layout.tsx
 
 import { Montserrat, Space_Grotesk, DotGothic16 } from 'next/font/google';
@@ -4964,6 +4985,48 @@ export default function Home() {
 			<Footer/>
 		</main>
 	);
+}
+-e 
+### FILE: ./types/react-three-fiber.d.ts
+
+// types/react-three-fiber.d.ts
+import * as THREE from 'three'
+
+declare global {
+  namespace JSX {
+    interface IntrinsicElements {
+      // Objects
+      mesh: any
+      group: any
+      
+      // Geometries  
+      boxGeometry: any
+      planeGeometry: any
+      sphereGeometry: any
+      
+      // Materials
+      meshBasicMaterial: any
+      meshStandardMaterial: any
+      
+      // Lights
+      ambientLight: any
+      directionalLight: any
+      spotLight: any
+      pointLight: any
+    }
+  }
+}
+
+export {}-e 
+### FILE: ./r3f-jsx.d.ts
+
+// r3f-jsx.d.ts
+/// <reference types="@react-three/fiber" />
+
+// Make the `@react-three/fiber/jsx-runtime` module available to TS
+declare module '@react-three/fiber/jsx-runtime' {
+  // Re-export everything from the main package
+  export * from '@react-three/fiber';
 }
 -e 
 ### FILE: ./tailwind.config.js
@@ -5060,28 +5123,12 @@ module.exports = {
   },
 }
 -e 
-### FILE: ./custom.d.ts
-
-// custom.d.ts
-import { ReactThreeFiber } from '@react-three/fiber';
-import { OrbitControls } from 'three-stdlib';
-
-declare global {
-  namespace JSX {
-    interface IntrinsicElements {
-      ambientLight: ReactThreeFiber.Object3DNode<THREE.AmbientLight, typeof THREE.AmbientLight>;
-      directionalLight: ReactThreeFiber.Object3DNode<THREE.DirectionalLight, typeof THREE.DirectionalLight>;
-      spotLight: ReactThreeFiber.Object3DNode<THREE.SpotLight, typeof THREE.SpotLight>;
-      group: ReactThreeFiber.Object3DNode<THREE.Group, typeof THREE.Group>;
-      mesh: ReactThreeFiber.Object3DNode<THREE.Mesh, typeof THREE.Mesh>;
-    }
-  }
-}-e 
 ### FILE: ./next.config.js
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
+  transpilePackages: ['three', '@react-three/fiber', '@react-three/drei'], // この行を追加
   images: {
     domains: [],
     formats: ["image/avif", "image/webp"],
@@ -5099,6 +5146,7 @@ const nextConfig = {
   experimental: {
     optimizeCss: true,
     scrollRestoration: true,
+    esmExternals: 'loose', // この行も追加
   },
 };
 

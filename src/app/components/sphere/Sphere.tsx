@@ -5,7 +5,7 @@ import { useFrame, Canvas } from '@react-three/fiber';
 import * as THREE from 'three';
 import styles from './Sphere.module.css';
 
-// エラーバウンダリーコンポーネン
+// エラーバウンダリーコンポーネン (前回と同じ)
 interface ErrorBoundaryProps {
 	children: React.ReactNode;
 	fallback: React.ReactNode;
@@ -73,10 +73,11 @@ const RotatingGroup: React.FC<RotatingGroupProps> = ({
 
 interface BackgroundSphereProps {
 	backgroundImage?: string;
+	isMobile?: boolean;
 }
 
 // 背景用の球体コンポーネント
-const BackgroundSphere: React.FC<BackgroundSphereProps> = ({ backgroundImage }) => {
+const BackgroundSphere: React.FC<BackgroundSphereProps> = ({ backgroundImage, isMobile = false }) => {
 	const [texture, setTexture] = useState<THREE.Texture | null>(null);
 
 	useEffect(() => {
@@ -98,7 +99,7 @@ const BackgroundSphere: React.FC<BackgroundSphereProps> = ({ backgroundImage }) 
 		// @ts-expect-error React Three Fiber JSX elements
 		<mesh>
 			{/* @ts-expect-error React Three Fiber JSX elements */}
-			<sphereGeometry args={[2, 16, 16]} />
+			<sphereGeometry args={[2, 64, isMobile ? 16 : 64]} />
 			{/* @ts-expect-error React Three Fiber JSX elements */}
 			<meshBasicMaterial map={texture} side={THREE.BackSide} />
 			{/* @ts-expect-error React Three Fiber JSX elements */}
@@ -115,6 +116,7 @@ interface SphereProps {
 	backgroundImage?: string; // カスタム背景画像のパス
 	useDefaultEnvironment?: boolean; // デフォルト環境マップを使用するかどうか
 	manualRotation?: number; // 手動で指定する回転値（ラジアン）
+	isMobile?: boolean; // モバイルデバイスかどうかのフラグ
 }
 
 const Sphere: React.FC<SphereProps> = ({
@@ -124,7 +126,8 @@ const Sphere: React.FC<SphereProps> = ({
 	rotationSpeed = 0.3,
 	backgroundImage = '',
 	useDefaultEnvironment = true,
-	manualRotation = 0
+	manualRotation = 0,
+	isMobile = false
 }) => {
 	const [isClient, setIsClient] = useState(false);
 	const [isHdrBackground, setIsHdrBackground] = useState(false);
@@ -162,10 +165,11 @@ const Sphere: React.FC<SphereProps> = ({
 			<div className={`${styles.decorLine} ${styles.decorLineBottom}`}></div>
 
 			<div className={styles.canvasWrapper}>
-				<Canvas
-					shadows={false}
-					dpr={typeof window !== 'undefined' ? Math.min(window.devicePixelRatio, 1) : 1}
-					gl={{ antialias: false }}
+				<Canvas 
+					shadows={!isMobile} 
+					gl={{ 
+						antialias: !isMobile 
+					}}
 				>
 					<ErrorBoundary
 						fallback={
@@ -178,9 +182,12 @@ const Sphere: React.FC<SphereProps> = ({
 						<RotatingGroup
 							rotationY={manualRotation}
 							rotationSpeed={rotationSpeed}
-							autoRotate={autoRotate}
+							autoRotate={!isMobile && autoRotate}
 						>
-							<BackgroundSphere backgroundImage={backgroundImage} />
+							<BackgroundSphere 
+								backgroundImage={backgroundImage} 
+								isMobile={isMobile}
+							/>
 						</RotatingGroup>
 
 						{/* カメラ設定 */}

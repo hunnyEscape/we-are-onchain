@@ -1,6 +1,6 @@
 // src/app/components/3d/ProteinModel.tsx
 'use client';
-import React, { useRef, useState, useEffect } from 'react';
+import React, { useRef } from 'react';
 import { useGLTF, Environment, OrbitControls, PerspectiveCamera } from '@react-three/drei';
 import { useFrame, Canvas } from '@react-three/fiber';
 import * as THREE from 'three';
@@ -10,21 +10,17 @@ interface ErrorBoundaryProps {
 	children: React.ReactNode;
 	fallback: React.ReactNode;
 }
-
 interface ErrorBoundaryState {
 	hasError: boolean;
 }
-
 class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoundaryState> {
 	constructor(props: ErrorBoundaryProps) {
 		super(props);
 		this.state = { hasError: false };
 	}
-
 	static getDerivedStateFromError(error: any) {
 		return { hasError: true };
 	}
-
 	render() {
 		if (this.state.hasError) {
 			return this.props.fallback;
@@ -37,75 +33,36 @@ class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoundarySta
 interface ProteinContainerProps {
 	autoRotate?: boolean;
 	scale?: number;
-	rotationSpeed?: number; // 回転速度を調整可能に
 }
-
-const ProteinContainer: React.FC<ProteinContainerProps> = ({
-	autoRotate = true,
-	scale = 1,
-	rotationSpeed = 0.2
-}) => {
+const ProteinContainer: React.FC<ProteinContainerProps> = ({ autoRotate = true, scale = 1}) => {
 	const groupRef = useRef<THREE.Group>(null);
-
-	// 画面サイズの状態管理
-	const [isMobile, setIsMobile] = useState(false);
-
-	// 画面サイズの監視
-	useEffect(() => {
-		const checkMobile = () => {
-			setIsMobile(window.innerWidth <= 768); // 768px以下をモバイルと判定
-		};
-
-		// 初期チェック
-		checkMobile();
-
-		// リサイズイベントリスナーを追加
-		window.addEventListener('resize', checkMobile);
-
-		// クリーンアップ
-		return () => window.removeEventListener('resize', checkMobile);
-	}, []);
-
-	// GLTFモデルの読み込み
 	const { scene } = useGLTF(`${process.env.NEXT_PUBLIC_CLOUDFRONT_URL}/pepe/protein_powder.glb`);
 
-	// コンソールにモデル情報を表示（デバッグ用）
-	useEffect(() => {
-		console.log('Model scene:', scene);
-	}, [scene]);
-
-	// フレームごとの処理（自動回転のみ）
-	useFrame((state, delta) => {
-		if (!groupRef.current) return;
-
-		// モバイルの場合は自動回転を無効化
-		//if (autoRotate && !isMobile) {
-		groupRef.current.rotation.y += delta * 0.2;
-		//}
+	useFrame((_, delta) => {
+		if (autoRotate && groupRef.current) {
+			groupRef.current.rotation.y += delta * 0.2;
+		}
 	});
 
-	// モデルが読み込まれていない場合、プレースホルダーを表示
 	if (!scene) {
 		return (
 			//@ts-expect-error React Three Fiber JSX elements
-			<mesh>
-				{/* @ts-expect-error React Three Fiber JSX elements */}
+			<mesh>{/* @ts-expect-error React Three Fiber JSX elements */}
 				<boxGeometry args={[1, 1, 1]} />
 				{/* @ts-expect-error React Three Fiber JSX elements */}
-				<meshStandardMaterial color="hotpink" />
+				<meshBasicMaterial color="hotpink" />
 				{/* @ts-expect-error React Three Fiber JSX elements */}
 			</mesh>
 		);
 	}
 
-	// GLTFモデル全体を表示する簡易アプローチ
 	return (
-		//@ts-expect-error React Three Fiber JSX elements
+		// @ts-expect-error React Three Fiber JSX elements
 		<group
 			ref={groupRef}
 			scale={[scale, scale, scale]}
-			position={[0, -0.5, 0]} // Y軸方向に少し下げて中央に表示
-			rotation={[0, Math.PI * 0.25, 0]} // 少し回転させて良い角度に
+			position={[0, -0.5, 0]}
+			rotation={[0, Math.PI * 0.25, 0]}
 		>
 			{/* @ts-expect-error React Three Fiber JSX elements */}
 			<primitive object={scene.clone()} />
@@ -114,26 +71,12 @@ const ProteinContainer: React.FC<ProteinContainerProps> = ({
 	);
 };
 
-// エラー処理をするためのFallback
-const ProteinModelWithErrorBoundary: React.FC<ProteinContainerProps> = (props) => {
-	return (
-		<ErrorBoundary fallback={<div>エラー: 3Dモデルの読み込みに失敗しました</div>}>
-			<ProteinContainer {...props} />
-		</ErrorBoundary>
-	);
-};
-
-// メインのエクスポートコンポーネント
+// メインコンポーネント
 interface ProteinModelProps extends ProteinContainerProps {
 	className?: string;
 }
-
-const ProteinModel: React.FC<ProteinModelProps> = ({
-	className = '',
-	autoRotate = true,
-	scale = 1,
-	rotationSpeed = 0.5
-}) => {
+const ProteinModel: React.FC<ProteinModelProps> = ({ className = '', autoRotate = true, scale = 1, rotationSpeed = 0.5 }) => {
+	const controlsRef = useRef<any>(null);
 	return (
 		<div className={`w-full h-full ${className}`}>
 			<Canvas
@@ -141,37 +84,37 @@ const ProteinModel: React.FC<ProteinModelProps> = ({
 				dpr={1}
 				shadows={false}
 				frameloop="always"
-				style={{ touchAction: 'pan-y' }}
+				style={{ touchAction: 'pan-y', pointerEvents: 'auto' }}
+				onPointerDown={() => { if (controlsRef.current) controlsRef.current.enabled = true; }}
+				onPointerUp={() => { if (controlsRef.current) controlsRef.current.enabled = false; }}
 			>
-				<ProteinModelWithErrorBoundary
-					autoRotate={autoRotate}
-					scale={scale}
-					rotationSpeed={rotationSpeed}
-				/>
+				<ErrorBoundary fallback={<div className="text-center p-4">エラー: 3Dモデルの読み込みに失敗しました</div>}>
+					<ProteinContainer autoRotate={autoRotate} scale={scale} />
+				</ErrorBoundary>
 
 				<Environment preset="city" />
-				{/* OrbitControlsを削除してユーザー操作を無効化 */}
 				<PerspectiveCamera makeDefault position={[0, 0, 3]} fov={40} />
 				<OrbitControls
+					ref={controlsRef}
+					enabled={false}
 					enableZoom={false}
 					enablePan={false}
 					enableRotate={true}
-					// 水平回転（Y軸）はフルレンジ
+					// 水平回転は無制限
 					minAzimuthAngle={-Infinity}
 					maxAzimuthAngle={Infinity}
-					// 垂直回転（X軸）は固定
-					minPolarAngle={Math.PI / 2.3}
-					maxPolarAngle={Math.PI / 2.3}
+					// 垂直回転を固定
+					minPolarAngle={Math.PI / 2.5}
+					maxPolarAngle={Math.PI / 2.5}
 					makeDefault
 				/>
 			</Canvas>
 		</div>
 	);
 };
-
 export default ProteinModel;
 
-// グローバルにモデルをプリロード（正しいURLを使用）
+// モデルプリロード
 if (typeof window !== 'undefined' && process.env.NEXT_PUBLIC_CLOUDFRONT_URL) {
 	useGLTF.preload(`${process.env.NEXT_PUBLIC_CLOUDFRONT_URL}/pepe/protein_powder.glb`);
 }

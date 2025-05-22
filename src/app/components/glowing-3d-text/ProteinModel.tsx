@@ -157,11 +157,12 @@ const ProteinModel: React.FC<ProteinModelProps> = ({
 					enablePan={false}
 					enableRotate={true}
 					// 水平回転（Y軸）はフルレンジ
-					minAzimuthAngle={-Math.PI}
-					maxAzimuthAngle={Math.PI}
+					minAzimuthAngle={-Infinity}
+					maxAzimuthAngle={Infinity}
 					// 垂直回転（X軸）は固定
 					minPolarAngle={Math.PI / 2.3}
 					maxPolarAngle={Math.PI / 2.3}
+					makeDefault
 				/>
 			</Canvas>
 		</div>

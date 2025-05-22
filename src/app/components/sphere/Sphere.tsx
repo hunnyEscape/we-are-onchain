@@ -59,11 +59,28 @@ const RotatingGroup = ({ rotationY = 0, rotationSpeed = 0.3, autoRotate = true, 
 	);
 };
 
+interface BackgroundSphereProps {
+    backgroundImage?: string;
+}
+
 // 背景用の球体コンポーネント
-const BackgroundSphere = ({ backgroundImage }) => {
-	const texture = new THREE.TextureLoader().load(backgroundImage);
-	texture.mapping = THREE.EquirectangularReflectionMapping;
-	texture.encoding = THREE.sRGBEncoding;
+const BackgroundSphere: React.FC<BackgroundSphereProps> = ({ backgroundImage }) => {
+    const [texture, setTexture] = useState<THREE.Texture | null>(null);
+
+    useEffect(() => {
+        if (backgroundImage) {
+            const textureLoader = new THREE.TextureLoader();
+            const loadedTexture = textureLoader.load(backgroundImage);
+            loadedTexture.mapping = THREE.EquirectangularReflectionMapping;
+            
+            // Use colorSpace instead of deprecated encoding
+            loadedTexture.colorSpace = THREE.SRGBColorSpace;
+            
+            setTexture(loadedTexture);
+        }
+    }, [backgroundImage]);
+
+    if (!texture) return null;
 
 	return (
 		// @ts-expect-error React Three Fiber JSX elements
@@ -72,7 +89,7 @@ const BackgroundSphere = ({ backgroundImage }) => {
 			<sphereGeometry args={[2, 64, 64]} />
 			 {/* @ts-expect-error React Three Fiber JSX elements */}
 			<meshBasicMaterial map={texture} side={THREE.BackSide} />
-			 {/* @ts-expect-error React Three Fiber JSX elements */}
+			{/* @ts-expect-error React Three Fiber JSX elements */}
 		</mesh>
 	);
 };

@@ -1,10 +1,7 @@
 // ScrollMessage.tsx
 'use client';
-
 import React, { useEffect, useRef, useState } from 'react';
-import CyberInterface from './CyberInterface';
 import styles from './PepeStyles.module.css';
-
 type MessageConfig = {
 	id: string;
 	text: string;
@@ -72,43 +69,6 @@ const ScrollTriggerMessages: React.FC = () => {
 	const [activeIndex, setActiveIndex] = useState<number | null>(null);
 	const [scrollProgress, setScrollProgress] = useState<number>(0);
 	const [randomTrigger, setRandomTrigger] = useState<boolean>(false);
-
-	// キーワードに基づいてテキストを処理する関数
-	const processText = (text: string, keywords: string[] = []): TextFragment[] => {
-		if (!keywords || keywords.length === 0) return [{ text, isKeyword: false }];
-
-		const fragments: TextFragment[] = [];
-		let remainingText = text;
-
-		// 各キーワードを検索して分割
-		keywords.forEach((keyword) => {
-			const parts = remainingText.split(new RegExp(`(${keyword})`, 'g'));
-			if (parts.length === 1) return; // キーワードが見つからない場合はスキップ
-
-			// 分割された部分を処理
-			let newRemainingText = '';
-			parts.forEach((part, index) => {
-				if (part === keyword) {
-					fragments.push({
-						text: part,
-						isKeyword: true,
-						keywordType: keyword,
-					});
-				} else if (part) {
-					newRemainingText += part;
-				}
-			});
-			remainingText = newRemainingText;
-		});
-
-		// 残りのテキストがあれば追加
-		if (remainingText) {
-			fragments.push({ text: remainingText, isKeyword: false });
-		}
-
-		return fragments.length > 0 ? fragments : [{ text, isKeyword: false }];
-	};
-
 	// グリッチエフェクトに基づいてクラス名を取得
 	const getGlitchClass = (effect?: 'rgb' | 'slice' | 'wave' | 'pulse' | 'jitter' | 'none'): string => {
 		switch (effect) {
@@ -237,7 +197,15 @@ const ScrollTriggerMessages: React.FC = () => {
 		<>
 			{/* トリガー用ダミーゾーン */}
 			{messages.map((_, i) => (
-				<div key={`zone-${i}`} ref={(el) => (refs.current[i] = el)} className="h-screen w-full" />
+				<div
+					key={`zone-${i}`}
+					ref={(el) => {
+						if (el) {
+							refs.current[i] = el;
+						}
+					}}
+					className="h-screen w-full"
+				/>
 			))}
 
 

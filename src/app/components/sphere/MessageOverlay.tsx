@@ -69,7 +69,7 @@ interface KeyLineProps {
 
 const KeyLine: React.FC<KeyLineProps> = ({ text, colorClass, borderClass }) => {
 	const ref = useRef<HTMLDivElement>(null);
-	const { scrollYProgress } = useScroll({ target: ref, offset: ['start end', 'end end'] });
+	const { scrollYProgress } = useScroll({ target: ref as React.RefObject<HTMLElement>, offset: ['start end', 'end end'] });
 	const opacity = useTransform(scrollYProgress, [0, 0.2], [0, 1]);
 	const y = useTransform(scrollYProgress, [0, 0.2], [20, 0]);
 

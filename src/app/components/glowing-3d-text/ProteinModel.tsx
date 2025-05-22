@@ -94,7 +94,6 @@ const ProteinModel: React.FC<ProteinModelProps> = ({ className = '', autoRotate 
 				dpr={1}
 				shadows={false}
 				frameloop="always"
-				// 縦スクロールを優先
 				style={{ touchAction: 'pan-y' }}
 			>
 				<ErrorBoundary fallback={<div className="text-center p-4">エラー: 3Dモデルの読み込みに失敗しました</div>}>
@@ -114,8 +113,8 @@ const ProteinModel: React.FC<ProteinModelProps> = ({ className = '', autoRotate 
 						minAzimuthAngle={-Infinity}
 						maxAzimuthAngle={Infinity}
 						// X軸固定
-						minPolarAngle={Math.PI / 2.5}
-						maxPolarAngle={Math.PI / 2.5}
+						minPolarAngle={Math.PI / 2.6}
+						maxPolarAngle={Math.PI / 2.6}
 						makeDefault
 					/>
 				)}

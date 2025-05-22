@@ -101,7 +101,7 @@ const PepeFlavorModel: React.FC<PepeFlavorModelProps> = ({
 
 		// 現在のスクロール位置を取得
 		const progress = scrollProgress.get();
-		
+		/*
 		if (isMobile) {
 			// モバイルの場合：スクロールに反応せず固定
 			// 基本的な浮遊アニメーションのみ
@@ -120,7 +120,7 @@ const PepeFlavorModel: React.FC<PepeFlavorModelProps> = ({
 				0, // 固定位置
 				0.05
 			);
-		} else {
+		} else {*/
 			// デスクトップの場合：元のスクロール連動アニメーション
 			// モデルの回転 - スクロールに応じて回転
 			modelRef.current.rotation.y = THREE.MathUtils.lerp(
@@ -138,7 +138,7 @@ const PepeFlavorModel: React.FC<PepeFlavorModelProps> = ({
 				-2 + progress * 5, // 奥から手前に移動
 				0.05
 			);
-		}
+	//	}
 	});
 
 	return (

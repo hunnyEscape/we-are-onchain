@@ -31,16 +31,6 @@ html {
 	}
 }
 
-@keyframes scanline {
-	0% {
-		transform: translateY(-100%);
-	}
-
-	100% {
-		transform: translateY(100vh);
-	}
-}
-
 @keyframes glitch {
 
 	0%,
@@ -100,19 +90,6 @@ body::before {
 	pointer-events: none;
 	z-index: 1;
 	animation: grid-move 20s linear infinite;
-}
-
-body::after {
-	content: "";
-	position: fixed;
-	top: 0;
-	left: 0;
-	width: 100%;
-	height: 5px;
-	background: rgba(0, 255, 127, 0.2);
-	z-index: 100;
-	pointer-events: none;
-	animation: scanline 8s linear infinite;
 }
 
 @layer components {
@@ -233,19 +210,6 @@ body::after {
 		backdrop-filter: blur(4px);
 	}
 
-	.scanline {
-		position: relative;
-		overflow: hidden;
-	}
-
-	.scanline:before {
-		content: '';
-		position: absolute;
-		width: 100%;
-		height: 5px;
-		background: rgba(0, 255, 127, 0.2);
-		animation: scanline 10s linear infinite;
-	}
 }
 
 body {

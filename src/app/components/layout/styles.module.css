@@ -164,7 +164,7 @@
   background: linear-gradient(to bottom, transparent, rgba(3, 255, 3, 0.1) 50%, transparent);
   background-size: 100% 8px;
   pointer-events: none;
-  z-index: 10;
+  z-index: 11;
   animation: scan 8s linear infinite;
 }
 
@@ -312,4 +312,22 @@
 
 .flashActive {
   opacity: 1;
+}
+
+.thickScanline {
+  position: fixed;
+  top: 0;                /* 初期位置は画面上部 */
+  left: 0;
+  width: 100%;
+  height: 4px;           /* 線の太さ */
+  background: rgba(0, 255, 0, 0.6);
+  pointer-events: none;
+  z-index: 11;
+  animation: thickScan 8s linear infinite;
+}
+
+/* 上から下へ移動させるアニメーション */
+@keyframes thickScan {
+  0%   { transform: translateY(0); }
+  100% { transform: translateY(100vh); }
 }

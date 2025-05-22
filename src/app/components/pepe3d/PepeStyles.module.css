@@ -388,19 +388,7 @@
 	}
 }
 
-/* スキャンラインエフェクト */
-.scanline {
-	position: fixed;
-	top: 0;
-	left: 0;
-	width: 100%;
-	height: 100%;
-	background: linear-gradient(to bottom, transparent, rgba(0, 255, 102, 0.2) 50%, transparent);
-	background-size: 100% 8px;
-	pointer-events: none;
-	z-index: 10;
-	animation: scan 8s linear infinite;
-}
+
 
 @keyframes scan {
 	0% {

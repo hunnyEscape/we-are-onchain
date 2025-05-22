@@ -12,15 +12,14 @@ export default function Home() {
 	return (
 		<main className="relative flex flex-col items-center">
 			<CyberInterface/>
-			<ScanlineEffect/>
-			<Header />
+			<Header/>
 			<HeroSection />
 			<GlowingTextSection />
 			<PulsatingComponent />
 			<PepeTop />
 			<FloatingImagesFixSection />
 			<SphereTop />
-			<div className='w-full relative h-[100vh] bg-black z-20' />
+			<div className='w-full relative h-[100vh] bg-black z-10' />
 			<Footer />
 		</main>
 	);

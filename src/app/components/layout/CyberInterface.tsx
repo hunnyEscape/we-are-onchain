@@ -10,7 +10,6 @@ import {
 	systemStatusText,
 	cyberMessages
 } from './constants';
-import ScanlineEffect from './ScanlineEffect';
 
 interface CyberInterfaceProps {
 }
@@ -229,8 +228,7 @@ const CyberInterface: React.FC<CyberInterfaceProps> = ({
 
 	return (
 		<>
-		
-			<div className={styles.scanline}></div>
+
 
 			{/* フラッシュエフェクト */}
 			<div className={`${styles.flashEffect} ${isFlashActive ? styles.flashActive : ''}`}></div>
@@ -243,6 +241,8 @@ const CyberInterface: React.FC<CyberInterfaceProps> = ({
 				<div className={`${styles.cornerMarker} ${styles.bottomRight} ${randomGlitch ? styles.jitterEffect : ''}`}></div>
 			</div>
 
+			<div className={`hidden sm:block ${styles.thickScanline}`} />
+			<div className={`${styles.scanline} hidden sm:block`}></div>
 			{/* データストリーム */}
 			<div className={`${styles.dataStream} hidden sm:block`}>
 				<div className={styles.dataContent}>
@@ -270,10 +270,6 @@ const CyberInterface: React.FC<CyberInterfaceProps> = ({
 				<div>{getStatusText()}</div>
 			</div>
 
-			{/* セクションインジケーター */}
-			<div className={styles.sectionIndicator}>
-				<div>SCROLL DEPTH: {Math.floor(scrollProgress * 100)}%</div>
-			</div>
 		</>
 	);
 };

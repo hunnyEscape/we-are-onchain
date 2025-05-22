@@ -154,25 +154,6 @@
   100% { transform: translate(0, 0); }
 }
 
-/* スキャンラインエフェクト */
-.scanline {
-  position: fixed;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
-  background: linear-gradient(to bottom, transparent, rgba(3, 255, 3, 0.1) 50%, transparent);
-  background-size: 100% 8px;
-  pointer-events: none;
-  z-index: 10;
-  animation: scan 8s linear infinite;
-}
-
-@keyframes scan {
-  0% { transform: translateY(0); }
-  100% { transform: translateY(100vh); }
-}
-
 /* サイバーインターフェース要素 */
 .cyberFrame {
   position: fixed;

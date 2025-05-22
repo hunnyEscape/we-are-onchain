@@ -9,7 +9,7 @@ const GlowingTextSection = () => {
 
 	// スクロール位置の検出
 	const { scrollYProgress } = useScroll({
-		target: sectionRef,
+		target: sectionRef as React.RefObject<HTMLElement>,
 		offset: ["start end", "end start"]
 	});
 
@@ -19,17 +19,16 @@ const GlowingTextSection = () => {
 			className="relative w-full overflow-hidden bg-black flex flex-col items-center justify-center"
 		>
 			<motion.div
-				className="mt-5 mb-40 left-1/2 transform text-neonGreen text-center"
 				initial={{ opacity: 0, y: -10 }}
 				animate={{ opacity: 1, y: 0 }}
 				transition={{ delay: 0.5, duration: 0.8, repeat: Infinity, repeatType: "reverse" }}
 			>
-				<div className="text-xl mb-2">↓</div>
+				<div className="text-xl text-center mb-2 mt-10">↓</div>
 				<div className="text-sm font-mono">SCROLL DOWN</div>
 			</motion.div>
 
 
-			<div className="flex justify-center">
+			<div className="flex justify-center mt-40">
 				<div className="relative w-full h-[110px] md:w-[800px] md:h-[150px] lg:w-[1200px] lg:h-[200px] pointer-events-auto">
 					<GlowingTextScene scrollProgress={scrollYProgress} />
 				</div>

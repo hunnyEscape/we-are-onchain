@@ -46,6 +46,25 @@ const ProteinContainer: React.FC<ProteinContainerProps> = ({
 	rotationSpeed = 0.5
 }) => {
 	const groupRef = useRef<THREE.Group>(null);
+	
+	// 画面サイズの状態管理
+	const [isMobile, setIsMobile] = useState(false);
+
+	// 画面サイズの監視
+	useEffect(() => {
+		const checkMobile = () => {
+			setIsMobile(window.innerWidth <= 768); // 768px以下をモバイルと判定
+		};
+
+		// 初期チェック
+		checkMobile();
+
+		// リサイズイベントリスナーを追加
+		window.addEventListener('resize', checkMobile);
+
+		// クリーンアップ
+		return () => window.removeEventListener('resize', checkMobile);
+	}, []);
 
 	// GLTFモデルの読み込み
 	const { scene } = useGLTF(`${process.env.NEXT_PUBLIC_CLOUDFRONT_URL}/pepe/protein_powder.glb`);
@@ -58,9 +77,9 @@ const ProteinContainer: React.FC<ProteinContainerProps> = ({
 	// フレームごとの処理（自動回転のみ）
 	useFrame((state, delta) => {
 		if (!groupRef.current) return;
-
-		// 自動回転のみ（マウスコントロールは削除）
-		if (autoRotate) {
+		
+		// モバイルの場合は自動回転を無効化
+		if (autoRotate && !isMobile) {
 			groupRef.current.rotation.y += delta * rotationSpeed;
 		}
 	});
@@ -109,32 +128,32 @@ interface ProteinModelProps extends ProteinContainerProps {
 	className?: string;
 }
 
-const ProteinModel: React.FC<ProteinModelProps> = ({ 
-  className = '', 
-  autoRotate = true, 
-  scale = 1,
-  rotationSpeed = 0.5
+const ProteinModel: React.FC<ProteinModelProps> = ({
+	className = '',
+	autoRotate = true,
+	scale = 1,
+	rotationSpeed = 0.5
 }) => {
-  return (
-    <div className={`w-full h-full ${className}`}>
-      <Canvas shadows>
-        <ProteinModelWithErrorBoundary 
-          autoRotate={autoRotate} 
-          scale={scale}
-          rotationSpeed={rotationSpeed}
-        />
-        
-        <Environment preset="city" />
-        {/* OrbitControlsを削除してユーザー操作を無効化 */}
-        <PerspectiveCamera makeDefault position={[0, 0, 3]} fov={40} />
-      </Canvas>
-    </div>
-  );
+	return (
+		<div className={`w-full h-full ${className}`}>
+			<Canvas shadows>
+				<ProteinModelWithErrorBoundary
+					autoRotate={autoRotate}
+					scale={scale}
+					rotationSpeed={rotationSpeed}
+				/>
+				
+				<Environment preset="city" />
+				{/* OrbitControlsを削除してユーザー操作を無効化 */}
+				<PerspectiveCamera makeDefault position={[0, 0, 3]} fov={40} />
+			</Canvas>
+		</div>
+	);
 };
 
 export default ProteinModel;
 
 // グローバルにモデルをプリロード（正しいURLを使用）
 if (typeof window !== 'undefined' && process.env.NEXT_PUBLIC_CLOUDFRONT_URL) {
-  useGLTF.preload(`${process.env.NEXT_PUBLIC_CLOUDFRONT_URL}/pepe/protein_powder.glb`);
+	useGLTF.preload(`${process.env.NEXT_PUBLIC_CLOUDFRONT_URL}/pepe/protein_powder.glb`);
 }

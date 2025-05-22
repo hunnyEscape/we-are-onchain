@@ -10,21 +10,17 @@ interface ErrorBoundaryProps {
 	children: React.ReactNode;
 	fallback: React.ReactNode;
 }
-
 interface ErrorBoundaryState {
 	hasError: boolean;
 }
-
 class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoundaryState> {
 	constructor(props: ErrorBoundaryProps) {
 		super(props);
 		this.state = { hasError: false };
 	}
-
 	static getDerivedStateFromError(error: any) {
 		return { hasError: true };
 	}
-
 	render() {
 		if (this.state.hasError) {
 			return this.props.fallback;
@@ -39,49 +35,16 @@ interface ProteinContainerProps {
 	scale?: number;
 	rotationSpeed?: number;
 }
-
-const ProteinContainer: React.FC<ProteinContainerProps> = ({
-	autoRotate = true,
-	scale = 1,
-	rotationSpeed = 0.2
-}) => {
+const ProteinContainer: React.FC<ProteinContainerProps> = ({ autoRotate = true, scale = 1, rotationSpeed = 0.5 }) => {
 	const groupRef = useRef<THREE.Group>(null);
-
-	// 画面サイズの状態管理
-	const [isMobile, setIsMobile] = useState(false);
-
-	// 画面サイズの監視
-	useEffect(() => {
-		const checkMobile = () => {
-			if (typeof window !== 'undefined') {
-				setIsMobile(window.innerWidth <= 768);
-			}
-		};
-
-		checkMobile();
-		
-		if (typeof window !== 'undefined') {
-			window.addEventListener('resize', checkMobile);
-			return () => window.removeEventListener('resize', checkMobile);
-		}
-	}, []);
-
-	// GLTFモデルの読み込み
 	const { scene } = useGLTF(`${process.env.NEXT_PUBLIC_CLOUDFRONT_URL}/pepe/protein_powder.glb`);
 
-	useEffect(() => {
-		console.log('Model scene:', scene);
-	}, [scene]);
-
-	// フレームごとの処理（自動回転）
-	useFrame((state, delta) => {
-		if (!groupRef.current) return;
-		if (autoRotate) {
+	useFrame((_, delta) => {
+		if (autoRotate && groupRef.current) {
 			groupRef.current.rotation.y += delta * rotationSpeed;
 		}
 	});
 
-	// モデルが読み込まれていない場合、プレースホルダーを表示
 	if (!scene) {
 		return (
 			//@ts-expect-error React Three Fiber JSX elements
@@ -89,7 +52,7 @@ const ProteinContainer: React.FC<ProteinContainerProps> = ({
 				{/* @ts-expect-error React Three Fiber JSX elements */}
 				<boxGeometry args={[1, 1, 1]} />
 				{/* @ts-expect-error React Three Fiber JSX elements */}
-				<meshStandardMaterial color="hotpink" />
+				<meshBasicMaterial color="hotpink" />
 				{/* @ts-expect-error React Three Fiber JSX elements */}
 			</mesh>
 		);
@@ -110,217 +73,52 @@ const ProteinContainer: React.FC<ProteinContainerProps> = ({
 	);
 };
 
-// エラー処理をするためのFallback
-const ProteinModelWithErrorBoundary: React.FC<ProteinContainerProps> = (props) => {
-	return (
-		<ErrorBoundary fallback={<div>エラー: 3Dモデルの読み込みに失敗しました</div>}>
-			<ProteinContainer {...props} />
-		</ErrorBoundary>
-	);
-};
-
-// カスタムOrbitControlsコンポーネント
-const CustomOrbitControls: React.FC<{ isMobile: boolean }> = ({ isMobile }) => {
-	const controlsRef = useRef<any>(null);
-
-	useEffect(() => {
-		if (!controlsRef.current) return;
-
-		const controls = controlsRef.current;
-		
-		if (isMobile) {
-			// モバイルでの設定
-			const handleTouchStart = (event: TouchEvent) => {
-				// 単一タッチの場合はスクロールを許可
-				if (event.touches.length === 1) {
-					const touch = event.touches[0];
-					const startY = touch.clientY;
-					
-					const handleTouchMove = (moveEvent: TouchEvent) => {
-						if (moveEvent.touches.length === 1) {
-							const currentY = moveEvent.touches[0].clientY;
-							const deltaY = Math.abs(currentY - startY);
-							
-							// 垂直方向の動きが一定以上の場合、OrbitControlsを無効化
-							if (deltaY > 10) {
-								controls.enabled = false;
-								// 少し遅れてOrbitControlsを再有効化
-								setTimeout(() => {
-									if (controls) controls.enabled = true;
-								}, 100);
-							}
-						}
-					};
-
-					const handleTouchEnd = () => {
-						document.removeEventListener('touchmove', handleTouchMove);
-						document.removeEventListener('touchend', handleTouchEnd);
-						// タッチ終了後にOrbitControlsを再有効化
-						if (controls) controls.enabled = true;
-					};
-
-					document.addEventListener('touchmove', handleTouchMove, { passive: true });
-					document.addEventListener('touchend', handleTouchEnd);
-				}
-			};
-
-			// タッチイベントリスナーを追加
-			controls.domElement.addEventListener('touchstart', handleTouchStart, { passive: true });
-
-			return () => {
-				if (controls.domElement) {
-					controls.domElement.removeEventListener('touchstart', handleTouchStart);
-				}
-			};
-		}
-	}, [isMobile]);
-
-	return (
-		<OrbitControls
-			ref={controlsRef}
-			enableZoom={false}
-			enablePan={false}
-			enableRotate={!isMobile} // モバイルでは回転を無効化
-			minAzimuthAngle={-Infinity}
-			maxAzimuthAngle={Infinity}
-			minPolarAngle={Math.PI / 2.3}
-			maxPolarAngle={Math.PI / 2.3}
-			makeDefault
-			// タッチ操作の設定
-			touches={{
-				ONE: isMobile ? THREE.TOUCH.PAN : THREE.TOUCH.ROTATE,
-				TWO: THREE.TOUCH.DOLLY_PAN
-			}}
-		/>
-	);
-};
-
-// メインのエクスポートコンポーネント
+// メインコンポーネント
 interface ProteinModelProps extends ProteinContainerProps {
 	className?: string;
 }
-
-const ProteinModel: React.FC<ProteinModelProps> = ({
-	className = '',
-	autoRotate = true,
-	scale = 1,
-	rotationSpeed = 0.5
-}) => {
+const ProteinModel: React.FC<ProteinModelProps> = ({ className = '', autoRotate = true, scale = 1, rotationSpeed = 0.5 }) => {
+	// モバイル判定
 	const [isMobile, setIsMobile] = useState(false);
-	const [isClient, setIsClient] = useState(false);
-	const canvasRef = useRef<HTMLDivElement>(null);
-
 	useEffect(() => {
-		// クライアントサイドでのみ実行
-		setIsClient(true);
-		
-		const checkMobile = () => {
-			if (typeof window !== 'undefined') {
-				setIsMobile(window.innerWidth <= 768);
-			}
-		};
-
-		checkMobile();
-		
-		if (typeof window !== 'undefined') {
-			window.addEventListener('resize', checkMobile);
-			return () => window.removeEventListener('resize', checkMobile);
-		}
+		const check = () => setIsMobile(window.innerWidth <= 768);
+		check();
+		window.addEventListener('resize', check);
+		return () => window.removeEventListener('resize', check);
 	}, []);
 
-	// タッチイベントの処理を改善
-	useEffect(() => {
-		if (!isClient) return; // クライアントサイドでのみ実行
-		
-		const canvasElement = canvasRef.current;
-		if (!canvasElement || !isMobile) return;
-
-		let isScrolling = false;
-		let startY = 0;
-
-		const handleTouchStart = (e: TouchEvent) => {
-			if (e.touches.length === 1) {
-				startY = e.touches[0].clientY;
-				isScrolling = false;
-			}
-		};
-
-		const handleTouchMove = (e: TouchEvent) => {
-			if (e.touches.length === 1) {
-				const currentY = e.touches[0].clientY;
-				const deltaY = Math.abs(currentY - startY);
-				
-				// 垂直方向の動きが10px以上の場合、スクロールと判定
-				if (deltaY > 10) {
-					isScrolling = true;
-				}
-
-				// スクロール中の場合、デフォルトの動作を許可
-				if (isScrolling) {
-					// タッチイベントを親要素に伝播させる
-					return;
-				}
-			}
-		};
-
-		const handleTouchEnd = () => {
-			isScrolling = false;
-		};
-
-		// パッシブリスナーを使用してパフォーマンスを向上
-		canvasElement.addEventListener('touchstart', handleTouchStart, { passive: true });
-		canvasElement.addEventListener('touchmove', handleTouchMove, { passive: true });
-		canvasElement.addEventListener('touchend', handleTouchEnd, { passive: true });
-
-		return () => {
-			canvasElement.removeEventListener('touchstart', handleTouchStart);
-			canvasElement.removeEventListener('touchmove', handleTouchMove);
-			canvasElement.removeEventListener('touchend', handleTouchEnd);
-		};
-	}, [isMobile, isClient]);
-
-	// クライアントサイドでのみレンダリング
-	if (!isClient) {
-		return (
-			<div className={`w-full h-full ${className} flex items-center justify-center`}>
-				<div>Loading...</div>
-			</div>
-		);
-	}
-
 	return (
-		<div 
-			ref={canvasRef}
-			className={`w-full h-full ${className}`}
-			style={{
-				// モバイルでのタッチ操作を改善
-				touchAction: isMobile ? 'pan-y pinch-zoom' : 'pan-y',
-				WebkitOverflowScrolling: 'touch'
-			}}
-		>
+		<div className={`w-full h-full ${className}`}>
 			<Canvas
-				gl={{ 
-					antialias: false,
-					alpha: true,
-					premultipliedAlpha: false
-				}}
-				dpr={typeof window !== 'undefined' ? Math.min(window.devicePixelRatio, 2) : 1}
+				gl={{ antialias: false }}
+				dpr={1}
 				shadows={false}
 				frameloop="always"
-				style={{ 
-					touchAction: isMobile ? 'none' : 'pan-y',
-					pointerEvents: 'auto'
-				}}
+				// 縦スクロールを優先
+				style={{ touchAction: 'pan-y' }}
 			>
-				<ProteinModelWithErrorBoundary
-					autoRotate={autoRotate}
-					scale={scale}
-					rotationSpeed={rotationSpeed}
-				/>
+				<ErrorBoundary fallback={<div className="text-center p-4">エラー: 3Dモデルの読み込みに失敗しました</div>}>
+					<ProteinContainer autoRotate={autoRotate} scale={scale} rotationSpeed={rotationSpeed} />
+				</ErrorBoundary>
 
 				<Environment preset="city" />
 				<PerspectiveCamera makeDefault position={[0, 0, 3]} fov={40} />
-				<CustomOrbitControls isMobile={isMobile} />
+
+				{/* モバイルでは触れないよう完全シャットダウン、PC のみ水平回転許可 */}
+				{!isMobile && (
+					<OrbitControls
+						enableZoom={false}
+						enablePan={false}
+						enableRotate={true}
+						// Y軸水平回転全域
+						minAzimuthAngle={-Infinity}
+						maxAzimuthAngle={Infinity}
+						// X軸固定
+						minPolarAngle={Math.PI / 2.5}
+						maxPolarAngle={Math.PI / 2.5}
+						makeDefault
+					/>
+				)}
 			</Canvas>
 		</div>
 	);
@@ -328,7 +126,7 @@ const ProteinModel: React.FC<ProteinModelProps> = ({
 
 export default ProteinModel;
 
-// グローバルにモデルをプリロード
+// モデルプリロード
 if (typeof window !== 'undefined' && process.env.NEXT_PUBLIC_CLOUDFRONT_URL) {
 	useGLTF.preload(`${process.env.NEXT_PUBLIC_CLOUDFRONT_URL}/pepe/protein_powder.glb`);
 }

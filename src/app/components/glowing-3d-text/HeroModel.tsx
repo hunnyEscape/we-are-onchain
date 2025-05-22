@@ -14,7 +14,6 @@ export const HeroModel: React.FC<HeroModelProps> = ({
 	return (
 		<ProteinModel
 			autoRotate={true}
-			mouseControl={true}
 			scale={scale}
 		/>
 	);

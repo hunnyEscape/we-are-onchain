@@ -2,8 +2,6 @@
 import { useRef } from 'react';
 import { useScroll } from 'framer-motion';
 import GlowingTextScene from './GlowingTextScene';
-import styles from './GlowingText.module.css';
-import ScrollSpace from './ScrollSpace';
 import { motion } from 'framer-motion';
 import HeroModel from '../hero-section/HeroModel';
 const GlowingTextSection = () => {
@@ -32,7 +30,7 @@ const GlowingTextSection = () => {
 
 
 			<div className="flex justify-center">
-				<div className="relative w-full h-[120px] md:w-[800px] md:h-[150px] lg:w-[1200px] lg:h-[200px] pointer-events-auto">
+				<div className="relative w-full h-[110px] md:w-[800px] md:h-[150px] lg:w-[1200px] lg:h-[200px] pointer-events-auto">
 					<GlowingTextScene scrollProgress={scrollYProgress} />
 				</div>
 			</div>

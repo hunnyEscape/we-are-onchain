@@ -8,19 +8,23 @@ import Header from './components/ui/Header';
 import Footer from './components/ui/Footer';
 import CyberInterface from './components/layout/CyberInterface';
 import ScanlineEffect from './components/layout/ScanlineEffect';
-export default function Home() {
-	return (
-		<main className="relative flex flex-col items-center">
+/*
 			<CyberInterface/>
 			<Header/>
 			<HeroSection />
-			<GlowingTextSection />
+
 			<PulsatingComponent />
 			<PepeTop />
 			<FloatingImagesFixSection />
 			<SphereTop />
 			<div className='w-full relative h-[100vh] bg-black z-10' />
 			<Footer />
+*/
+export default function Home() {
+	return (
+		<main className="relative flex flex-col items-center">
+
+			<GlowingTextSection />
 		</main>
 	);
 }

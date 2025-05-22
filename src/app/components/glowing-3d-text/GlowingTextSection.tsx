@@ -68,10 +68,6 @@ const GlowingTextSection = () => {
 							<td className="border border-white px-2 py-1 text-center">allergen</td>
 							<td className="border border-white px-2 py-1 text-left">Milk</td>
 						</tr>
-						<tr>
-							<td className="border border-white px-2 py-1 text-center">勇気</td>
-							<td className="border border-white px-2 py-1 text-left">1%</td>
-						</tr>
 					</tbody>
 				</table>
 			</div>

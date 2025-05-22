@@ -46,7 +46,7 @@ const ProteinContainer: React.FC<ProteinContainerProps> = ({
 	rotationSpeed = 0.5
 }) => {
 	const groupRef = useRef<THREE.Group>(null);
-	
+
 	// 画面サイズの状態管理
 	const [isMobile, setIsMobile] = useState(false);
 
@@ -77,11 +77,11 @@ const ProteinContainer: React.FC<ProteinContainerProps> = ({
 	// フレームごとの処理（自動回転のみ）
 	useFrame((state, delta) => {
 		if (!groupRef.current) return;
-		
+
 		// モバイルの場合は自動回転を無効化
-		if (autoRotate && !isMobile) {
-			groupRef.current.rotation.y += delta * rotationSpeed;
-		}
+		//if (autoRotate && !isMobile) {
+		groupRef.current.rotation.y += delta * rotationSpeed;
+		//}
 	});
 
 	// モデルが読み込まれていない場合、プレースホルダーを表示
@@ -92,7 +92,7 @@ const ProteinContainer: React.FC<ProteinContainerProps> = ({
 				{/* @ts-expect-error React Three Fiber JSX elements */}
 				<boxGeometry args={[1, 1, 1]} />
 				{/* @ts-expect-error React Three Fiber JSX elements */}
-				<meshStandardMaterial color="hotpink"/>
+				<meshStandardMaterial color="hotpink" />
 				{/* @ts-expect-error React Three Fiber JSX elements */}
 			</mesh>
 		);
@@ -136,13 +136,19 @@ const ProteinModel: React.FC<ProteinModelProps> = ({
 }) => {
 	return (
 		<div className={`w-full h-full ${className}`}>
-			<Canvas shadows>
+			<Canvas
+				gl={{ antialias: false }}              
+				dpr={1}          
+				shadows={false}                  
+				frameloop="always"              
+				style={{ touchAction: 'none' }}        
+			>
 				<ProteinModelWithErrorBoundary
 					autoRotate={autoRotate}
 					scale={scale}
 					rotationSpeed={rotationSpeed}
 				/>
-				
+
 				<Environment preset="city" />
 				{/* OrbitControlsを削除してユーザー操作を無効化 */}
 				<PerspectiveCamera makeDefault position={[0, 0, 3]} fov={40} />

@@ -22,7 +22,7 @@ const SelfCustodySection: React.FC = () => {
 
       {/* Sticky container: intro + key line stick after 200vh */}
       <div className="sticky top-0 pt-[200vh] z-20">
-        <div className="absolute top-0 left-0 mt-8 ml-8 w-auto max-w-5xl text-left">
+        <div className="absolute top-0 left-0 mt-8 ml-8 w-auto max-w-6xl text-left">
           {/* Typewriter Intro */}
           <motion.div
             className="overflow-hidden whitespace-nowrap border-r-2 border-neonGreen font-mono text-neonGreen text-sm mb-6"
@@ -35,7 +35,7 @@ const SelfCustodySection: React.FC = () => {
 
           {/* Key highlighted line with glitch and custom line break */}
           <KeyLine
-            text={`セルフカストディアンの戦士よ―魂を呼び覚ませ`}
+            text={`For the Few Who Hold Their Own Keys.\nAwaken Your Soul.`}
             colorClass="text-neonGreen font-heading text-[7vw]"
             borderClass="border-l-2 border-neonGreen"
           />

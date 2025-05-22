@@ -29,7 +29,7 @@ export interface GlitchEffectConfig {
 export const cyberMessages: MessageConfig[] = [
 	{
 		id: 'message-1',
-		text: 'The Innovator rises.',
+		text: 'Pepe Ascends.',
 		position: { start: 0, end: 200 },
 		style: 'horizontal',
 		size: '4rem',
@@ -40,7 +40,7 @@ export const cyberMessages: MessageConfig[] = [
 	},
 	{
 		id: 'message-2',
-		text: 'The code read us here.',
+		text: 'Pepe Summons Us Here.',
 		position: { start: 200, end: 400 },
 		style: 'horizontal',
 		size: '4rem',

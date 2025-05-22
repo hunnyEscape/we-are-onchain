@@ -185,7 +185,7 @@ const Footer = () => {
 
 					{/* Glitch Effect */}
 					<div className="absolute bottom-4 right-4 opacity-20">
-						<div className="text-neonGreen font-pixel text-xs animate-glitch">
+						<div className="text-neonGreen font-pixel text-xs md:animate-glitch">
 							[BLOCKCHAIN_ENABLED]
 						</div>
 					</div>

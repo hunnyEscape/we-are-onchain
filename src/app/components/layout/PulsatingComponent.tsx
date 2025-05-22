@@ -44,7 +44,7 @@ const PulsatingComponent = () => {
 				{pulses.map(pulse => (
 					<div
 						key={pulse.id}
-						className="absolute rounded-full border border-neonGreen"
+						className="absolute rounded-full border border-neonGreen hidden md:block"
 						style={{
 							width: `${pulse.size}px`,
 							height: `${pulse.size}px`,

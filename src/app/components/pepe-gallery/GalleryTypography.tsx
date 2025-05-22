@@ -99,7 +99,6 @@ const GalleryTypography: React.FC = () => {
           anchorX={element.anchorX || 'center'}
           anchorY="middle"
           color="black"
-          opacity={0} // 初期状態では非表示
           {...textStyle}
         >
           {element.text}

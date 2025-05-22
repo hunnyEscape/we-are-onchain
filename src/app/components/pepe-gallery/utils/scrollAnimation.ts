@@ -84,7 +84,6 @@ export const applyScrollZoom = (
 	// 滑らかなスケールの適用
 	easing.damp3(
 		ref.current.scale,
-		targetScale,
 		0.2,
 		delta
 	);
@@ -113,7 +112,6 @@ export const applyScrollMovement = (
 	// 滑らかな移動の適用
 	easing.damp3(
 		ref.current.position,
-		targetPosition,
 		0.15,
 		delta
 	);

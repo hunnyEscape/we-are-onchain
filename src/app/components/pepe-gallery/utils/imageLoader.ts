@@ -44,11 +44,6 @@ export const useImageLoader = (imageUrl: string): ImageLoadingState => {
       // 読み込み失敗時
       (error) => {
         console.error(`Error loading texture from ${imageUrl}:`, error);
-        setState({
-          texture: null,
-          loading: false,
-          error: new Error(`Failed to load image: ${error.message}`)
-        });
       }
     );
 

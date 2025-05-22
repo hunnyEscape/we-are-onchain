@@ -79,11 +79,6 @@ const ImageItem: React.FC<ImageItemProps> = ({
       // スクロールに応じたサイズ変化
       easing.damp3(
         ref.current.scale,
-        [
-          scaleFactor[0] * scrollBasedZoom,
-          scaleFactor[1] * scrollBasedZoom,
-          1
-        ],
         0.3,
         delta
       );
@@ -116,11 +111,9 @@ const ImageItem: React.FC<ImageItemProps> = ({
       ref={ref}
       url={image.path}
       position={position}
-      scale={scaleFactor}
       transparent
       opacity={1}
       toneMapped={false}
-      className={`${styles.imageGlow} ${styles.parallaxLayer}`}
     />
   );
 };

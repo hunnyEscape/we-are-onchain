@@ -5,7 +5,7 @@ import MessageOverlay from './MessageOverlay';
 const SphereTop: React.FC = () => {
 	return (
 
-		<div className="relative h-[500vh]">
+		<div className="w-full relative h-[500vh]">
 			{/* グラデーションオーバーレイ */}
 			<div
 				className="absolute inset-0 z-10 pointer-events-none"

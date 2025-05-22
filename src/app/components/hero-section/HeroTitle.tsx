@@ -13,21 +13,21 @@ export const HeroTitle: React.FC<HeroTitleProps> = ({ style }) => {
 			<div className={styles.titleGroup}>
 				<GlitchText
 					text="NO BANKS"
-					className="text-7xl sm:text-8xl lg:text-9xl"
+					className="text-6xl md:text-7xl lg:text-9xl"
 					color="text-neonOrange"
 					glitchIntensity="high"
 					isMainTitle={true}
 				/>
 				<GlitchText
-					text="NO MIDDLEMEN"
-					className="text-7xl sm:text-8xl lg:text-9xl"
+					text="PEER-TO-PEER"
+					className="text-6xl md:text-7xl lg:text-9xl"
 					color="text-neonGreen"
 					glitchIntensity="medium"
 					isMainTitle={true}
 				/>
 				<GlitchText
 					text="JUST PROTEIN"
-					className="text-7xl sm:text-8xl lg:text-9xl"
+					className="text-6xl md:text-7xl lg:text-9xl"
 					color="text-white"
 					glitchIntensity="high"
 					isMainTitle={true}

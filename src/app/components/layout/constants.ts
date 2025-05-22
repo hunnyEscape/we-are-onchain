@@ -29,29 +29,29 @@ export interface GlitchEffectConfig {
 export const cyberMessages: MessageConfig[] = [
 	{
 		id: 'message-1',
-		text: 'Pepe ascends.',
+		text: 'Pepe Ascends.',
 		position: { start: 0, end: 200 },
 		style: 'horizontal',
 		size: '4rem',
 		align: 'left',
 		glitchEffect: 'rgb',
-		keywords: ['Pepe', 'Ascends'],
+		keywords: ['mystery', 'miracle'],
 		color: '#ffffff', // 白色ベース
 	},
 	{
 		id: 'message-2',
-		text: 'Pepe summons us here.',
+		text: 'Pepe Summons Us Here.',
 		position: { start: 200, end: 400 },
 		style: 'horizontal',
 		size: '4rem',
 		align: 'right',
 		glitchEffect: 'slice',
-		keywords: ['Pepe', 'Summons'],
+		keywords: ['限られた', 'たどり着く'],
 		color: '#ffffff', // 白色ベース
 	},
 	{
 		id: 'message-3',
-		text: `Pepe <br/>Makes us <br/>Free.`,
+		text: 'The<br/>Awakening',
 		position: { start: 400, end: 700 },
 		style: 'horizontal',
 		size: '10rem',

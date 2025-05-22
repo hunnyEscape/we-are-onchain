@@ -6,18 +6,22 @@ import PulsatingComponent from './components/layout/PulsatingComponent';
 import FloatingImagesFixSection from './components/floating-images-fix/FloatingImagesFixSection';
 import Header from './components/ui/Header';
 import Footer from './components/ui/Footer';
+import CyberInterface from './components/layout/CyberInterface';
+import ScanlineEffect from './components/layout/ScanlineEffect';
 export default function Home() {
 	return (
-		<main className="relative">
-			<Header/>
-			<HeroSection/>
-			<GlowingTextSection/>
-			<PulsatingComponent/>
-			<PepeTop/>
-			<FloatingImagesFixSection/>
-			<SphereTop/>
-			<div className='relative h-[100vh] bg-black z-20'/>
-			<Footer/>
+		<main className="relative flex flex-col items-center">
+			<CyberInterface/>
+			<ScanlineEffect/>
+			<Header />
+			<HeroSection />
+			<GlowingTextSection />
+			<PulsatingComponent />
+			<PepeTop />
+			<FloatingImagesFixSection />
+			<SphereTop />
+			<div className='w-full relative h-[100vh] bg-black z-20' />
+			<Footer />
 		</main>
 	);
 }

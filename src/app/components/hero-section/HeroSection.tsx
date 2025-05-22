@@ -1,6 +1,5 @@
 'use client';
 import React, { useState, useEffect } from 'react';
-import ScanlineEffect from '../ui/ScanlineEffect';
 import styles from './HeroSection.module.css';
 import { useGlitchEffect } from './GlitchEffects';
 import HeroBackground from './HeroBackground';
@@ -36,7 +35,7 @@ export const HeroSection: React.FC = () => {
   `;
 
 	return (
-		<div className="sticky top-0 h-[90vh] overflow-hidden">
+		<div className="sticky w-full top-0 h-[90vh] overflow-hidden">
 			{/* 背景 & エフェクト */}
 			<HeroBackground
 				backgroundTransform={backgroundTransform}
@@ -44,25 +43,8 @@ export const HeroSection: React.FC = () => {
 				glitchState={glitchState}
 				getGlitchStyle={getGlitchStyle}
 			/>
-
-			{/* 
-			
-						<div
-				className="absolute inset-0 z-[15] pointer-events-none"
-				style={{
-					transform: midLayerTransform,
-					transition: 'transform 1.5s ease-out',
-				}}
-			>
-				<HeroModel />
-			</div>
-
-			*/}
-
-
-			{/* タイトル（前景） */}
 			<div
-				className={styles.contentContainer}
+				className={`${styles.contentContainer} mt-10 max-w-screen-xl mx-auto flex justify-center items-center`}
 				style={{
 					transform: foregroundTransform,
 					transition: 'transform 0.5s ease-out',
@@ -70,9 +52,6 @@ export const HeroSection: React.FC = () => {
 			>
 				<HeroTitle />
 			</div>
-
-			{/* スキャンライン */}
-			<ScanlineEffect />
 		</div>
 
 	);

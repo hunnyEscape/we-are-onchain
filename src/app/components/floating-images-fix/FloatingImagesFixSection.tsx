@@ -9,7 +9,7 @@ import CyberScrollMessages from './cyber-scroll-messages';
 // コンポーネント定義
 const FloatingImagesFixSection: React.FC = () => {
 	return (<>
-		<div className='relative h-[150vh] bg-black'/>
+		<div className='w-full relative h-[150vh] bg-black'/>
 		<section 
 			className="w-screen h-[800vh] relative overflow-hidden bg-black floating-images-fix-section"
 			id="floating-images-fix-section"
@@ -27,7 +27,7 @@ const FloatingImagesFixSection: React.FC = () => {
 				/>
 			</div>
 		</section>
-		<div className='relative h-[150vh] bg-black' />
+		<div className='w-full relative h-[150vh] bg-black' />
 	</>);
 };
 

@@ -1,0 +1,315 @@
+/* src/app/components/floating-images-fix/cyber-scroll-messages/styles.module.css */
+
+/* グリッチエフェクト定義 */
+@keyframes glitch {
+  0% { transform: translate(0); text-shadow: 0 0 0 #0f0, 0 0 0 #f00, 0 0 0 #00f; }
+  2% { transform: translate(-2px, 0); text-shadow: -2px 0 0 #0f0, 2px 0 0 #f00, 0 0 0 #00f; }
+  4% { transform: translate(-2px, 0); text-shadow: -2px 0 0 #0f0, 2px 0 0 #f00, 0 0 0 #00f; }
+  5% { transform: translate(0); text-shadow: 0 0 0 #0f0, 0 0 0 #f00, 0 0 0 #00f; }
+  60% { transform: translate(0); text-shadow: 0 0 0 #0f0, 0 0 0 #f00, 0 0 0 #00f; }
+  61% { transform: translate(3px, 0); text-shadow: 3px 0 0 #0f0, -3px 0 0 #f00, 0 0 0 #00f; }
+  62% { transform: translate(0); text-shadow: 0 0 0 #0f0, 0 0 0 #f00, 0 0 0 #00f; }
+  98% { transform: translate(0); text-shadow: 0 0 0 #0f0, 0 0 0 #f00, 0 0 0 #00f; }
+  100% { transform: translate(0); text-shadow: 0 0 0 #0f0, 0 0 0 #f00, 0 0 0 #00f; }
+}
+
+/* 虹色アニメーション */
+@keyframes rainbow {
+  0% { color: #ffd0d0; }   /* 赤 */
+  16.66% { color: #ffead3; } /* オレンジ */
+  33.33% { color: #ffffd0; } /* 黄 */
+  50% { color: #d4ffd4; }    /* 緑 */
+  66.66% { color: #cde7ff; } /* 青 */
+  83.33% { color: #f1e1ff; } /* 紫 */
+  100% { color: #ffdddd; }   /* 赤に戻る */
+}
+
+/* 特殊キーワード強調グリッチ（虹色版） */
+.keywordGlitch {
+  position: relative;
+  display: inline-block;
+  animation: rainbow 3s linear infinite;
+}
+
+.keywordGlitch::before,
+.keywordGlitch::after {
+  content: attr(data-text);
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(8, 8, 8, 0.2);
+}
+
+.keywordGlitch::before {
+  left: 2px;
+  text-shadow: -1px 0 #ffffff;
+  animation: glitch-1 2s infinite linear alternate-reverse, rainbow 3s linear infinite;
+  clip-path: polygon(0 0, 100% 0, 100% 45%, 0 45%);
+}
+
+.keywordGlitch::after {
+  left: -2px;
+  text-shadow: -1px 0 #ffffff;
+  animation: glitch-2 3s infinite linear alternate-reverse, rainbow 3s linear infinite reverse;
+  clip-path: polygon(0 55%, 100% 55%, 100% 100%, 0 100%);
+}
+
+@keyframes glitch-1 {
+  0% { transform: translateX(0); }
+  80% { transform: translateX(0); }
+  85% { transform: translateX(2px); }
+  90% { transform: translateX(-2px); }
+  95% { transform: translateX(1px); }
+  100% { transform: translateX(0); }
+}
+
+@keyframes glitch-2 {
+  0% { transform: translateX(0); }
+  15% { transform: translateX(0); }
+  20% { transform: translateX(-2px); }
+  25% { transform: translateX(2px); }
+  30% { transform: translateX(-1px); }
+  35% { transform: translateX(0); }
+  100% { transform: translateX(0); }
+}
+
+/* RGB分離効果（白ベース） */
+.rgbSplit {
+  position: relative;
+  color: #ffffff;
+  text-shadow: -2px 0 #ff4444, 2px 0 #44ffff;
+  animation: rgb-shift 0.4s ease-in-out infinite alternate, rainbow 4s linear infinite;
+}
+
+@keyframes rgb-shift {
+  0% { text-shadow: -2px 0 #ff4444, 2px 0 #44ffff; }
+  50% { text-shadow: -3px 0 #ff4444, 3px 0 #44ffff; }
+  100% { text-shadow: -2px 0 #ff4444, 2px 0 #44ffff; }
+}
+
+/* 波形歪みエフェクト（白+虹色） */
+.waveDistort {
+  display: inline-block;
+  color: #ffffff;
+  animation: wave 2s ease-in-out infinite, rainbow 3s linear infinite;
+}
+
+@keyframes wave {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-5px) }
+}
+
+/* パルス効果（白+虹色） */
+.pulseEffect {
+  color: #ffffff;
+  animation: pulse-effect 1.5s ease-in-out infinite, rainbow 2.5s linear infinite;
+}
+
+@keyframes pulse-effect {
+  0%, 100% { transform: scale(1); opacity: 1; }
+  50% { transform: scale(1.05); opacity: 0.9; }
+}
+
+/* スライスグリッチ（白+虹色） */
+.sliceGlitch {
+  position: relative;
+  overflow: hidden;
+  color: #ffffff;
+  animation: rainbow 2s linear infinite;
+}
+
+.sliceGlitch::before {
+  content: attr(data-text);
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 100%;
+  height: 100%;
+  background: rgb(8, 8, 8);
+  color: #ffffff;
+  animation: slice 3s ease-in-out infinite, rainbow 2s linear infinite reverse;
+}
+
+@keyframes slice {
+  0%, 90%, 100% { height: 0; top: 0; }
+  10%, 14% { height: 33%; top: 33%; }
+  15%, 19% { height: 0; top: 0; }
+  20%, 24% { height: 20%; top: 10%; }
+  25% { height: 0; top: 0; }
+}
+
+/* ジッターエフェクト（白+虹色） */
+.jitterEffect {
+  color: #ffffff;
+  animation: jitter 0.1s linear infinite, rainbow 1.5s linear infinite;
+}
+
+@keyframes jitter {
+  0% { transform: translate(0, 0); }
+  25% { transform: translate(1px, -1px); }
+  50% { transform: translate(-1px, 1px); }
+  75% { transform: translate(-1px, -1px); }
+  100% { transform: translate(0, 0); }
+}
+
+/* スキャンラインエフェクト */
+.scanline {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(to bottom, transparent, rgba(3, 255, 3, 0.1) 50%, transparent);
+  background-size: 100% 8px;
+  pointer-events: none;
+  z-index: 10;
+  animation: scan 8s linear infinite;
+}
+
+@keyframes scan {
+  0% { transform: translateY(0); }
+  100% { transform: translateY(100vh); }
+}
+
+/* サイバーインターフェース要素 */
+.cyberFrame {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  z-index: 5;
+}
+
+.cornerMarker {
+  position: absolute;
+  width: 30px;
+  height: 30px;
+  border: 2px solid #ffffff;
+  opacity: 0.8;
+}
+
+.topLeft {
+  top: 10px;
+  left: 10px;
+  border-right: none;
+  border-bottom: none;
+}
+
+.topRight {
+  top: 10px;
+  right: 10px;
+  border-left: none;
+  border-bottom: none;
+}
+
+.bottomLeft {
+  bottom: 10px;
+  left: 10px;
+  border-right: none;
+  border-top: none;
+}
+
+.bottomRight {
+  bottom: 10px;
+  right: 10px;
+  border-left: none;
+  border-top: none;
+}
+
+/* エネルギーメーター */
+.energyMeter {
+  position: fixed;
+  right: 20px;
+  height: 60vh;
+  width: 10px;
+  background: rgba(255, 255, 255, 0.2);
+  border: 1px solid #ffffff;
+  bottom: 20vh;
+  z-index: 5;
+  pointer-events: none;
+}
+
+.energyLevel {
+  position: absolute;
+  bottom: 0;
+  width: 100%;
+  background: linear-gradient(to top, #ffffff, #cccccc);
+  transition: height 0.5s ease;
+}
+
+/* システムステータス */
+.systemStatus {
+  position: fixed;
+  right: 20px;
+  bottom: 10px;
+  font-family: monospace;
+  font-size: 12px;
+  color: #ffffff;
+  z-index: 5;
+  pointer-events: none;
+}
+
+/* 縦書きテキスト */
+.verticalText {
+  writing-mode: vertical-rl;
+  text-orientation: upright;
+  white-space: nowrap;
+}
+
+/* データストリーム */
+.dataStream {
+  position: fixed;
+  left: 20px;
+  top: 0;
+  height: 100vh;
+  width: 40px;
+  overflow: hidden;
+  z-index: 5;
+  opacity: 0.6;
+  pointer-events: none;
+}
+
+.dataContent {
+  font-family: monospace;
+  font-size: 14px;
+  line-height: 14px;
+  color: #ffffff;
+  animation: data-fall 20s linear infinite;
+}
+
+@keyframes data-fall {
+  0% { transform: translateY(-100%); }
+  100% { transform: translateY(100%); }
+}
+
+/* セクション表示 */
+.sectionIndicator {
+  position: fixed;
+  left: 20px;
+  bottom: 20px;
+  font-size: 12px;
+  color: #ffffff;
+  z-index: 5;
+}
+
+/* フラッシュエフェクト */
+.flashEffect {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(255, 255, 255, 0.2);
+  opacity: 0;
+  pointer-events: none;
+  z-index: 100;
+  transition: opacity 0.1s ease;
+}
+
+.flashActive {
+  opacity: 1;
+}

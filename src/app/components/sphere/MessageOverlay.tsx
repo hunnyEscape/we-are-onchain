@@ -33,11 +33,9 @@ const SelfCustodySection: React.FC = () => {
 						  &gt; selfcustody.exe
 						</div>
 					</motion.div>
-
-					{/* Key highlighted line with glitch and custom line break */}
 					<KeyLine
-						text={`For the Few Who Hold Their Own Keys.\nAwaken Your Soul.`}
-						colorClass="text-neonGreen font-heading text-[7vw]"
+						text={`Awaken\nYour\nSoul.`}
+						colorClass="text-neonGreen font-heading text-[14vw] font-extrabold"
 						borderClass="border-l-2 border-neonGreen"
 					/>
 				</div>

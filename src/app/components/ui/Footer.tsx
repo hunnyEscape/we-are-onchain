@@ -33,7 +33,7 @@ const Footer = () => {
 	];
 
 	return (
-		<footer className="relative bg-black border-t border-dark-300 overflow-hidden z-20">
+		<footer className="w-full relative bg-black border-t border-dark-300 overflow-hidden z-20">
 			{/* Background Effects */}
 			<div className="absolute inset-0 bg-gradient-to-t from-dark-100 to-black"></div>
 

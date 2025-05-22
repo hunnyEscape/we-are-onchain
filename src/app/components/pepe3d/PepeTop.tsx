@@ -8,7 +8,7 @@ const PepeTop: React.FC = () => {
 	const scrollMessageRef = useRef<HTMLDivElement>(null);
 
 	return (
-		<div className="relative f-[1000vh]">
+		<div className="w-full relative f-full">
 			{/* Sticky PepeModel3D */}
 			<div className="sticky top-0 h-screen w-full overflow-hidden">
 				<PepeModel3D />

@@ -20,6 +20,16 @@ const MessageDisplay: React.FC<MessageDisplayProps> = ({
 	randomGlitch
 }) => {
 	const messageRef = useRef<HTMLDivElement>(null);
+	// ① モバイル判定用ステート
+	const [isMobile, setIsMobile] = useState(false);
+
+	useEffect(() => {
+		const mql = window.matchMedia('(max-width: 640px)');
+		const handler = (e: MediaQueryListEvent) => setIsMobile(e.matches);
+		setIsMobile(mql.matches);
+		mql.addEventListener('change', handler);
+		return () => mql.removeEventListener('change', handler);
+	}, []);
 
 	// グリッチエフェクトに対応するクラス名を取得
 	const getGlitchClass = (effect?: GlitchEffectType): string => {
@@ -105,17 +115,27 @@ const MessageDisplay: React.FC<MessageDisplayProps> = ({
 		} else if (message.id === 'message-2') {
 			// 「限られた者がたどり着く」- 横書き、中央右寄り
 			styleProps.position = 'fixed';
-			styleProps.top = '50vh';
+			styleProps.top = '40vh';
 			styleProps.transform = styleProps.transform
 				? `${styleProps.transform} translateY(-50%)`
 				: 'translateY(-50%)';
 		} else if (message.id === 'message-3') {
 			// 「境地」- 縦書き、中央左寄り
 			styleProps.position = 'fixed';
-			styleProps.top = '50vh';
+			styleProps.top = '60vh';
 			styleProps.transform = styleProps.transform
 				? `${styleProps.transform} translateY(-50%)`
 				: 'translateY(-50%)';
+		}
+		if (isMobile) {
+			styleProps.left = '10vw';
+			styleProps.right = undefined;
+			styleProps.textAlign = 'left';
+			styleProps.fontSize = '4rem';
+			// 縦方向の translate は必要なければ外して OK
+			if (styleProps.transform) {
+				styleProps.transform = styleProps.transform.replace(/translateY\(-50%\)/, '');
+			}
 		}
 
 		return styleProps;

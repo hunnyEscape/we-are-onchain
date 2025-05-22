@@ -22,7 +22,7 @@ const SelfCustodySection: React.FC = () => {
 
 			{/* Sticky container: intro + key line stick after 200vh */}
 			<div className="sticky top-0 pt-[200vh] z-20">
-				<div className="absolute top-0 left-0 mt-8 ml-8 w-auto max-w-6xl text-left">
+				<div className="absolute top-0 left-0 mt-8 ml-8 w-full text-left">
 					{/* Typewriter Intro */}
 					<motion.div
 						initial={{ width: 0 }}
@@ -34,7 +34,7 @@ const SelfCustodySection: React.FC = () => {
 						</div>
 					</motion.div>
 					<KeyLine
-						text={`Awaken\nYour\nSoul.`}
+						text={`Awaken\nYour soul.`}
 						colorClass="text-neonGreen font-heading text-[14vw] font-extrabold"
 						borderClass="border-l-2 border-neonGreen"
 					/>

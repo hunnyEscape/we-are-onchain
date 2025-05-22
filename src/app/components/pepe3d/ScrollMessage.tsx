@@ -134,7 +134,7 @@ const ScrollTriggerMessages: React.FC = () => {
 				// rootMarginを調整してセクション開始時（上部が見えるとき）から検出
 				rootMargin: '100px 0px',
 				// thresholdを下げて少しでも見えたら反応するように
-				threshold: 0.1
+				threshold: 0.01
 			}
 		);
 
@@ -204,7 +204,7 @@ const ScrollTriggerMessages: React.FC = () => {
 							refs.current[i] = el;
 						}
 					}}
-					className="h-screen w-full"
+					className="h-[150vh] w-full"
 				/>
 			))}
 

@@ -15,7 +15,7 @@ const PepeFlavorModel: React.FC<PepeFlavorModelProps> = ({
 	preserveOriginalMaterials = true // デフォルトでBlenderのマテリアルを保持
 }) => {
 	// GLBモデルをロード
-	const { scene, nodes, materials } = useGLTF('/models/pepe_flavor.glb');
+	const { scene, nodes, materials } = useGLTF(`${process.env.NEXT_PUBLIC_CLOUDFRONT_URL}/pepe/pepe_flavor.glb`);
 	const modelRef = useRef<THREE.Group>(null);
 
 	// モデルの初期設定

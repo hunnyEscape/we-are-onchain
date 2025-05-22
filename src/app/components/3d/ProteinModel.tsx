@@ -48,7 +48,7 @@ const ProteinContainer: React.FC<ProteinContainerProps> = ({
 	const groupRef = useRef<THREE.Group>(null);
 
 	// GLTFモデルの読み込み
-	const { scene } = useGLTF('/models/protein_powder.glb');
+	const { scene } = useGLTF(`${process.env.NEXT_PUBLIC_CLOUDFRONT_URL}/pepe/protein_powder.glb`);
 
 	// コンソールにモデル情報を表示（デバッグ用）
 	useEffect(() => {

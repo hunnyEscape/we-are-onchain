@@ -50,7 +50,7 @@ const PepeContainer: React.FC<PepeContainerProps> = ({
 	const [isLoading, setIsLoading] = useState(true);
 
 	// GLTFモデルの読み込み
-	const { scene, animations } = useGLTF('/models/pepe.glb');
+	const { scene, animations } = useGLTF(`${process.env.NEXT_PUBLIC_CLOUDFRONT_URL}/pepe/pepe.glb`);
 
 	// モデル情報をログに出力と位置調整
 	useEffect(() => {
@@ -208,4 +208,4 @@ const PepeModel3D: React.FC<PepeModel3DProps> = ({
 export default PepeModel3D;
 
 // グローバルにモデルをプリロード
-useGLTF.preload('/models/pepe.glb');
+useGLTF.preload(`${process.env.NEXT_PUBLIC_CLOUDFRONT_URL}/pepe/pepe.glb`);

@@ -43,7 +43,7 @@ interface ProteinContainerProps {
 const ProteinContainer: React.FC<ProteinContainerProps> = ({
 	autoRotate = true,
 	scale = 1,
-	rotationSpeed = 0.5
+	rotationSpeed = 0.2
 }) => {
 	const groupRef = useRef<THREE.Group>(null);
 
@@ -80,7 +80,7 @@ const ProteinContainer: React.FC<ProteinContainerProps> = ({
 
 		// モバイルの場合は自動回転を無効化
 		//if (autoRotate && !isMobile) {
-		groupRef.current.rotation.y += delta * rotationSpeed;
+		groupRef.current.rotation.y += delta * 0.2;
 		//}
 	});
 
@@ -137,11 +137,11 @@ const ProteinModel: React.FC<ProteinModelProps> = ({
 	return (
 		<div className={`w-full h-full ${className}`}>
 			<Canvas
-				gl={{ antialias: false }}              
-				dpr={1}          
-				shadows={false}                  
-				frameloop="always"              
-				style={{ touchAction: 'none' }}        
+				gl={{ antialias: false }}
+				dpr={1}
+				shadows={false}
+				frameloop="always"
+				style={{ touchAction: 'pan-y' }}
 			>
 				<ProteinModelWithErrorBoundary
 					autoRotate={autoRotate}
@@ -152,6 +152,17 @@ const ProteinModel: React.FC<ProteinModelProps> = ({
 				<Environment preset="city" />
 				{/* OrbitControlsを削除してユーザー操作を無効化 */}
 				<PerspectiveCamera makeDefault position={[0, 0, 3]} fov={40} />
+				<OrbitControls
+					enableZoom={false}
+					enablePan={false}
+					enableRotate={true}
+					// 水平回転（Y軸）はフルレンジ
+					minAzimuthAngle={-Math.PI}
+					maxAzimuthAngle={Math.PI}
+					// 垂直回転（X軸）は固定
+					minPolarAngle={Math.PI / 2.3}
+					maxPolarAngle={Math.PI / 2.3}
+				/>
 			</Canvas>
 		</div>
 	);

@@ -98,7 +98,7 @@ const BackgroundSphere: React.FC<BackgroundSphereProps> = ({ backgroundImage }) 
 		// @ts-expect-error React Three Fiber JSX elements
 		<mesh>
 			{/* @ts-expect-error React Three Fiber JSX elements */}
-			<sphereGeometry args={[2, 64, 64]} />
+			<sphereGeometry args={[2, 32, 32]} />
 			{/* @ts-expect-error React Three Fiber JSX elements */}
 			<meshBasicMaterial map={texture} side={THREE.BackSide} />
 			{/* @ts-expect-error React Three Fiber JSX elements */}
@@ -162,7 +162,11 @@ const Sphere: React.FC<SphereProps> = ({
 			<div className={`${styles.decorLine} ${styles.decorLineBottom}`}></div>
 
 			<div className={styles.canvasWrapper}>
-				<Canvas shadows>
+				<Canvas
+					shadows={false}
+					dpr={typeof window !== 'undefined' ? Math.min(window.devicePixelRatio, 1) : 1}
+					gl={{ antialias: false }}
+				>
 					<ErrorBoundary
 						fallback={
 							<div className={styles.errorMessage}>

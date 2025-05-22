@@ -166,43 +166,42 @@ const PepeModel3D: React.FC<PepeModel3DProps> = ({
 				<div className={`${styles.decorLine} ${styles.decorLineBottom}`}></div>
 
 				<div className={styles.canvasWrapper}>
-					<Canvas shadows>
-						<ErrorBoundary
-							fallback={
-								<div className={styles.errorMessage}>
-									エラー: 3Dモデルの読み込みに失敗しました
-								</div>
-							}
-						>
-							{/* @ts-expect-error React Three Fiber JSX elements */}
-							<ambientLight intensity={0.8} />
-							{/* @ts-expect-error React Three Fiber JSX elements */}
-							<directionalLight position={[5, 5, 5]} intensity={1.0} castShadow />
-							{/* @ts-expect-error React Three Fiber JSX elements */}
-							<spotLight position={[-5, 8, -5]} angle={0.15} penumbra={1} intensity={1.5} castShadow />
-							{/* @ts-expect-error React Three Fiber JSX elements */}
-							<hemisphereLight intensity={0.4} color="#88eeff" groundColor="#553333" />
+					<Canvas
+						className="w-full h-full"
+						gl={{ antialias: false }}
+						dpr={1}
+						shadows={false}
+						frameloop="demand"
+					>
+
+						{/* @ts-expect-error React Three Fiber JSX elements */}
+						<ambientLight intensity={0.8} />
+						{/* @ts-expect-error React Three Fiber JSX elements */}
+						<directionalLight position={[5, 5, 5]} intensity={1.0} castShadow />
+						{/* @ts-expect-error React Three Fiber JSX elements */}
+						<spotLight position={[-5, 8, -5]} angle={0.15} penumbra={1} intensity={1.5} castShadow />
+						{/* @ts-expect-error React Three Fiber JSX elements */}
+						<hemisphereLight intensity={0.4} color="#88eeff" groundColor="#553333" />
 
 
-							{/* Pepeモデル */}
-							<PepeContainer autoRotate={autoRotate} rotationSpeed={rotationSpeed} />
+						{/* Pepeモデル */}
+						<PepeContainer autoRotate={autoRotate} rotationSpeed={rotationSpeed} />
 
-							{/* カメラ設定 - 少し下向きにして顔が中心に来るように */}
-							<PerspectiveCamera makeDefault position={[0, 1, 4]} fov={45} />
+						{/* カメラ設定 - 少し下向きにして顔が中心に来るように */}
+						<PerspectiveCamera makeDefault position={[0, 1, 4]} fov={45} />
 
-							{/* コントロール設定 - Y軸周りの回転のみ許可（水平方向のみ回転可能） */}
-							{enableControls && (
-								<OrbitControls
-									enableZoom={false}
-									enablePan={false}
-									enableRotate={true}
-									minPolarAngle={Math.PI / 2} // 90度 - 常に赤道面に固定
-									maxPolarAngle={Math.PI / 2} // 90度 - 常に赤道面に固定
-									dampingFactor={0.05}
-									rotateSpeed={0.5}
-								/>
-							)}
-						</ErrorBoundary>
+						{/* コントロール設定 - Y軸周りの回転のみ許可（水平方向のみ回転可能） */}
+						{enableControls && (
+							<OrbitControls
+								enableZoom={false}
+								enablePan={false}
+								enableRotate={true}
+								minPolarAngle={Math.PI / 2} // 90度 - 常に赤道面に固定
+								maxPolarAngle={Math.PI / 2} // 90度 - 常に赤道面に固定
+								dampingFactor={0.05}
+								rotateSpeed={0.5}
+							/>
+						)}
 					</Canvas>
 				</div>
 

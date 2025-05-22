@@ -15,47 +15,14 @@
 │   ├── globe.svg
 │   ├── images
 │   │   ├── noisy.webp
-│   │   ├── noisy_grid.webp
-│   │   └── pepe_flavor.png
+│   │   └── noisy_grid.webp
 │   ├── models
-│   │   ├── pepe.glb
-│   │   ├── pepe_flavor.glb
-│   │   └── protein_powder.glb
 │   ├── next.svg
 │   ├── vercel.svg
 │   └── window.svg
 ├── src
 │   └── app
 │       ├── components
-│       │   ├── 3d
-│       │   │   ├── PepeModel.tsx
-│       │   │   ├── PepeModelImproved.tsx
-│       │   │   └── ProteinModel.tsx
-│       │   ├── cyber-text-reveal
-│       │   │   ├── CyberGrid.tsx
-│       │   │   ├── CyberTextReveal.module.css
-│       │   │   ├── CyberTextRevealSection.tsx
-│       │   │   ├── GlitchText3D.tsx
-│       │   │   └── TextParticleEffect.tsx
-│       │   ├── debug
-│       │   │   └── ModelDebug.tsx
-│       │   ├── floating-images
-│       │   │   ├── EffectsComposer.tsx
-│       │   │   ├── FloatingBackgroundSection.tsx
-│       │   │   ├── FloatingCanvas.tsx
-│       │   │   ├── FloatingImage.tsx
-│       │   │   ├── FloatingImages.module.css
-│       │   │   ├── FloatingImages.tsx
-│       │   │   ├── FloatingImagesFixSection.tsx
-│       │   │   ├── FloatingImagesSection.tsx
-│       │   │   ├── constants.ts
-│       │   │   ├── styles.module.css
-│       │   │   ├── types.ts
-│       │   │   ├── useCircularMotion.ts
-│       │   │   ├── useDirectMotion.ts
-│       │   │   ├── useFloatingAnimation.ts
-│       │   │   ├── useImageLoader.ts
-│       │   │   └── useRadialMotion.ts
 │       │   ├── floating-images-fix
 │       │   │   ├── FloatingImageFix.tsx
 │       │   │   ├── FloatingImagesFixCanvas.tsx
@@ -72,13 +39,14 @@
 │       │   │   ├── GlowingText.module.css
 │       │   │   ├── GlowingTextScene.tsx
 │       │   │   ├── GlowingTextSection.tsx
+│       │   │   ├── HeroModel.tsx
 │       │   │   ├── LightingSetup.tsx
 │       │   │   ├── PepeFlavorModel.tsx
-│       │   │   └── PostProcessEffects.tsx
+│       │   │   ├── PostProcessEffects.tsx
+│       │   │   └── ProteinModel.tsx
 │       │   ├── hero-section
 │       │   │   ├── GlitchEffects.tsx
 │       │   │   ├── HeroBackground.tsx
-│       │   │   ├── HeroModel.tsx
 │       │   │   ├── HeroSection.module.css
 │       │   │   ├── HeroSection.tsx
 │       │   │   └── HeroTitle.tsx
@@ -114,7 +82,9 @@
 │       │   │   ├── Sphere.tsx
 │       │   │   └── SphereTop.tsx
 │       │   └── ui
+│       │       ├── Footer.tsx
 │       │       ├── GlitchText.tsx
+│       │       ├── Header.tsx
 │       │       ├── ScanlineEffect.module.css
 │       │       └── ScanlineEffect.tsx
 │       ├── favicon.ico
@@ -124,4 +94,4 @@
 ├── tailwind.config.js
 └── tsconfig.json
 
-22 directories, 102 files
+18 directories, 76 files

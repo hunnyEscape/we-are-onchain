@@ -3,11 +3,12 @@
 import React, { useMemo } from 'react';
 import { Canvas, useThree } from '@react-three/fiber';
 import FloatingImageFix from './FloatingImageFix';
-import { imageFiles, SCALE_MAP, ImageSize } from './constants';
+import { ImageSize,ImageFile } from './constants';
+import { useResponsiveImages } from './useResponsiveImages';
 
-const CANVAS_DEPTH = 5; // 奥行き全体の幅
-const PADDING_X = 0.5;  // 横方向パディング
-const PADDING_Y = 2;  // 縦方向パディング
+const CANVAS_DEPTH = 3; // 奥行き全体の幅
+const PADDING_X = 0.3;  // 横方向パディング
+const PADDING_Y = 2;    // 縦方向パディング
 
 const getZBySize = (size: ImageSize) => {
 	if (size === 'L') return CANVAS_DEPTH * 0.42 + Math.random();
@@ -15,7 +16,10 @@ const getZBySize = (size: ImageSize) => {
 	return -CANVAS_DEPTH * 0.42 + Math.random();
 };
 
-const FloatingImagesFixInner: React.FC = () => {
+const FloatingImagesFixInner: React.FC<{
+	imageFiles: ImageFile[];  // any[] から ImageFile[] に変更
+	scaleMap: Record<ImageSize, number>;
+}> = ({ imageFiles, scaleMap }) => {
 	const { viewport } = useThree();
 	const count = imageFiles.length;
 	const cols = Math.ceil(Math.sqrt(count));
@@ -60,16 +64,17 @@ const FloatingImagesFixInner: React.FC = () => {
 					key={image.id}
 					image={image}
 					position={positions[i]}
-					scale={SCALE_MAP[image.size]}
+					scale={scaleMap[image.size]}
 					rotationSpeed={speeds[i]}
 				/>
 			))}
-	
 		</>
 	);
 };
 
 const FloatingImagesFixCanvas: React.FC = () => {
+	const { imageFiles, scaleMap } = useResponsiveImages();
+
 	return (
 		<Canvas
 			className="w-full h-full"
@@ -78,8 +83,7 @@ const FloatingImagesFixCanvas: React.FC = () => {
 			shadows={false}
 			frameloop="always"
 		>
-
-			<FloatingImagesFixInner />
+			<FloatingImagesFixInner imageFiles={imageFiles} scaleMap={scaleMap} />
 		</Canvas>
 	);
 };

@@ -58,9 +58,9 @@ const DESKTOP_SCALE_MAP: Record<ImageSize, number> = {
 };
 
 const MOBILE_SCALE_MAP: Record<ImageSize, number> = {
-	L: 0.4,
-	M: 0.4,
-	S: 0.4,
+	L: 0.5,
+	M: 0.5,
+	S: 0.5,
 };
 
 export const useResponsiveImages = () => {
@@ -82,7 +82,7 @@ export const useResponsiveImages = () => {
 
 	// 画像データを生成（画面サイズに応じてパスを切り替え）
 	const imageFiles: ImageFile[] = useMemo(() => {
-		const folder = isMobileView ? 'pepe/gallery-small' : 'pepe';
+		const folder = isMobileView ? 'pepe/gallery-small2' : 'pepe';
 
 		return baseImageData.map(item => ({
 			...item,

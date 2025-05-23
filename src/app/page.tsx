@@ -16,18 +16,19 @@ import ScanlineEffect from './components/layout/ScanlineEffect';
 
 <FloatingImagesFixSection/>
 
-			<div className='w-full relative h-[100vh] bg-black z-10' />
-			<Footer />
 */
 export default function Home() {
 	return (
 		<main className="relative flex flex-col items-center">
-			<CyberInterface/>
-			<GlowingTextSection/>
-			<PulsatingComponent/>
-			<PepeTop/>
-			
+			<Header/>
+			<CyberInterface />
+			<GlowingTextSection />
+			<PulsatingComponent />
+			<PepeTop />
+
 			<SphereTop />
+			<div className='w-full relative h-[100vh] bg-black z-10' />
+			<Footer />
 		</main>
 	);
 }

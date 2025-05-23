@@ -20,6 +20,7 @@ export default function Home() {
 	return (
 		<main className="relative flex flex-col items-center">
 			<Header />
+			<HeroSection/>
 			<CyberInterface />
 			<GlowingTextSection />
 			<PulsatingComponent />

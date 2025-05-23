@@ -34,15 +34,16 @@ export const HeroSection: React.FC = () => {
     translateY(${(mousePosition.y - 0.5) * -12.5}px)
   `;
 
-	return (
-		<div className="sticky w-full top-0 h-[80vh] md:h-[90vh] overflow-hidden">
-			{/* 背景 & エフェクト */}
+  /*
 			<HeroBackground
 				backgroundTransform={backgroundTransform}
 				midLayerTransform={midLayerTransform}
 				glitchState={glitchState}
 				getGlitchStyle={getGlitchStyle}
 			/>
+  */
+	return (
+		<div className="sticky w-full top-0 h-[80vh] md:h-[90vh] overflow-hidden">
 			<div
 				className={`${styles.contentContainer} mt-10 max-w-screen-xl mx-auto flex justify-center items-center`}
 				style={{

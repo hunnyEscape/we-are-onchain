@@ -3,10 +3,13 @@
 
 import { useMemo } from 'react';
 import { ModelTransform } from '../types';
-import { controlPoints } from '../config/controlPoints';
+import { getResponsiveControlPoints } from '../config/controlPoints';
 
 export function useModelPosition(scrollProgress: number): ModelTransform {
 	return useMemo(() => {
+		// レスポンシブ対応の制御点を取得
+		const controlPoints = getResponsiveControlPoints();
+
 		// スクロール進行度が0-1の範囲外の場合の処理
 		if (scrollProgress <= 0) {
 			const firstPoint = controlPoints[0];

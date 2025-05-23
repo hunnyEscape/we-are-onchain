@@ -10,12 +10,7 @@ export default function StickyCanvas({ children, className = '' }: StickyCanvasP
 		<div className={`sticky top-0 w-full h-screen z-10 ${className}`}>
 			<Canvas
 				className="w-full h-full"
-				gl={{
-					antialias: false,
-					alpha: true,
-					powerPreference: "high-performance"
-				}}
-				dpr={typeof window !== 'undefined' ? Math.min(window.devicePixelRatio, 2) : 1} // SSR対応
+				gl={{ antialias: false }}
 				shadows={false}
 				frameloop="always"
 				camera={{
@@ -24,6 +19,7 @@ export default function StickyCanvas({ children, className = '' }: StickyCanvasP
 					near: 0.1,
 					far: 1000
 				}}
+				dpr={1}
 			>
 				{/* @ts-expect-error React Three Fiber JSX elements */}
 				<ambientLight intensity={0.3} />

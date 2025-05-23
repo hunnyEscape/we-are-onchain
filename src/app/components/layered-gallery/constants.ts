@@ -20,7 +20,7 @@ const CDN_URL = process.env.NEXT_PUBLIC_CLOUDFRONT_URL || ""
  * 画像パスを生成する関数（floating-images-fixと同じロジック）
  */
 const generateImagePath = (filename: string): string => {
-	const folder = isMobile() ? 'gallery-small' : 'pepe'
+	const folder = isMobile() ? 'pepe/gallery-small' : 'pepe'
 	return `${CDN_URL}/${folder}/${filename}`
 }
 
@@ -267,11 +267,11 @@ export const logImagePaths = () => {
 			CDN_URL,
 			envVariable: process.env.NEXT_PUBLIC_CLOUDFRONT_URL,
 			isMobile: isMobile(),
-			folder: isMobile() ? 'gallery-small' : 'pepe',
+			folder: isMobile() ? 'pepe/gallery-small' : 'pepe',
 			samplePaths: testPaths.map(img => ({
 				filename: img.filename,
 				path: img.path,
-				fullURL: `${CDN_URL}/${isMobile() ? 'gallery-small' : 'pepe'}/${img.filename}`
+				fullURL: `${CDN_URL}/${isMobile() ? 'pepe/gallery-small' : 'pepe'}/${img.filename}`
 			}))
 		})
 	}

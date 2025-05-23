@@ -186,19 +186,6 @@ const ImagePlane: React.FC<ImagePlaneProps> = ({
 		return baseScale * scrollScale
 	}, [imageConfig.size, scrollProgress, index])
 
-	// 距離に応じた透明度
-	const opacity = useMemo(() => {
-		if (!scrollProgress) return 0.9
-
-		const cameraY = 0
-		const distance = Math.abs(position[1] - cameraY)
-
-		if (distance > 25) return 0.1
-		if (distance > 20) return 0.3
-		if (distance > 15) return 0.6
-		if (distance > 10) return 0.8
-		return 0.95
-	}, [position, scrollProgress])
 
 	// テクスチャ読み込み
 	useEffect(() => {
@@ -257,10 +244,10 @@ const ImagePlane: React.FC<ImagePlaneProps> = ({
 	if (error) {
 		return (
 			<mesh position={position} scale={[scale, scale, scale]}>
-				<planeGeometry args={[2, 2]} />
+				<planeGeometry args={[2, 3]} />
 				<meshBasicMaterial
 					color="#ff4757"
-					opacity={opacity * 0.7}
+					opacity={0.7}
 					transparent
 					side={2}
 				/>
@@ -278,10 +265,10 @@ const ImagePlane: React.FC<ImagePlaneProps> = ({
 
 		return (
 			<mesh position={position} scale={[scale, scale, scale]}>
-				<planeGeometry args={[2, 2]} />
+				<planeGeometry args={[2, 3]} />
 				<meshBasicMaterial
 					color={colors[imageConfig.size]}
-					opacity={opacity * 0.6}
+					opacity={0.7}
 					transparent
 					side={2}
 				/>
@@ -292,11 +279,11 @@ const ImagePlane: React.FC<ImagePlaneProps> = ({
 	// 実際の画像表示
 	return (
 		<mesh position={position} scale={[scale, scale, scale]}>
-			<planeGeometry args={[2, 2]} />
+			<planeGeometry args={[2, 3]} />
 			<meshBasicMaterial
 				map={texture}
 				transparent
-				opacity={opacity}
+				opacity={0.7}
 				side={2}
 			/>
 		</mesh>

@@ -55,7 +55,7 @@ const RotatingGroup: React.FC<RotatingGroupProps> = ({
 
 		// 自動回転が有効な場合
 	//	if (autoRotate) {
-			groupRef.current.rotation.y += rotationSpeed * delta;
+			groupRef.current.rotation.y += 0.2 * delta;
 	//	} else {
 	//		// 外部から渡された回転値を適用
 	//		groupRef.current.rotation.y = rotationY;
@@ -99,7 +99,7 @@ const BackgroundSphere: React.FC<BackgroundSphereProps> = ({ backgroundImage, is
 		// @ts-expect-error React Three Fiber JSX elements
 		<mesh>
 			{/* @ts-expect-error React Three Fiber JSX elements */}
-			<sphereGeometry args={[2, isMobile ? 16 : 64, isMobile ? 16 : 64]} />
+			<sphereGeometry args={[isMobile ? 2 : 2, isMobile ? 8 : 64, isMobile ? 8 : 64]} />
 			{/* @ts-expect-error React Three Fiber JSX elements */}
 			<meshBasicMaterial map={texture} side={THREE.BackSide} />
 			{/* @ts-expect-error React Three Fiber JSX elements */}

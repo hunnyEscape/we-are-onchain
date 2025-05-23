@@ -1,224 +1,416 @@
 -e 
-### FILE: ./src/app/components/layout/SmoothScroll.tsx
+### FILE: ./src/app/components/layout/constants.ts
 
-'use client';
-import React, { useEffect, useRef } from 'react';
-import Lenis from '@studio-freight/lenis';
+// src/app/components/floating-images-fix/cyber-scroll-messages/constants.ts
 
-interface SmoothScrollProps {
-	children: React.ReactNode;
+export type GlitchEffectType = 'rgb' | 'slice' | 'wave' | 'pulse' | 'jitter' | 'none';
+export type TextDirection = 'horizontal' | 'vertical';
+export type TextAlignment = 'left' | 'center' | 'right';
+
+export interface MessageConfig {
+	id: string;
+	text: string;
+	position: {
+		start: number; // vh単位での開始位置
+		end: number;   // vh単位での終了位置
+	};
+	style: TextDirection;
+	size: string;
+	align?: TextAlignment;
+	glitchEffect?: GlitchEffectType;
+	keywords?: string[]; // 特別強調するキーワード
+	delay?: number;      // 表示遅延 (ms)
+	color?: string;      // オーバーライド色
 }
 
-// より単純で直接的なアプローチ
-const SmoothScroll: React.FC<SmoothScrollProps> = ({ children }) => {
-	const lenisRef = useRef<Lenis | null>(null);
+export interface GlitchEffectConfig {
+	className: string;
+	intensity: number;
+}
 
-	useEffect(() => {
-		// ページロード時の遅延を防ぐために、すべてのスタイルを先に設定
-		document.documentElement.style.scrollBehavior = 'auto';
-		document.body.style.overflowY = 'scroll';
-		document.body.style.overscrollBehavior = 'none';
+// メッセージ定義
+export const cyberMessages: MessageConfig[] = [
+	{
+		id: 'message-1',
+		text: 'Pepe Ascends.',
+		position: { start: 0, end: 200 },
+		style: 'horizontal',
+		size: '4rem',
+		align: 'left',
+		glitchEffect: 'rgb',
+		keywords: ['mystery', 'miracle'],
+		color: '#ffffff', // 白色ベース
+	},
+	{
+		id: 'message-2',
+		text: 'Pepe Summons Us Here.',
+		position: { start: 200, end: 400 },
+		style: 'horizontal',
+		size: '4rem',
+		align: 'right',
+		glitchEffect: 'slice',
+		keywords: ['限られた', 'たどり着く'],
+		color: '#ffffff', // 白色ベース
+	},
+	{
+		id: 'message-3',
+		text: 'The<br/>Awakening',
+		position: { start: 400, end: 700 },
+		style: 'horizontal',
+		size: '10rem',
+		align: 'left',
+		glitchEffect: 'rgb',
+		keywords: ['境地'],
+		color: '#ffffff', // 白色ベース
+	}
+];
 
-		// 少し遅延させてLenisを初期化（DOMの準備を確実に）
-		const timer = setTimeout(() => {
-			if (lenisRef.current) return;
-
-			lenisRef.current = new Lenis({
-				// ↓lerp を指定せず、duration/easing を有効にする
-				duration: 0.1,              // 0.2秒だけ慣性を残す
-				easing: (t: number) => t,   // リニアイージング（慣性距離をすっと切る）
-
-				orientation: 'vertical',
-				gestureOrientation: 'vertical',
-				smoothWheel: true,          // Wheel 特有のスムージングは ON
-				wheelMultiplier: 1,         // 必要なら 0.5〜1.0 の範囲で調整
-				normalizeWheel: true,
-				syncTouch: true,
-			});
-
-
-			// この時点でスクロール位置を正確に設定
-			lenisRef.current.scrollTo(window.scrollY, { immediate: true });
-
-			// 即時アニメーション開始
-			function raf(time: number) {
-				if (lenisRef.current) {
-					lenisRef.current.raf(time);
-				}
-				requestAnimationFrame(raf);
-			}
-
-			requestAnimationFrame(raf);
-		}, 50); // 少しだけ遅延
-
-		return () => {
-			clearTimeout(timer);
-			if (lenisRef.current) {
-				lenisRef.current.destroy();
-			}
-			// スタイルをリセット
-			document.documentElement.style.removeProperty('scroll-behavior');
-			document.body.style.removeProperty('overflow-y');
-			document.body.style.removeProperty('overscroll-behavior');
-		};
-	}, []);
-
-	return <>{children}</>;
+// グリッチエフェクト設定
+export const glitchEffects: Record<GlitchEffectType, GlitchEffectConfig> = {
+	rgb: {
+		className: 'rgbSplit',
+		intensity: 2
+	},
+	wave: {
+		className: 'waveDistort',
+		intensity: 1.5
+	},
+	slice: {
+		className: 'sliceGlitch',
+		intensity: 3
+	},
+	pulse: {
+		className: 'pulseEffect',
+		intensity: 2
+	},
+	jitter: {
+		className: 'jitterEffect',
+		intensity: 1
+	},
+	none: {
+		className: '',
+		intensity: 0
+	}
 };
 
-export default SmoothScroll;-e 
-### FILE: ./src/app/components/layout/Navbar.tsx
+// システムステータス表示用テキスト
+export const systemStatusText = {
+	loading: 'Loading...',
+	ready: 'Activate',
+	awakening: 'Start...',
+	complete: 'END'
+};
+
+// 装飾用ランダムバイナリ生成
+export const generateRandomBinary = (length: number): string => {
+	return Array.from({ length }, () => Math.round(Math.random())).join('');
+};
+
+// 装飾用16進数生成
+export const generateRandomHex = (length: number): string => {
+	const hexChars = '0123456789ABCDEF';
+	return Array.from(
+		{ length },
+		() => hexChars[Math.floor(Math.random() * hexChars.length)]
+	).join('');
+};-e 
+### FILE: ./src/app/components/layout/CyberInterface.tsx
+
+// src/app/components/floating-images-fix/cyber-scroll-messages/CyberInterface.tsx
 
 'use client';
 
-import { useState, useEffect } from 'react';
-import Link from 'next/link';
+import React, { useEffect, useState } from 'react';
+import styles from './styles.module.css';
+import {
+	generateRandomBinary,
+	generateRandomHex,
+	systemStatusText,
+	cyberMessages
+} from './constants';
 
-const Navbar = () => {
-	const [isScrolled, setIsScrolled] = useState(false);
-	const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+interface CyberInterfaceProps {
+}
 
-	// スクロール検知
+const CyberInterface: React.FC<CyberInterfaceProps> = ({
+
+}) => {
+	const [dataStream, setDataStream] = useState<string[]>([]);
+	const [systemTime, setSystemTime] = useState<string>('');
+	const [scrollProgress, setScrollProgress] = useState<number>(0);
+	const [activeIndex, setActiveIndex] = useState<number | null>(null);
+	const [randomGlitch, setRandomGlitch] = useState<boolean>(false);
+	const [isFlashActive, setIsFlashActive] = useState<boolean>(false);
+	const [debugInfo, setDebugInfo] = useState<{ [key: string]: any }>({});
+
+	// 強制的に全てのメッセージをアクティブにする（デバッグ用）
+	const [forceAllActive, setForceAllActive] = useState<boolean>(false);
+
 	useEffect(() => {
 		const handleScroll = () => {
-			setIsScrolled(window.scrollY > 10);
+			// 現在のページ全体のスクロール位置
+			const scrollTop = window.scrollY;
+			const winHeight = window.innerHeight;
+			const docHeight = document.documentElement.scrollHeight;
+
+			// まず全体のスクロール進捗を計算
+			const totalScrollProgress = scrollTop / (docHeight - winHeight);
+
+			// FloatingImagesFixSectionを特定のセレクターで検索
+			const targetSection = document.querySelector('#floating-images-fix-section') as HTMLElement;
+
+			if (!targetSection) {
+				// フォールバック: クラス名でも検索
+				const fallbackSection = document.querySelector('.floating-images-fix-section') as HTMLElement;
+
+				if (!fallbackSection) {
+					// セクションが見つからない場合、ページの相対位置で推定
+					console.log('Target section not found, estimating position');
+
+					// ページの相対位置から推定（調整された値）
+					const estimatedStart = docHeight * 0.5;  // 0.66から0.5に調整
+					const estimatedHeight = docHeight * 0.25;
+
+					// 相対スクロール位置を計算
+					const relativeScroll = Math.max(0, Math.min(1,
+						(scrollTop - estimatedStart) / estimatedHeight
+					));
+
+					setScrollProgress(relativeScroll);
+					setDebugInfo({
+						scrollTop,
+						docHeight,
+						estimatedStart,
+						estimatedHeight,
+						relativeScroll,
+						mode: 'estimated'
+					});
+
+					// メッセージ表示の判定
+					updateActiveMessage(relativeScroll * 800);
+				} else {
+					// フォールバックセクションを使用
+					processSectionScroll(fallbackSection, scrollTop);
+				}
+			} else {
+				// メインのIDセレクターで見つかった場合
+				processSectionScroll(targetSection, scrollTop);
+			}
+
+			// ランダムグリッチの発生
+			triggerRandomGlitch();
+		};
+
+		// セクションスクロール処理を共通化
+		const processSectionScroll = (section: HTMLElement, scrollTop: number) => {
+			const rect = section.getBoundingClientRect();
+			const sectionTop = rect.top + scrollTop;
+			const sectionHeight = rect.height;
+
+			// セクション内相対位置を計算
+			let relativeScroll = 0;
+			if (scrollTop < sectionTop) {
+				relativeScroll = 0;
+			} else if (scrollTop > sectionTop + sectionHeight) {
+				relativeScroll = 1;
+			} else {
+				relativeScroll = (scrollTop - sectionTop) / sectionHeight;
+			}
+
+			setScrollProgress(relativeScroll);
+			setDebugInfo({
+				scrollTop,
+				sectionTop,
+				sectionHeight,
+				relativeScroll,
+				viewportOffset: rect.top,
+				mode: 'section-based',
+				sectionFound: section.id || section.className
+			});
+
+			// メッセージ表示の判定
+			updateActiveMessage(relativeScroll * 800);
+		};
+
+		// メッセージのアクティブ状態を更新
+		const updateActiveMessage = (currentVhPosition: number) => {
+			if (forceAllActive) {
+				setActiveIndex(0);
+				return;
+			}
+
+			// セクション検出が正常に動作している場合は、オフセット調整を少なくする
+			const adjustedPosition = currentVhPosition - 50; // 150から50に調整
+
+			let foundActive = false;
+			let activeIdx = null;
+
+
+			setActiveIndex(foundActive ? activeIdx : null);
+		};
+
+		// フラッシュエフェクトをトリガー
+		const triggerFlashEffect = () => {
+			setIsFlashActive(true);
+			setTimeout(() => setIsFlashActive(false), 300);
+		};
+
+		// ランダムなグリッチエフェクトをトリガー
+		const triggerRandomGlitch = () => {
+			if (Math.random() > 0.95) {
+				setRandomGlitch(true);
+				setTimeout(() => setRandomGlitch(false), 150);
+			}
 		};
 
 		window.addEventListener('scroll', handleScroll);
-		return () => window.removeEventListener('scroll', handleScroll);
+		handleScroll(); // 初期化時に一度実行
+
+		// キーボードショートカット：Dキーでデバッグモード切替
+		const handleKeyDown = (e: KeyboardEvent) => {
+			if (e.key === 'd' || e.key === 'D') {
+				setForceAllActive(prev => !prev);
+				console.log('Debug mode:', !forceAllActive);
+			}
+		};
+
+		window.addEventListener('keydown', handleKeyDown);
+
+		return () => {
+			window.removeEventListener('scroll', handleScroll);
+			window.removeEventListener('keydown', handleKeyDown);
+		};
+	}, [forceAllActive, isFlashActive]);
+
+
+	// システムステータステキスト
+	const getStatusText = () => {
+		if (activeIndex === null) return systemStatusText.loading;
+		if (activeIndex === 0) return systemStatusText.ready;
+		if (activeIndex === 1) return systemStatusText.awakening;
+		if (activeIndex === 2) return systemStatusText.complete;
+		return systemStatusText.loading;
+	};
+
+	// データストリームを生成
+	useEffect(() => {
+		// 初期データストリームを生成
+		const initialData: string[] = [];
+		for (let i = 0; i < 50; i++) {
+			if (Math.random() > 0.7) {
+				initialData.push(generateRandomHex(16));
+			} else {
+				initialData.push(generateRandomBinary(16));
+			}
+		}
+		setDataStream(initialData);
+
+		// 定期的にデータストリームを更新
+		const interval = setInterval(() => {
+			setDataStream(prev => {
+				const newData = [...prev];
+				// 1-3行をランダムに置き換え
+				const replaceCount = Math.floor(Math.random() * 3) + 1;
+				for (let i = 0; i < replaceCount; i++) {
+					const index = Math.floor(Math.random() * newData.length);
+					if (Math.random() > 0.7) {
+						newData[index] = generateRandomHex(16);
+					} else {
+						newData[index] = generateRandomBinary(16);
+					}
+				}
+				return newData;
+			});
+
+			// ランダムなグリッチ効果
+			if (Math.random() > 0.9) {
+				setRandomGlitch(true);
+				setTimeout(() => setRandomGlitch(false), 200);
+			}
+		}, 500);
+
+		// システム時間の更新
+		const timeInterval = setInterval(() => {
+			const now = new Date();
+			setSystemTime(`SYS://AWAKENING_SEQUENCE v2.4.7 | ${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}:${now.getSeconds().toString().padStart(2, '0')}`);
+		}, 1000);
+
+		return () => {
+			clearInterval(interval);
+			clearInterval(timeInterval);
+		};
 	}, []);
 
+	// エネルギーレベル（スクロール進行に基づく）
+	const energyLevel = Math.max(5, Math.min(100, scrollProgress * 100));
+
 	return (
-		<nav
-			className={`fixed top-0 left-0 w-full z-50 transition-all duration-300 ${isScrolled ? 'bg-black/80 backdrop-blur-md py-3' : 'bg-transparent py-5'
-				}`}
-		>
-			<div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-				<div className="flex items-center justify-between h-16">
-					{/* ロゴ */}
-					<div className="flex-shrink-0">
-						<Link href="/" className="text-neon-green font-heading text-2xl">
-							WE ARE ON-CHAIN
-						</Link>
-					</div>
+		<>
 
-					{/* デスクトップメニュー */}
-					<div className="hidden md:block">
-						<div className="ml-10 flex items-center space-x-8">
-							<Link
-								href="#product"
-								className="text-white hover:text-neon-green transition-colors"
-							>
-								PRODUCT
-							</Link>
-							<Link
-								href="#how-it-works"
-								className="text-white hover:text-neon-green transition-colors"
-							>
-								HOW IT WORKS
-							</Link>
-							<Link
-								href="#order-scan"
-								className="text-white hover:text-neon-green transition-colors"
-							>
-								ORDER SCAN
-							</Link>
-							<a href="#" className="btn-cyber">
-								BUY NOW
-							</a>
+
+			{/* フラッシュエフェクト */}
+			<div className={`${styles.flashEffect} ${isFlashActive ? styles.flashActive : ''}`}></div>
+
+			{/* コーナーマーカー */}
+			<div className={styles.cyberFrame}>
+				<div className={`${styles.cornerMarker} ${styles.topLeft} ${randomGlitch ? styles.jitterEffect : ''}`}></div>
+				<div className={`${styles.cornerMarker} ${styles.topRight} ${randomGlitch ? styles.jitterEffect : ''}`}></div>
+				<div className={`${styles.cornerMarker} ${styles.bottomLeft} ${randomGlitch ? styles.jitterEffect : ''}`}></div>
+				<div className={`${styles.cornerMarker} ${styles.bottomRight} ${randomGlitch ? styles.jitterEffect : ''}`}></div>
+			</div>
+
+			<div className={`${styles.thickScanline}`} />
+			<div className={`${styles.scanline}`}></div>
+			{/* データストリーム */}
+			<div className={`${styles.dataStream} `}>
+				<div className={styles.dataContent}>
+					{dataStream.map((line, index) => (
+						<div key={index} className={randomGlitch && index % 5 === 0 ? styles.jitterEffect : ''}>
+							{line}
 						</div>
-					</div>
-
-					{/* モバイルメニューボタン */}
-					<div className="md:hidden">
-						<button
-							type="button"
-							className="text-gray-400 hover:text-white focus:outline-none"
-							aria-controls="mobile-menu"
-							aria-expanded="false"
-							onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
-						>
-							<span className="sr-only">Open main menu</span>
-							{isMobileMenuOpen ? (
-								<svg
-									className="h-6 w-6"
-									xmlns="http://www.w3.org/2000/svg"
-									fill="none"
-									viewBox="0 0 24 24"
-									stroke="currentColor"
-									aria-hidden="true"
-								>
-									<path
-										strokeLinecap="round"
-										strokeLinejoin="round"
-										strokeWidth={2}
-										d="M6 18L18 6M6 6l12 12"
-									/>
-								</svg>
-							) : (
-								<svg
-									className="h-6 w-6"
-									xmlns="http://www.w3.org/2000/svg"
-									fill="none"
-									viewBox="0 0 24 24"
-									stroke="currentColor"
-									aria-hidden="true"
-								>
-									<path
-										strokeLinecap="round"
-										strokeLinejoin="round"
-										strokeWidth={2}
-										d="M4 6h16M4 12h16M4 18h16"
-									/>
-								</svg>
-							)}
-						</button>
-					</div>
+					))}
 				</div>
 			</div>
 
-			{/* モバイルメニュー */}
-			<div
-				className={`md:hidden transition-all duration-300 ease-in-out ${isMobileMenuOpen ? 'max-h-64 opacity-100' : 'max-h-0 opacity-0 overflow-hidden'
-					}`}
-				id="mobile-menu"
-			>
-				<div className="px-2 pt-2 pb-3 space-y-1 sm:px-3 bg-black/90 backdrop-blur-md">
-					<Link
-						href="#product"
-						className="text-white hover:text-neon-green block px-3 py-2"
-						onClick={() => setIsMobileMenuOpen(false)}
-					>
-						PRODUCT
-					</Link>
-					<Link
-						href="#how-it-works"
-						className="text-white hover:text-neon-green block px-3 py-2"
-						onClick={() => setIsMobileMenuOpen(false)}
-					>
-						HOW IT WORKS
-					</Link>
-					<Link
-						href="#order-scan"
-						className="text-white hover:text-neon-green block px-3 py-2"
-						onClick={() => setIsMobileMenuOpen(false)}
-					>
-						ORDER SCAN
-					</Link>
-
-					href="#"
-					className="btn-cyber block mx-3 my-4 text-center"
-					onClick={() => setIsMobileMenuOpen(false)}
-          >
-					BUY NOW
-				</a>
+			{/* エネルギーメーター */}
+			<div className={`${styles.energyMeter} hidden sm:block`}>
+				<div
+					className={styles.energyLevel}
+					style={{ height: `${energyLevel}%` }}
+				></div>
 			</div>
-		</div>
-    </nav >
+
+			{/* システムステータス */}
+			<div className={`${styles.systemStatus} hidden sm:block`}>
+				<div>{systemTime}</div>
+				<div>SECTION: {activeIndex !== null ? activeIndex + 1 : 0}/{cyberMessages.length}</div>
+				<div>ENERGY: {Math.floor(energyLevel)}%</div>
+				<div>{getStatusText()}</div>
+			</div>
+
+		</>
+	);
+};
+
+export default CyberInterface;-e 
+### FILE: ./src/app/components/layout/ScanlineEffect.tsx
+
+// src/app/components/ui/ScanlineEffect.tsx
+import React from 'react';
+
+export const ScanlineEffect: React.FC = () => {
+  return (
+    <div className="pointer-events-none fixed inset-0 z-50 overflow-hidden hidden sm:block">
+      <div className="absolute inset-0 z-10 h-full w-full bg-transparent opacity-10">
+        {/* スキャンライン効果 */}
+        <div className="absolute left-0 top-0 h-[1px] w-full animate-scanline bg-neonGreen opacity-50 shadow-[0_0_5px_#00FF7F] hidden sm:block"></div>
+    
+      </div>
+    </div>
   );
 };
 
-export default Navbar;-e 
+export default ScanlineEffect;-e 
 ### FILE: ./src/app/components/layout/PulsatingComponent.tsx
 
 'use client';
@@ -261,7 +453,7 @@ const PulsatingComponent = () => {
 	}, []);
 
 	return (
-		<div className="h-screen relative overflow-hidden bg-black">
+		<div className="w-full h-screen relative overflow-hidden bg-black">
 			{/* 中心を基準にするコンテナ */}
 			<div className="absolute inset-0 flex items-center justify-center pointer-events-none">
 				{pulses.map(pulse => (
@@ -355,22 +547,29 @@ export default SmoothRotation;
 'use client';
 import Sphere from './Sphere';
 import MessageOverlay from './MessageOverlay';
+import { useMediaQuery } from 'react-responsive'; // 推奨：メディアクエリのためのフック
 
 const SphereTop: React.FC = () => {
-	return (
+	const isMobile = useMediaQuery({ maxWidth: 767 }); // Tailwindのmdブレイクポイントに合わせる
 
-		<div className="relative h-[500vh]">
+	const backgroundImage = {
+		desktop: `${process.env.NEXT_PUBLIC_CLOUDFRONT_URL}/pepe/cyberpunk-cityscape.webp`,
+		mobile: `${process.env.NEXT_PUBLIC_CLOUDFRONT_URL}/pepe/cyberpunk-cityscape.webp`
+	};
+
+	return (
+		<div className="w-full relative h-[300vh] md:h-[500vh] hidden sm:block">
 			{/* グラデーションオーバーレイ */}
 			<div
 				className="absolute inset-0 z-10 pointer-events-none"
 				style={{
 					background: `linear-gradient(to bottom,
-              rgba(0,0,0,1) 0%,
-              rgba(0,0,0,0.85) 10%,
-              rgba(0,0,0,0.0) 30%,
-              rgba(0,0,0,0.0) 70%,
-              rgba(0,0,0,0.85) 90%,
-              rgba(0,0,0,1) 100%)`,
+            rgba(0,0,0,1) 0%,
+            rgba(0,0,0,0.85) 10%,
+            rgba(0,0,0,0.0) 30%,
+            rgba(0,0,0,0.0) 70%,
+            rgba(0,0,0,0.85) 90%,
+            rgba(0,0,0,1) 100%)`,
 				}}
 			/>
 
@@ -379,8 +578,9 @@ const SphereTop: React.FC = () => {
 				<Sphere
 					enableControls={false}
 					rotationSpeed={0.3}
-					backgroundImage={`${process.env.NEXT_PUBLIC_CLOUDFRONT_URL}/pepe/cyberpunk-cityscape.webp`}
+					backgroundImage={isMobile ? backgroundImage.mobile : backgroundImage.desktop}
 					useDefaultEnvironment={false}
+					isMobile={isMobile}
 				/>
 			</div>
 
@@ -392,8 +592,7 @@ const SphereTop: React.FC = () => {
 	);
 };
 
-export default SphereTop;
--e 
+export default SphereTop;-e 
 ### FILE: ./src/app/components/sphere/MessageOverlay.tsx
 
 // src/app/components/SelfCustodySection.tsx
@@ -413,35 +612,34 @@ import { motion, useScroll, useTransform } from 'framer-motion';
  * - Adjustable line breaks via whitespace-pre-line
  */
 const SelfCustodySection: React.FC = () => {
-  return (
-    <section className="snap-start relative overflow-hidden">
-      {/* Scanline Overlay */}
-      <div className="pointer-events-none fixed inset-0 bg-gradient-to-b from-transparent via-black/10 to-transparent opacity-30 animate-scanline z-10" />
+	return (
+		<section className="snap-start relative overflow-hidden">
+			{/* Scanline Overlay */}
+			<div className="pointer-events-none fixed inset-0 bg-gradient-to-b from-transparent via-black/10 to-transparent opacity-30 animate-scanline z-10" />
 
-      {/* Sticky container: intro + key line stick after 200vh */}
-      <div className="sticky top-0 pt-[200vh] z-20">
-        <div className="absolute top-0 left-0 mt-8 ml-8 w-auto max-w-6xl text-left">
-          {/* Typewriter Intro */}
-          <motion.div
-            className="overflow-hidden whitespace-nowrap border-r-2 border-neonGreen font-mono text-neonGreen text-sm mb-6"
-            initial={{ width: 0 }}
-            animate={{ width: '100%' }}
-            transition={{ duration: 2, ease: 'easeInOut' }}
-          >
-            &gt; selfcustody.exe
-          </motion.div>
+			{/* Sticky container: intro + key line stick after 200vh */}
+			<div className="sticky top-0 pt-[200vh] z-20">
+				<div className="absolute top-0 left-0 mt-8 ml-8 w-full text-left">
+					{/* Typewriter Intro */}
+					<motion.div
+						initial={{ width: 0 }}
+						animate={{ width: '100%' }}
+						transition={{ duration: 2, ease: 'easeInOut' }}
+					>
+						<div className="overflow-hidden whitespace-nowrap border-r-2 border-neonGreen font-mono text-neonGreen text-sm mb-6">
+						  &gt; selfcustody.exe
+						</div>
+					</motion.div>
+					<KeyLine
+						text={`Awaken\nYour soul.`}
+						colorClass="text-neonGreen font-heading text-[14vw] font-extrabold"
+						borderClass="border-l-2 border-neonGreen"
+					/>
+				</div>
+			</div>
 
-          {/* Key highlighted line with glitch and custom line break */}
-          <KeyLine
-            text={`For the Few Who Hold Their Own Keys.\nAwaken Your Soul.`}
-            colorClass="text-neonGreen font-heading text-[7vw]"
-            borderClass="border-l-2 border-neonGreen"
-          />
-        </div>
-      </div>
-
-      {/* Rainbow glitch keyframes and class */}
-      <style jsx global>{`
+			{/* Rainbow glitch keyframes and class */}
+			<style jsx global>{`
         .glitchRainbow {
           position: relative;
           animation: glitchRainbow 3s ease-in-out infinite;
@@ -454,35 +652,32 @@ const SelfCustodySection: React.FC = () => {
           80% { text-shadow: 4px 0 #f0f, -4px 0 #ff0; }
         }
       `}</style>
-    </section>
-  );
+		</section>
+	);
 };
 
 interface KeyLineProps {
-  text: string;
-  colorClass: string;
-  borderClass: string;
+	text: string;
+	colorClass: string;
+	borderClass: string;
 }
 
 const KeyLine: React.FC<KeyLineProps> = ({ text, colorClass, borderClass }) => {
-  const ref = useRef<HTMLDivElement>(null);
-  const { scrollYProgress } = useScroll({ target: ref, offset: ['start end', 'end end'] });
-  const opacity = useTransform(scrollYProgress, [0, 0.2], [0, 1]);
-  const y = useTransform(scrollYProgress, [0, 0.2], [20, 0]);
+	const ref = useRef<HTMLDivElement>(null);
+	const { scrollYProgress } = useScroll({ target: ref as React.RefObject<HTMLElement>, offset: ['start end', 'end end'] });
+	const opacity = useTransform(scrollYProgress, [0, 0.2], [0, 1]);
+	const y = useTransform(scrollYProgress, [0, 0.2], [20, 0]);
 
-  return (
-    <motion.div
-      ref={ref}
-      style={{ opacity, y }}
-      className={`relative overflow-hidden ${borderClass} pl-3`}
-    >
-      <span
-        className={`${colorClass} glitchRainbow whitespace-pre-line leading-none`}
-      >
-        {text}
-      </span>
-    </motion.div>
-  );
+	return (
+		<motion.div
+			ref={ref}
+			style={{ opacity, y }}
+		>
+			<span className={`${colorClass} glitchRainbow whitespace-pre-line leading-none`}>
+				{text}
+			</span>
+		</motion.div>
+	);
 };
 
 export default SelfCustodySection;
@@ -490,13 +685,13 @@ export default SelfCustodySection;
 ### FILE: ./src/app/components/sphere/Sphere.tsx
 
 'use client';
-import React, { useRef, useState, useEffect } from 'react';
+import React, { useRef, useState, useEffect, ReactNode } from 'react';
 import { Environment, PerspectiveCamera, OrbitControls } from '@react-three/drei';
 import { useFrame, Canvas } from '@react-three/fiber';
 import * as THREE from 'three';
 import styles from './Sphere.module.css';
 
-// エラーバウンダリーコンポーネン
+// エラーバウンダリーコンポーネン (前回と同じ)
 interface ErrorBoundaryProps {
 	children: React.ReactNode;
 	fallback: React.ReactNode;
@@ -526,7 +721,19 @@ class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoundarySta
 }
 
 // 回転制御コンポーネント
-const RotatingGroup = ({ rotationY = 0, rotationSpeed = 0.3, autoRotate = true, children }) => {
+type RotatingGroupProps = {
+	rotationY?: number;
+	rotationSpeed?: number;
+	autoRotate?: boolean;
+	children: ReactNode;
+};
+
+const RotatingGroup: React.FC<RotatingGroupProps> = ({
+	rotationY = 0,
+	rotationSpeed = 0.3,
+	autoRotate = true,
+	children,
+}) => {
 	const groupRef = useRef<THREE.Group>(null);
 
 	useFrame((_, delta) => {
@@ -534,30 +741,54 @@ const RotatingGroup = ({ rotationY = 0, rotationSpeed = 0.3, autoRotate = true, 
 
 		// 自動回転が有効な場合
 		if (autoRotate) {
-			groupRef.current.rotation.y += rotationSpeed * delta;
+			groupRef.current.rotation.y += 0.2 * delta;
 		} else {
 			// 外部から渡された回転値を適用
-			groupRef.current.rotation.y = rotationY;
+			groupRef.current.rotation.y += 0.2 * delta;
 		}
 	});
 
 	return (
+		// @ts-expect-error React Three Fiber JSX elements
 		<group ref={groupRef}>
 			{children}
+			{/* @ts-expect-error React Three Fiber JSX elements */}
 		</group>
 	);
 };
 
+interface BackgroundSphereProps {
+	backgroundImage?: string;
+	isMobile?: boolean;
+}
+
 // 背景用の球体コンポーネント
-const BackgroundSphere = ({ backgroundImage }) => {
-	const texture = new THREE.TextureLoader().load(backgroundImage);
-	texture.mapping = THREE.EquirectangularReflectionMapping;
-	texture.encoding = THREE.sRGBEncoding;
+const BackgroundSphere: React.FC<BackgroundSphereProps> = ({ backgroundImage, isMobile = false }) => {
+	const [texture, setTexture] = useState<THREE.Texture | null>(null);
+
+	useEffect(() => {
+		if (backgroundImage) {
+			const textureLoader = new THREE.TextureLoader();
+			const loadedTexture = textureLoader.load(backgroundImage);
+			loadedTexture.mapping = THREE.EquirectangularReflectionMapping;
+
+			// Use colorSpace instead of deprecated encoding
+			loadedTexture.colorSpace = THREE.SRGBColorSpace;
+
+			setTexture(loadedTexture);
+		}
+	}, [backgroundImage]);
+
+	if (!texture) return null;
 
 	return (
+		// @ts-expect-error React Three Fiber JSX elements
 		<mesh>
-			<sphereGeometry args={[2, 64, 64]} />
+			{/* @ts-expect-error React Three Fiber JSX elements */}
+			<sphereGeometry args={[isMobile ? 1.6 : 2, isMobile ? 32 : 64, isMobile ? 32 : 64]} />
+			{/* @ts-expect-error React Three Fiber JSX elements */}
 			<meshBasicMaterial map={texture} side={THREE.BackSide} />
+			{/* @ts-expect-error React Three Fiber JSX elements */}
 		</mesh>
 	);
 };
@@ -571,6 +802,7 @@ interface SphereProps {
 	backgroundImage?: string; // カスタム背景画像のパス
 	useDefaultEnvironment?: boolean; // デフォルト環境マップを使用するかどうか
 	manualRotation?: number; // 手動で指定する回転値（ラジアン）
+	isMobile?: boolean; // モバイルデバイスかどうかのフラグ
 }
 
 const Sphere: React.FC<SphereProps> = ({
@@ -580,7 +812,8 @@ const Sphere: React.FC<SphereProps> = ({
 	rotationSpeed = 0.3,
 	backgroundImage = '',
 	useDefaultEnvironment = true,
-	manualRotation = 0
+	manualRotation = 0,
+	isMobile = false
 }) => {
 	const [isClient, setIsClient] = useState(false);
 	const [isHdrBackground, setIsHdrBackground] = useState(false);
@@ -618,7 +851,13 @@ const Sphere: React.FC<SphereProps> = ({
 			<div className={`${styles.decorLine} ${styles.decorLineBottom}`}></div>
 
 			<div className={styles.canvasWrapper}>
-				<Canvas shadows>
+				<Canvas
+					className="w-full h-full"
+					gl={{ antialias: false }}
+					dpr={1}
+					shadows={false}
+					frameloop="always"
+				>
 					<ErrorBoundary
 						fallback={
 							<div className={styles.errorMessage}>
@@ -626,15 +865,16 @@ const Sphere: React.FC<SphereProps> = ({
 							</div>
 						}
 					>
-
-
 						{/* 回転制御コンポーネントで背景を囲む */}
 						<RotatingGroup
 							rotationY={manualRotation}
 							rotationSpeed={rotationSpeed}
-							autoRotate={autoRotate}
+							autoRotate={!isMobile && autoRotate}
 						>
-							<BackgroundSphere backgroundImage={backgroundImage} />
+							<BackgroundSphere
+								backgroundImage={backgroundImage}
+								isMobile={isMobile}
+							/>
 						</RotatingGroup>
 
 						{/* カメラ設定 */}
@@ -665,32 +905,6 @@ const Sphere: React.FC<SphereProps> = ({
 };
 
 export default Sphere;-e 
-### FILE: ./src/app/components/ui/ScanlineEffect.tsx
-
-// src/app/components/ui/ScanlineEffect.tsx
-import React from 'react';
-
-export const ScanlineEffect: React.FC = () => {
-  return (
-    <div className="pointer-events-none fixed inset-0 z-50 overflow-hidden">
-      <div className="absolute inset-0 z-10 h-full w-full bg-transparent opacity-10">
-        {/* スキャンライン効果 */}
-        <div className="absolute left-0 top-0 h-[1px] w-full animate-scanline bg-neonGreen opacity-50 shadow-[0_0_5px_#00FF7F]"></div>
-        
-        {/* ノイズオーバーレイ */}
-        <div 
-          className="absolute inset-0 bg-repeat opacity-5"
-          style={{ 
-            backgroundImage: "url('/images/noisy.webp')",
-            mixBlendMode: "overlay"
-          }}
-        ></div>
-      </div>
-    </div>
-  );
-};
-
-export default ScanlineEffect;-e 
 ### FILE: ./src/app/components/ui/Footer.tsx
 
 'use client';
@@ -728,7 +942,7 @@ const Footer = () => {
 	];
 
 	return (
-		<footer className="relative bg-black border-t border-dark-300 overflow-hidden z-20">
+		<footer className="w-full relative bg-black border-t border-dark-300 overflow-hidden z-20">
 			{/* Background Effects */}
 			<div className="absolute inset-0 bg-gradient-to-t from-dark-100 to-black"></div>
 
@@ -757,7 +971,7 @@ const Footer = () => {
 									<div className="w-10 h-10 bg-gradient-to-br from-neonGreen to-neonOrange rounded-sm animate-pulse-fast"></div>
 									<div className="absolute inset-0 w-10 h-10 bg-gradient-to-br from-neonGreen to-neonOrange rounded-sm blur-md opacity-50"></div>
 								</div>
-								<span className="text-2xl font-heading font-bold text-white animate-glitch-slow">
+								<span className="text-2xl font-heading font-bold text-white md:animate-glitch-slow">
 									We are on-chain
 								</span>
 							</div>
@@ -851,7 +1065,7 @@ const Footer = () => {
 						</div>
 					</div>
 
-					{/* Bottom Section */}
+			
 					<div className="flex flex-col lg:flex-row justify-between items-center space-y-4 lg:space-y-0">
 						{/* Legal Links */}
 						<div className="flex flex-wrap items-center space-x-6">
@@ -880,7 +1094,7 @@ const Footer = () => {
 
 					{/* Glitch Effect */}
 					<div className="absolute bottom-4 right-4 opacity-20">
-						<div className="text-neonGreen font-pixel text-xs animate-glitch">
+						<div className="text-neonGreen font-pixel text-xs md:animate-glitch">
 							[BLOCKCHAIN_ENABLED]
 						</div>
 					</div>
@@ -947,7 +1161,7 @@ const Header = () => {
 							<div className="w-8 h-8 bg-gradient-to-br from-neonGreen to-neonOrange rounded-sm animate-pulse-fast"></div>
 							<div className="absolute inset-0 w-8 h-8 bg-gradient-to-br from-neonGreen to-neonOrange rounded-sm blur-sm opacity-50"></div>
 						</div>
-						<span className="text-xl font-heading font-bold text-white group-hover:text-neonGreen transition-colors duration-200 animate-glitch-slow">
+						<span className="text-xl font-heading font-bold text-white group-hover:text-neonGreen transition-colors duration-200 md:animate-glitch-slow">
 							We are on-chain
 						</span>
 					</Link>
@@ -1301,21 +1515,21 @@ export const HeroTitle: React.FC<HeroTitleProps> = ({ style }) => {
 			<div className={styles.titleGroup}>
 				<GlitchText
 					text="NO BANKS"
-					className="text-7xl sm:text-8xl lg:text-9xl"
+					className="text-6xl md:text-7xl lg:text-9xl"
 					color="text-neonOrange"
 					glitchIntensity="high"
 					isMainTitle={true}
 				/>
 				<GlitchText
-					text="NO MIDDLEMEN"
-					className="text-7xl sm:text-8xl lg:text-9xl"
+					text="PEER-TO-PEER"
+					className="text-6xl md:text-7xl lg:text-9xl"
 					color="text-neonGreen"
 					glitchIntensity="medium"
 					isMainTitle={true}
 				/>
 				<GlitchText
 					text="JUST PROTEIN"
-					className="text-7xl sm:text-8xl lg:text-9xl"
+					className="text-6xl md:text-7xl lg:text-9xl"
 					color="text-white"
 					glitchIntensity="high"
 					isMainTitle={true}
@@ -1333,116 +1547,121 @@ export default HeroTitle;-e
 ### FILE: ./src/app/components/hero-section/HeroBackground.tsx
 
 // src/app/components/hero-section/HeroBackground.tsx
+
 import React from 'react';
 import styles from './HeroSection.module.css';
 import { GlitchState } from './GlitchEffects';
 
 interface HeroBackgroundProps {
-  backgroundTransform: string;
-  midLayerTransform: string;
-  glitchState: GlitchState;
-  getGlitchStyle: (baseTransform: string) => any;
+	backgroundTransform: string;
+	midLayerTransform: string;
+	glitchState: GlitchState;
+	getGlitchStyle: (baseTransform: string) => any;
 }
 
 export const HeroBackground: React.FC<HeroBackgroundProps> = ({
-  backgroundTransform,
-  midLayerTransform,
-  glitchState,
-  getGlitchStyle,
+	backgroundTransform,
+	midLayerTransform,
+	glitchState,
+	getGlitchStyle,
 }) => {
-  return (
-    <>
-      {/* 背景画像 - グリッチ効果に対応 */}
-      <div
-        className={`${styles.backgroundImage} ${glitchState.active ? styles.glitchActive : ''}`}
-        style={{
-          backgroundImage: `url('${process.env.NEXT_PUBLIC_CLOUDFRONT_URL}/pepe/pepe-cyberpunk.webp')`,
-          ...(!glitchState.active
-            ? {
-              filter: 'contrast(1.1) brightness(0.9)',
-              transform: backgroundTransform,
-              transition: 'transform 2s ease-out',
-            }
-            : getGlitchStyle(backgroundTransform)
-          )
-        }}
-      />
-      <div
-        className={styles.darkOverlay}
-        style={{
-          transform: `scale(1.02) ${midLayerTransform}`,
-          transition: 'transform 1.5s ease-out',
-        }}
-      />
+	return (
+		<>
+			{/* 背景画像 - グリッチ効果に対応 */}
+			<div
+				className={`${styles.backgroundImage} ${glitchState.active ? styles.glitchActive : ''}`}
+				style={{
+					backgroundImage: `url('${process.env.NEXT_PUBLIC_CLOUDFRONT_URL}/pepe/pepe-cyberpunk.webp')`,
+					...(!glitchState.active
+						? {
+							filter: 'contrast(1.1) brightness(0.9)',
+							transform: backgroundTransform,
+							transition: 'transform 2s ease-out',
+						}
+						: getGlitchStyle(backgroundTransform))
+				}}
+			/>
 
-      {/* 中心部に光の効果 - マウスとは逆方向に少し動く */}
-      <div
-        className={styles.centerLight}
-        style={{
-          transform: midLayerTransform,
-          transition: 'transform 1.5s ease-out',
-        }}
-      />
+			{/* ライトとオーバーレイは常時レンダリング */}
+			<div
+				className={`${styles.darkOverlay} w-full`}
+				style={{
+					transform: `scale(1.02) ${midLayerTransform}`,
+					transition: 'transform 1.5s ease-out',
+				}}
+			/>
 
-      {/* グリッチに対応するノイズレイヤー */}
-      <div className={`${styles.mainNoise} ${glitchState.active ? styles.noiseIntense : ''}`} />
+			{/* 重いエフェクト: モバイルでは非表示 */}
+			<div className="hidden sm:block">
+				<div
+					className={styles.centerLight}
+					style={{
+						transform: midLayerTransform,
+						transition: 'transform 1.5s ease-out',
+					}}
+				/>
+				{/* メインノイズ */}
+				<div className={`${styles.mainNoise} ${glitchState.active ? styles.noiseIntense : ''
+					}`} />
 
-      {/* 格子状ノイズ - 少し動く */}
-      <div
-        className={styles.gridNoise}
-        style={{
-          backgroundImage: `url('${process.env.NEXT_PUBLIC_CLOUDFRONT_URL}/noisy_grid.webp')`,
-          transform: midLayerTransform,
-          transition: 'transform 1.5s ease-out',
-        }}
-      />
+				{/* 格子状ノイズ */}
+				<div
+					className={styles.gridNoise}
+					style={{
+						backgroundImage: `url('${process.env.NEXT_PUBLIC_CLOUDFRONT_URL}/noisy_grid.webp')`,
+						transform: midLayerTransform,
+						transition: 'transform 1.5s ease-out',
+					}}
+				/>
 
-      {/* 動くノイズ */}
-      <div className={styles.movingNoise} />
+				{/* 動くノイズ */}
+				<div className={styles.movingNoise} />
 
-      {/* RGB分離効果 - グリッチ状態に対応 */}
-      <div className={`${styles.rgbSplit} ${glitchState.active && glitchState.type.includes('rgb') ? styles.rgbActive : ''}`} />
+				{/* RGB分離効果 */}
+				<div className={`${styles.rgbSplit} ${glitchState.active && glitchState.type.includes('rgb') ? styles.rgbActive : ''
+					}`} />
 
-      {/* グリッチブロックエフェクト */}
-      {glitchState.active && glitchState.intensity > 2 && (
-        <div
-          className={styles.glitchBlocks}
-          style={{
-            backgroundImage: `url(''${process.env.NEXT_PUBLIC_CLOUDFRONT_URL}/pepe/pepe-cyberpunk.webp')`,
-            opacity: 0.4 + (glitchState.intensity * 0.05),
-          }}
-        />
-      )}
+				{/* グリッチブロックエフェクト */}
+				{glitchState.active && glitchState.intensity > 2 && (
+					<div
+						className={styles.glitchBlocks}
+						style={{
+							backgroundImage: `url('${process.env.NEXT_PUBLIC_CLOUDFRONT_URL}/pepe/pepe-cyberpunk.webp')`,
+							opacity: 0.4 + glitchState.intensity * 0.05,
+						}}
+					/>
+				)}
 
-      {/* RGBスライス効果 - 強いグリッチ時のみ */}
-      {glitchState.active && glitchState.type.includes('rgb') && glitchState.intensity > 2 && (
-        <>
-          <div
-            className={styles.rgbSliceRed}
-            style={{
-              backgroundImage: `url('${process.env.NEXT_PUBLIC_CLOUDFRONT_URL}/pepe/pepe-cyberpunk.webp')`,
-              transform: `translateX(${glitchState.intensity * 1.5}px)`,
-            }}
-          />
-          <div
-            className={styles.rgbSliceBlue}
-            style={{
-              backgroundImage: `url('${process.env.NEXT_PUBLIC_CLOUDFRONT_URL}/pepe/pepe-cyberpunk.webp')`,
-              transform: `translateX(-${glitchState.intensity * 1.5}px)`,
-            }}
-          />
-        </>
-      )}
-    </>
-  );
+				{/* RGBスライス効果 */}
+				{glitchState.active && glitchState.type.includes('rgb') && glitchState.intensity > 2 && (
+					<>
+						<div
+							className={styles.rgbSliceRed}
+							style={{
+								backgroundImage: `url('${process.env.NEXT_PUBLIC_CLOUDFRONT_URL}/pepe/pepe-cyberpunk.webp')`,
+								transform: `translateX(${glitchState.intensity * 1.5}px)`,
+							}}
+						/>
+						<div
+							className={styles.rgbSliceBlue}
+							style={{
+								backgroundImage: `url('${process.env.NEXT_PUBLIC_CLOUDFRONT_URL}/pepe/pepe-cyberpunk.webp')`,
+								transform: `translateX(-${glitchState.intensity * 1.5}px)`,
+							}}
+						/>
+					</>
+				)}
+			</div>
+		</>
+	);
 };
 
-export default HeroBackground;-e 
+export default HeroBackground;
+-e 
 ### FILE: ./src/app/components/hero-section/HeroSection.tsx
 
 'use client';
 import React, { useState, useEffect } from 'react';
-import ScanlineEffect from '../ui/ScanlineEffect';
 import styles from './HeroSection.module.css';
 import { useGlitchEffect } from './GlitchEffects';
 import HeroBackground from './HeroBackground';
@@ -1478,33 +1697,15 @@ export const HeroSection: React.FC = () => {
   `;
 
 	return (
-		<div className="sticky top-0 h-[90vh] overflow-hidden">
-			{/* 背景 & エフェクト */}
+		<div className="sticky w-full top-0 h-[80vh] md:h-[90vh] overflow-hidden">
 			<HeroBackground
 				backgroundTransform={backgroundTransform}
 				midLayerTransform={midLayerTransform}
 				glitchState={glitchState}
 				getGlitchStyle={getGlitchStyle}
 			/>
-
-			{/* 
-			
-						<div
-				className="absolute inset-0 z-[15] pointer-events-none"
-				style={{
-					transform: midLayerTransform,
-					transition: 'transform 1.5s ease-out',
-				}}
-			>
-				<HeroModel />
-			</div>
-
-			*/}
-
-
-			{/* タイトル（前景） */}
 			<div
-				className={styles.contentContainer}
+				className={`${styles.contentContainer} mt-10 max-w-screen-xl mx-auto flex justify-center items-center`}
 				style={{
 					transform: foregroundTransform,
 					transition: 'transform 0.5s ease-out',
@@ -1512,9 +1713,6 @@ export const HeroSection: React.FC = () => {
 			>
 				<HeroTitle />
 			</div>
-
-			{/* スキャンライン */}
-			<ScanlineEffect />
 		</div>
 
 	);
@@ -1532,6 +1730,7 @@ import { useScroll, Scroll } from '@react-three/drei';
 import { imageFiles } from './utils/constants';
 import { calculateOptimalImagePositions } from './utils/imageLoader';
 import ImageItem from './ImageItem';
+import * as THREE from 'three'
 
 const ScrollableImages: React.FC = () => {
 	// スクロールデータを取得
@@ -1592,6 +1791,7 @@ const ScrollableImages: React.FC = () => {
 
 	return (
 		<Scroll>
+			{/* @ts-expect-error React Three Fiber JSX elements */}
 			<group ref={groupRef}>
 				{imageFiles.map((image, index) => {
 					// 画像の位置を取得（デフォルト位置を設定）
@@ -1621,6 +1821,7 @@ const ScrollableImages: React.FC = () => {
 						/>
 					);
 				})}
+				{/* @ts-expect-error React Three Fiber JSX elements */}
 			</group>
 		</Scroll>
 	);
@@ -1710,11 +1911,6 @@ const ImageItem: React.FC<ImageItemProps> = ({
       // スクロールに応じたサイズ変化
       easing.damp3(
         ref.current.scale,
-        [
-          scaleFactor[0] * scrollBasedZoom,
-          scaleFactor[1] * scrollBasedZoom,
-          1
-        ],
         0.3,
         delta
       );
@@ -1747,11 +1943,9 @@ const ImageItem: React.FC<ImageItemProps> = ({
       ref={ref}
       url={image.path}
       position={position}
-      scale={scaleFactor}
       transparent
       opacity={1}
       toneMapped={false}
-      className={`${styles.imageGlow} ${styles.parallaxLayer}`}
     />
   );
 };
@@ -1769,105 +1963,104 @@ import { applyTextFadeEffect, applyFloatingAnimation } from './utils/scrollAnima
 
 // テキスト要素の型定義
 interface TextElement {
-  id: number;
-  text: string;
-  position: [number, number, number];
-  anchorX?: 'left' | 'center' | 'right';
-  visibleRange: [number, number]; // [表示開始位置, 表示終了位置]
+	id: number;
+	text: string;
+	position: [number, number, number];
+	anchorX?: 'left' | 'center' | 'right';
+	visibleRange: [number, number]; // [表示開始位置, 表示終了位置]
 }
 
 const GalleryTypography: React.FC = () => {
-  // テキスト要素の定義
-  const textElements: TextElement[] = [
-    {
-      id: 1,
-      text: "PEPE",
-      position: TYPOGRAPHY_POSITIONS[0].position as [number, number, number],
-      anchorX: TYPOGRAPHY_POSITIONS[0].anchorX as 'left' | 'center' | 'right',
-      visibleRange: [0, 0.4] // スクロール0%〜40%の間で表示
-    },
-    {
-      id: 2,
-      text: "GALLERY",
-      position: TYPOGRAPHY_POSITIONS[1].position as [number, number, number],
-      anchorX: TYPOGRAPHY_POSITIONS[1].anchorX as 'left' | 'center' | 'right',
-      visibleRange: [0.3, 0.7] // スクロール30%〜70%の間で表示
-    },
-    {
-      id: 3,
-      text: "COLLECTION",
-      position: TYPOGRAPHY_POSITIONS[2].position as [number, number, number],
-      anchorX: TYPOGRAPHY_POSITIONS[2].anchorX as 'left' | 'center' | 'right',
-      visibleRange: [0.6, 1.0] // スクロール60%〜100%の間で表示
-    }
-  ];
-  
-  // スクロールデータを取得
-  const data = useScroll();
-  
-  // テキスト要素の参照を保持する配列
-  const textRefs = useRef<Array<React.RefObject<any>>>([]);
-  
-  // テキスト要素の参照を初期化
-  if (textRefs.current.length !== textElements.length) {
-    textRefs.current = Array(textElements.length)
-      .fill(null)
-      .map((_, i) => textRefs.current[i] || React.createRef());
-  }
-  
-  // ビューポートのサイズを取得
-  const { width, height } = useThree((state) => state.viewport);
-  
-  // テキストのスタイル設定
-  const textStyle = {
-    font: '/Inter-Regular.woff', // プロジェクトに合わせて変更
-    fontSize: width * 0.08,
-    letterSpacing: -0.05,
-    lineHeight: 1,
-    'material-toneMapped': false
-  };
-  
-  // 各フレームでのアニメーション処理
-  useFrame((state, delta) => {
-    const scrollOffset = data.offset; // スクロール位置（0-1）
-    const time = state.clock.getElapsedTime();
-    
-    // 各テキスト要素にアニメーション効果を適用
-    textElements.forEach((element, index) => {
-      const ref = textRefs.current[index];
-      if (ref && ref.current) {
-        // フェードイン/アウト効果の適用
-        applyTextFadeEffect(ref, scrollOffset, element.visibleRange, delta);
-        
-        // 浮遊アニメーションの適用
-        applyFloatingAnimation(
-          ref, 
-          time + index, 
-          element.position,
-          0.05 // 浮遊の振幅
-        );
-      }
-    });
-  });
-  
-  return (
-    <>
-      {textElements.map((element, index) => (
-        <Text
-          key={element.id}
-          ref={textRefs.current[index]}
-          position={element.position}
-          anchorX={element.anchorX || 'center'}
-          anchorY="middle"
-          color="black"
-          opacity={0} // 初期状態では非表示
-          {...textStyle}
-        >
-          {element.text}
-        </Text>
-      ))}
-    </>
-  );
+	// テキスト要素の定義
+	const textElements: TextElement[] = [
+		{
+			id: 1,
+			text: "PEPE",
+			position: TYPOGRAPHY_POSITIONS[0].position as [number, number, number],
+			anchorX: TYPOGRAPHY_POSITIONS[0].anchorX as 'left' | 'center' | 'right',
+			visibleRange: [0, 0.4] // スクロール0%〜40%の間で表示
+		},
+		{
+			id: 2,
+			text: "GALLERY",
+			position: TYPOGRAPHY_POSITIONS[1].position as [number, number, number],
+			anchorX: TYPOGRAPHY_POSITIONS[1].anchorX as 'left' | 'center' | 'right',
+			visibleRange: [0.3, 0.7] // スクロール30%〜70%の間で表示
+		},
+		{
+			id: 3,
+			text: "COLLECTION",
+			position: TYPOGRAPHY_POSITIONS[2].position as [number, number, number],
+			anchorX: TYPOGRAPHY_POSITIONS[2].anchorX as 'left' | 'center' | 'right',
+			visibleRange: [0.6, 1.0] // スクロール60%〜100%の間で表示
+		}
+	];
+
+	// スクロールデータを取得
+	const data = useScroll();
+
+	// テキスト要素の参照を保持する配列
+	const textRefs = useRef<Array<React.RefObject<any>>>([]);
+
+	// テキスト要素の参照を初期化
+	if (textRefs.current.length !== textElements.length) {
+		textRefs.current = Array(textElements.length)
+			.fill(null)
+			.map((_, i) => textRefs.current[i] || React.createRef());
+	}
+
+	// ビューポートのサイズを取得
+	const { width, height } = useThree((state) => state.viewport);
+
+	// テキストのスタイル設定
+	const textStyle = {
+		font: '/Inter-Regular.woff', // プロジェクトに合わせて変更
+		fontSize: width * 0.08,
+		letterSpacing: -0.05,
+		lineHeight: 1,
+		'material-toneMapped': false
+	};
+
+	// 各フレームでのアニメーション処理
+	useFrame((state, delta) => {
+		const scrollOffset = data.offset; // スクロール位置（0-1）
+		const time = state.clock.getElapsedTime();
+
+		// 各テキスト要素にアニメーション効果を適用
+		textElements.forEach((element, index) => {
+			const ref = textRefs.current[index];
+			if (ref && ref.current) {
+				// フェードイン/アウト効果の適用
+				applyTextFadeEffect(ref, scrollOffset, element.visibleRange, delta);
+
+				// 浮遊アニメーションの適用
+				applyFloatingAnimation(
+					ref,
+					time + index,
+					element.position,
+					0.05 // 浮遊の振幅
+				);
+			}
+		});
+	});
+
+	return (
+		<>
+			{textElements.map((element, index) => (
+				<Text
+					key={element.id}
+					ref={textRefs.current[index]}
+					position={element.position}
+					anchorX={element.anchorX || 'center'}
+					anchorY="middle"
+					color="black"
+					{...textStyle}
+				>
+					{element.text}
+				</Text>
+			))}
+		</>
+	);
 };
 
 export default GalleryTypography;-e 
@@ -1891,7 +2084,7 @@ export const CDN_URL = process.env.NEXT_PUBLIC_CLOUDFRONT_URL || '';
 export const SIZE_SCALES = {
   S: 1.5,
   M: 2.5,
-  L: 4.0
+  L: 3
 };
 
 // 画像サイズに応じたZ位置（深度）設定
@@ -2008,11 +2201,6 @@ export const useImageLoader = (imageUrl: string): ImageLoadingState => {
       // 読み込み失敗時
       (error) => {
         console.error(`Error loading texture from ${imageUrl}:`, error);
-        setState({
-          texture: null,
-          loading: false,
-          error: new Error(`Failed to load image: ${error.message}`)
-        });
       }
     );
 
@@ -2188,7 +2376,6 @@ export const applyScrollZoom = (
 	// 滑らかなスケールの適用
 	easing.damp3(
 		ref.current.scale,
-		targetScale,
 		0.2,
 		delta
 	);
@@ -2217,7 +2404,6 @@ export const applyScrollMovement = (
 	// 滑らかな移動の適用
 	easing.damp3(
 		ref.current.position,
-		targetPosition,
 		0.15,
 		delta
 	);
@@ -2272,247 +2458,61 @@ export const applyFloatingAnimation = (
 		basePosition[2]
 	);
 };-e 
-### FILE: ./src/app/components/pepe-gallery/PepeGallery.tsx
+### FILE: ./src/app/components/pepePush/PepePush.tsx
 
+// components/PepePush.tsx
 'use client';
 
-import React, { Suspense, useState, useEffect, useRef, useCallback } from 'react';
-import { Canvas, useFrame, useThree } from '@react-three/fiber';
-import { Image as DreiImage, Preload } from '@react-three/drei';
+import React, { useEffect, Suspense } from 'react';
+import { Canvas, useFrame } from '@react-three/fiber';
+import { useGLTF, useAnimations, OrbitControls } from '@react-three/drei';
+import * as THREE from 'three';
 
-// サイズ定数
-const SIZE_SCALES = {
-	S: 1.5,
-	M: 2.5,
-	L: 4.0
-};
+export default function PepePush() {
+	return (
+		<Canvas
+			className="w-full h-full"
+			gl={{ antialias: false }}
+			dpr={1}
+			shadows={false}
+			frameloop="always"
+		>
+			<ambientLight intensity={0.3} />
+			<directionalLight position={[5, 10, 7]} intensity={1} />
+			<Suspense fallback={null}>
+				<PepeModel url="/models/push-up-pepe.glb" />
+			</Suspense>
+			<OrbitControls />
+		</Canvas>
+	);
+}
 
-// スクロール設定
-const SCROLL_SETTINGS = {
-	pages: 3
-};
+function PepeModel({ url }: { url: string }) {
+	const { scene, animations } = useGLTF(url);
+	const { actions, mixer } = useAnimations(animations, scene);
 
-// テスト用の画像データ
-const testImages = [
-	{
-		id: 1,
-		filename: '1L.webp',
-		size: 'L',
-		path: 'https://d1abhb48aypmuo.cloudfront.net/we-are-onchain/pepe/1L.webp'
-	},
-	{
-		id: 2,
-		filename: '2M.webp',
-		size: 'M',
-		path: 'https://d1abhb48aypmuo.cloudfront.net/we-are-onchain/pepe/2M.webp'
-	},
-	{
-		id: 3,
-		filename: '6L.webp',
-		size: 'L',
-		path: 'https://d1abhb48aypmuo.cloudfront.net/we-are-onchain/pepe/6L.webp'
-	}
-];
-
-// スクロール位置をコンテキスト経由で共有
-const ScrollContext = React.createContext(0);
-
-// ImageItemコンポーネント
-const ImageItem = ({ image, position, index }) => {
-	const ref = useRef(null);
-	const scrollOffset = React.useContext(ScrollContext);
-
-	let imageUrl = '';
-	let imageSize = 'L';
-
-	if (typeof image === 'string') {
-		imageUrl = image;
-	} else {
-		imageUrl = image.path;
-		imageSize = image.size;
-	}
-
-	const scale = SIZE_SCALES[imageSize];
-	const scaleFactor = typeof scale === 'number' ? scale :
-		Array.isArray(scale) ? [scale[0], scale[1], 1] : [scale, scale, 1];
-
-	// スクロールに応じた効果
-	useFrame(() => {
-		if (ref.current && ref.current.material) {
-			// 各画像に異なるスクロール範囲でズーム効果を適用
-			const startPoint = index * 0.2;
-			const duration = 0.3;
-			const endPoint = startPoint + duration;
-
-			// スクロール位置が範囲内にあるか確認
-			let progress = 0;
-			if (scrollOffset > startPoint && scrollOffset < endPoint) {
-				progress = (scrollOffset - startPoint) / duration;
-			} else if (scrollOffset >= endPoint) {
-				progress = 1;
-			}
-
-			// ズーム効果の適用
-			const zoom = 1 + (progress / 3);
-			ref.current.material.zoom = zoom;
-
-			// 視差効果 - Y位置をスクロールに応じて調整
-			const baseY = position[1];
-			const parallaxStrength = index + 1;
-			const yOffset = baseY - (scrollOffset * 3 * parallaxStrength);
-			ref.current.position.y = yOffset;
+	// アニメーション再生
+	useEffect(() => {
+		Object.values(actions).forEach((a) => a.stop());
+		actions['PushUp']?.reset().play();
+		const bodyKey = Object.keys(actions).find((k) => k.includes('Armature'));
+		if (bodyKey) {
+			actions[bodyKey]?.reset().fadeIn(0.3).play();
 		}
+	}, [actions]);
+
+	// 毎フレーム、ミキサーを更新
+	useFrame((_, dt) => {
+		mixer.update(dt);
 	});
 
-	return (
-		<DreiImage
-			ref={ref}
-			url={imageUrl}
-			position={position}
-			scale={scaleFactor}
-			transparent
-			opacity={1}
-		/>
-	);
-};
+	// glTF に含まれるマテリアルを一切触らずそのまま適用
+	return <primitive object={scene} />;
+}
 
-// メインのThree.jsシーン
-const ThreeScene = () => {
-	return (
-		<>
-			<ambientLight intensity={0.5} />
-			<pointLight position={[10, 10, 10]} />
-
-			{/* テスト用のボックス */}
-			<mesh position={[0, 0, 0]}>
-				<boxGeometry args={[2, 2, 2]} />
-				<meshStandardMaterial color="blue" />
-			</mesh>
-
-			<mesh position={[0, -3, 0]}>
-				<boxGeometry args={[1, 1, 1]} />
-				<meshStandardMaterial color="red" />
-			</mesh>
-
-			{/* 複数の画像を追加 */}
-			{testImages.map((img, index) => (
-				<ImageItem
-					key={img.id}
-					image={img}
-					position={[
-						(index % 2) * 4 - 2,
-						-index * 3,
-						0
-					]}
-					index={index}
-				/>
-			))}
-		</>
-	);
-};
-
-// メインコンポーネント
-const PepeGallery = ({ className = '' }) => {
-	const [isLoading, setIsLoading] = useState(true);
-	const [scrollOffset, setScrollOffset] = useState(0);
-	const containerRef = useRef(null);
-
-	// スクロールハンドラー
-	const handleScroll = useCallback(() => {
-		if (containerRef.current) {
-			// スクロール位置を0~1の範囲に正規化
-			const scrollHeight = containerRef.current.scrollHeight - window.innerHeight;
-			const scrollTop = containerRef.current.scrollTop;
-			const normalized = Math.max(0, Math.min(1, scrollTop / scrollHeight));
-			setScrollOffset(normalized);
-		}
-	}, []);
-
-	// コンポーネントマウント時の処理
-	useEffect(() => {
-		// 初期ロード
-		const timer = setTimeout(() => {
-			setIsLoading(false);
-		}, 1000);
-
-		// スクロールイベントの設定
-		const currentRef = containerRef.current;
-		if (currentRef) {
-			currentRef.addEventListener('scroll', handleScroll);
-		}
-
-		// クリーンアップ
-		return () => {
-			clearTimeout(timer);
-			if (currentRef) {
-				currentRef.removeEventListener('scroll', handleScroll);
-			}
-		};
-	}, [handleScroll]);
-
-	// 仮想スクロールエリアの高さ
-	const scrollHeight = `${SCROLL_SETTINGS.pages * 100}vh`;
-
-	return (
-		<div
-			ref={containerRef}
-			className={`w-full h-screen overflow-auto ${className}`}
-			style={{ scrollBehavior: 'smooth' }}
-		>
-			{/* ローディング表示 */}
-			{isLoading && (
-				<div className="fixed inset-0 flex items-center justify-center bg-gray-900 bg-opacity-80 z-50">
-					<div className="text-white text-2xl">Loading Gallery...</div>
-				</div>
-			)}
-
-			{/* スクロール可能なコンテンツエリア */}
-			<div style={{ height: scrollHeight, position: 'relative' }}>
-				{/* Three.jsコンテンツ（固定位置） */}
-				<div className="fixed inset-0">
-					<ScrollContext.Provider value={scrollOffset}>
-						<Canvas
-							camera={{ position: [0, 0, 15], fov: 15 }}
-							className="w-full h-full"
-							gl={{
-								antialias: true,
-								alpha: true,
-								preserveDrawingBuffer: true
-							}}
-							dpr={[1, 1.5]}
-						>
-							<color attach="background" args={['#d8d7d7']} />
-							<Suspense fallback={null}>
-								<ThreeScene />
-								<Preload all />
-							</Suspense>
-						</Canvas>
-					</ScrollContext.Provider>
-				</div>
-
-				{/* HTML/DOMコンテンツ（スクロール可能） */}
-				<div className="relative w-full h-full" style={{ pointerEvents: 'none' }}>
-					{/* 例：スクロールに連動するテキスト */}
-					<div
-						className="absolute top-[100vh] left-10 text-4xl font-bold"
-						style={{ pointerEvents: 'auto' }}
-					>
-						Pepe Gallery
-					</div>
-
-					<div
-						className="absolute top-[200vh] right-10 text-4xl font-bold"
-						style={{ pointerEvents: 'auto' }}
-					>
-						Collection
-					</div>
-				</div>
-			</div>
-		</div>
-	);
-};
-
-export default PepeGallery;-e 
+// モデルのプリロード
+useGLTF.preload('/models/push-up-pepe.glb');
+-e 
 ### FILE: ./src/app/components/pepe3d/types.d.ts
 
 // types.d.ts
@@ -2542,139 +2542,12 @@ interface TextFragment {
 	isKeyword: boolean;
 	keywordType?: string;
 }-e 
-### FILE: ./src/app/components/pepe3d/CyberInterface.tsx
-
-// CyberInterface.tsx
-'use client';
-
-import React, { useEffect, useState, useRef } from 'react';
-import styles from './PepeStyles.module.css';
-
-// バイナリデータを生成する関数
-const generateBinaryData = (length: number): string => {
-  const chars = '01';
-  return Array.from({ length }, () => chars.charAt(Math.floor(Math.random() * chars.length))).join('');
-};
-
-// 16進数データを生成する関数
-const generateHexData = (length: number): string => {
-  const chars = '0123456789ABCDEF';
-  return Array.from({ length }, () => chars.charAt(Math.floor(Math.random() * chars.length))).join('');
-};
-
-const CyberInterface: React.FC<CyberInterfaceProps> = ({ 
-  scrollProgress, 
-  activeIndex,
-  totalSections 
-}) => {
-  const [dataStream, setDataStream] = useState<string[]>([]);
-  const [systemTime, setSystemTime] = useState<string>('');
-  const [randomGlitch, setRandomGlitch] = useState<boolean>(false);
-  
-  // データストリームを生成
-  useEffect(() => {
-    // 初期データストリームを生成
-    const initialData: string[] = [];
-    for (let i = 0; i < 50; i++) {
-      if (Math.random() > 0.7) {
-        initialData.push(generateHexData(16));
-      } else {
-        initialData.push(generateBinaryData(16));
-      }
-    }
-    setDataStream(initialData);
-    
-    // 定期的にデータストリームを更新
-    const interval = setInterval(() => {
-      setDataStream(prev => {
-        const newData = [...prev];
-        // 1-3行をランダムに置き換え
-        const replaceCount = Math.floor(Math.random() * 3) + 1;
-        for (let i = 0; i < replaceCount; i++) {
-          const index = Math.floor(Math.random() * newData.length);
-          if (Math.random() > 0.7) {
-            newData[index] = generateHexData(16);
-          } else {
-            newData[index] = generateBinaryData(16);
-          }
-        }
-        return newData;
-      });
-      
-      // ランダムなグリッチ効果
-      if (Math.random() > 0.9) {
-        setRandomGlitch(true);
-        setTimeout(() => setRandomGlitch(false), 200);
-      }
-    }, 500);
-    
-    // システム時間の更新
-    const timeInterval = setInterval(() => {
-      const now = new Date();
-      setSystemTime(`SYS://GREEN_SOURCE v2.3.7 | ${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}:${now.getSeconds().toString().padStart(2, '0')}`);
-    }, 1000);
-    
-    return () => {
-      clearInterval(interval);
-      clearInterval(timeInterval);
-    };
-  }, []);
-  
-  // エネルギーレベル（スクロール進行に基づく）
-  const energyLevel = Math.max(5, Math.min(100, scrollProgress * 100));
-  
-  return (
-    <>
-      {/* スキャンライン */}
-      <div className={styles.scanline}></div>
-      
-      {/* コーナーマーカー */}
-      <div className={styles.cyberFrame}>
-        <div className={`${styles.cornerMarker} ${styles.topLeft} ${randomGlitch ? styles.jitter : ''}`}></div>
-        <div className={`${styles.cornerMarker} ${styles.topRight} ${randomGlitch ? styles.jitter : ''}`}></div>
-        <div className={`${styles.cornerMarker} ${styles.bottomLeft} ${randomGlitch ? styles.jitter : ''}`}></div>
-        <div className={`${styles.cornerMarker} ${styles.bottomRight} ${randomGlitch ? styles.jitter : ''}`}></div>
-      </div>
-      
-      {/* データストリーム */}
-      <div className={styles.dataStream}>
-        <div className={styles.dataContent}>
-          {dataStream.map((line, index) => (
-            <div key={index} className={randomGlitch && index % 5 === 0 ? styles.jitter : ''}>
-              {line}
-            </div>
-          ))}
-        </div>
-      </div>
-      
-      {/* エネルギーメーター */}
-      <div className={styles.energyMeter}>
-        <div 
-          className={styles.energyLevel} 
-          style={{ height: `${energyLevel}%` }}
-        ></div>
-      </div>
-      
-      {/* システムステータス */}
-      <div className={styles.systemStatus}>
-        {systemTime}
-        <div>SECTION: {activeIndex !== null ? activeIndex + 1 : 0}/{totalSections}</div>
-        <div>ENERGY: {Math.floor(energyLevel)}%</div>
-      </div>
-    </>
-  );
-};
-
-export default CyberInterface;-e 
 ### FILE: ./src/app/components/pepe3d/ScrollMessage.tsx
 
 // ScrollMessage.tsx
 'use client';
-
 import React, { useEffect, useRef, useState } from 'react';
-import CyberInterface from './CyberInterface';
 import styles from './PepeStyles.module.css';
-
 type MessageConfig = {
 	id: string;
 	text: string;
@@ -2707,10 +2580,10 @@ const messages: MessageConfig[] = [
 	},
 	{
 		id: 'trigger-2',
-		text: 'The Green Source — rich, deep, and sweet.',
+		text: 'The Green Source — rich, deep and sweet.',
 		top: '30vh',
 		left: '30vw',
-		width: 'max-content',
+		width: 'auto',
 		fontSize: '2rem',
 		glitchEffect: 'rgb',
 		keywords: ['green source'],
@@ -2720,7 +2593,7 @@ const messages: MessageConfig[] = [
 		text: 'It pushes you toward your next challenge.',
 		top: '40vh',
 		left: '10vw',
-		width: 'max-content',
+		width: 'auto',
 		fontSize: '2rem',
 		glitchEffect: 'rgb',
 		keywords: ['pulse', 'blasting away fatigue'],
@@ -2728,10 +2601,10 @@ const messages: MessageConfig[] = [
 	{
 		id: 'trigger-4',
 		text: 'Feel the green power — right in your hands.',
-		top: '80vh',
+		top: '60vh',
 		left: '30vw',
-		width: '60vw',
-		fontSize: '3rem',
+		width: 'auto',
+		fontSize: '2rem',
 		glitchEffect: 'slice',
 		keywords: ['green power', 'transcends dimensions'],
 	},
@@ -2742,43 +2615,6 @@ const ScrollTriggerMessages: React.FC = () => {
 	const [activeIndex, setActiveIndex] = useState<number | null>(null);
 	const [scrollProgress, setScrollProgress] = useState<number>(0);
 	const [randomTrigger, setRandomTrigger] = useState<boolean>(false);
-
-	// キーワードに基づいてテキストを処理する関数
-	const processText = (text: string, keywords: string[] = []): TextFragment[] => {
-		if (!keywords || keywords.length === 0) return [{ text, isKeyword: false }];
-
-		const fragments: TextFragment[] = [];
-		let remainingText = text;
-
-		// 各キーワードを検索して分割
-		keywords.forEach((keyword) => {
-			const parts = remainingText.split(new RegExp(`(${keyword})`, 'g'));
-			if (parts.length === 1) return; // キーワードが見つからない場合はスキップ
-
-			// 分割された部分を処理
-			let newRemainingText = '';
-			parts.forEach((part, index) => {
-				if (part === keyword) {
-					fragments.push({
-						text: part,
-						isKeyword: true,
-						keywordType: keyword,
-					});
-				} else if (part) {
-					newRemainingText += part;
-				}
-			});
-			remainingText = newRemainingText;
-		});
-
-		// 残りのテキストがあれば追加
-		if (remainingText) {
-			fragments.push({ text: remainingText, isKeyword: false });
-		}
-
-		return fragments.length > 0 ? fragments : [{ text, isKeyword: false }];
-	};
-
 	// グリッチエフェクトに基づいてクラス名を取得
 	const getGlitchClass = (effect?: 'rgb' | 'slice' | 'wave' | 'pulse' | 'jitter' | 'none'): string => {
 		switch (effect) {
@@ -2844,7 +2680,7 @@ const ScrollTriggerMessages: React.FC = () => {
 				// rootMarginを調整してセクション開始時（上部が見えるとき）から検出
 				rootMargin: '100px 0px',
 				// thresholdを下げて少しでも見えたら反応するように
-				threshold: 0.1
+				threshold: 0.01
 			}
 		);
 
@@ -2907,7 +2743,15 @@ const ScrollTriggerMessages: React.FC = () => {
 		<>
 			{/* トリガー用ダミーゾーン */}
 			{messages.map((_, i) => (
-				<div key={`zone-${i}`} ref={(el) => (refs.current[i] = el)} className="h-screen w-full" />
+				<div
+					key={`zone-${i}`}
+					ref={(el) => {
+						if (el) {
+							refs.current[i] = el;
+						}
+					}}
+					className="h-[150vh] w-full"
+				/>
 			))}
 
 
@@ -2962,7 +2806,7 @@ const PepeTop: React.FC = () => {
 	const scrollMessageRef = useRef<HTMLDivElement>(null);
 
 	return (
-		<div className="relative f-[1000vh]">
+		<div className="w-full relative h-full">
 			{/* Sticky PepeModel3D */}
 			<div className="sticky top-0 h-screen w-full overflow-hidden">
 				<PepeModel3D />
@@ -3090,22 +2934,29 @@ const PepeContainer: React.FC<PepeContainerProps> = ({
 	// モデルが読み込まれていない場合のローディング表示
 	if (isLoading || !scene) {
 		return (
+			//@ts-expect-error React Three Fiber JSX elements
 			<mesh>
+				{/* @ts-expect-error React Three Fiber JSX elements */}
 				<boxGeometry args={[1, 1, 1]} />
+				{/* @ts-expect-error React Three Fiber JSX elements */}
 				<meshStandardMaterial color="lime" wireframe />
+				{/* @ts-expect-error React Three Fiber JSX elements */}
 			</mesh>
 		);
 	}
 
 	// GLTFモデル表示
 	return (
+		//@ts-expect-error React Three Fiber JSX elements
 		<group
 			ref={groupRef}
 			scale={[modelScale, modelScale, modelScale]} // 固定スケール
 			position={[modelPosition[0], modelPosition[1], modelPosition[2]]}
 			rotation={[0, 0, 0]} // 正面向きの初期回転
 		>
+			{/* @ts-expect-error React Three Fiber JSX elements */}
 			<primitive object={scene.clone()} />
+			{/* @ts-expect-error React Three Fiber JSX elements */}
 		</group>
 	);
 };
@@ -3165,40 +3016,42 @@ const PepeModel3D: React.FC<PepeModel3DProps> = ({
 				<div className={`${styles.decorLine} ${styles.decorLineBottom}`}></div>
 
 				<div className={styles.canvasWrapper}>
-					<Canvas shadows>
-						<ErrorBoundary
-							fallback={
-								<div className={styles.errorMessage}>
-									エラー: 3Dモデルの読み込みに失敗しました
-								</div>
-							}
-						>
-							{/* ライティング設定 */}
-							<ambientLight intensity={0.8} />
-							<directionalLight position={[5, 5, 5]} intensity={1.0} castShadow />
-							<spotLight position={[-5, 8, -5]} angle={0.15} penumbra={1} intensity={1.5} castShadow />
-							<hemisphereLight intensity={0.4} color="#88eeff" groundColor="#553333" />
+					<Canvas
+						className="w-full h-full"
+						gl={{ antialias: false }}
+						dpr={1}
+						shadows={false}
+						frameloop="demand"
+					>
+
+						{/* @ts-expect-error React Three Fiber JSX elements */}
+						<ambientLight intensity={0.8} />
+						{/* @ts-expect-error React Three Fiber JSX elements */}
+						<directionalLight position={[5, 5, 5]} intensity={1.0} castShadow />
+						{/* @ts-expect-error React Three Fiber JSX elements */}
+						<spotLight position={[-5, 8, -5]} angle={0.15} penumbra={1} intensity={1.5} castShadow />
+						{/* @ts-expect-error React Three Fiber JSX elements */}
+						<hemisphereLight intensity={0.4} color="#88eeff" groundColor="#553333" />
 
 
-							{/* Pepeモデル */}
-							<PepeContainer autoRotate={autoRotate} rotationSpeed={rotationSpeed} />
+						{/* Pepeモデル */}
+						<PepeContainer autoRotate={autoRotate} rotationSpeed={rotationSpeed} />
 
-							{/* カメラ設定 - 少し下向きにして顔が中心に来るように */}
-							<PerspectiveCamera makeDefault position={[0, 1, 4]} fov={45} />
+						{/* カメラ設定 - 少し下向きにして顔が中心に来るように */}
+						<PerspectiveCamera makeDefault position={[0, 1, 4]} fov={45} />
 
-							{/* コントロール設定 - Y軸周りの回転のみ許可（水平方向のみ回転可能） */}
-							{enableControls && (
-								<OrbitControls
-									enableZoom={false}
-									enablePan={false}
-									enableRotate={true}
-									minPolarAngle={Math.PI / 2} // 90度 - 常に赤道面に固定
-									maxPolarAngle={Math.PI / 2} // 90度 - 常に赤道面に固定
-									dampingFactor={0.05}
-									rotateSpeed={0.5}
-								/>
-							)}
-						</ErrorBoundary>
+						{/* コントロール設定 - Y軸周りの回転のみ許可（水平方向のみ回転可能） */}
+						{enableControls && (
+							<OrbitControls
+								enableZoom={false}
+								enablePan={false}
+								enableRotate={true}
+								minPolarAngle={Math.PI / 2} // 90度 - 常に赤道面に固定
+								maxPolarAngle={Math.PI / 2} // 90度 - 常に赤道面に固定
+								dampingFactor={0.05}
+								rotateSpeed={0.5}
+							/>
+						)}
 					</Canvas>
 				</div>
 
@@ -3215,315 +3068,10 @@ export default PepeModel3D;
 
 // グローバルにモデルをプリロード
 useGLTF.preload(`${process.env.NEXT_PUBLIC_CLOUDFRONT_URL}/pepe/pepe.glb`);-e 
-### FILE: ./src/app/components/matrix-scroll/MatrixScrollContainer.tsx
-
-// MatrixScrollContainer.tsx
-'use client';
-import React, { useState, useEffect, useRef } from 'react';
-import { Environment, PerspectiveCamera } from '@react-three/drei';
-import { useFrame, Canvas } from '@react-three/fiber';
-import * as THREE from 'three';
-import styles from './MatrixScroll.module.css';
-
-/**
- * MatrixScrollContainer - メインコンポーネント
- * スクロールアニメーションとマトリックスエフェクトを組み合わせたコンテナ
- */
-interface MatrixScrollContainerProps {
-  children?: React.ReactNode;
-  backgroundImage?: string;
-}
-
-const MatrixScrollContainer: React.FC<MatrixScrollContainerProps> = ({
-  children,
-  backgroundImage = ''
-}) => {
-  // スクロール状態の管理
-  const [scrollY, setScrollY] = useState(0);
-  const [maxScroll, setMaxScroll] = useState(0);
-  const [scrollProgress, setScrollProgress] = useState(0);
-  const containerRef = useRef<HTMLDivElement>(null);
-  
-  // スクロール量を監視してステートを更新
-  useEffect(() => {
-    const handleScroll = () => {
-      if (containerRef.current) {
-        const currentScrollY = window.scrollY;
-        setScrollY(currentScrollY);
-        
-        // コンテナの高さからビューポートの高さを引いた値が最大スクロール量
-        const containerHeight = containerRef.current.scrollHeight;
-        const maxScrollValue = containerHeight - window.innerHeight;
-        setMaxScroll(maxScrollValue);
-        
-        // スクロール進行度を0〜1の範囲で計算
-        const progress = Math.min(Math.max(currentScrollY / maxScrollValue, 0), 1);
-        setScrollProgress(progress);
-      }
-    };
-
-    // 初期設定
-    handleScroll();
-    
-    // スクロールイベントリスナーの登録（パフォーマンス向上のためにpassiveオプションを設定）
-    window.addEventListener('scroll', handleScroll, { passive: true });
-    
-    // リサイズイベントリスナーの登録
-    window.addEventListener('resize', handleScroll, { passive: true });
-    
-    return () => {
-      window.removeEventListener('scroll', handleScroll);
-      window.removeEventListener('resize', handleScroll);
-    };
-  }, [maxScroll]);
-
-  return (
-    <div className={styles.scrollContainer} ref={containerRef}>
-      {/* スクロールコンテンツ（高さを確保） */}
-      <div className={styles.scrollContent}>
-        {/* スティッキーな球体コンテナ */}
-        <div className={styles.stickyContainer}>
-          {/* 3D球体 */}
-          <MatrixSphereCanvas 
-            scrollProgress={scrollProgress}
-            backgroundImage={backgroundImage}
-          />
-          
-          {/* マトリックスコードのレイン効果 */}
-          <MatrixCodeRain 
-            scrollProgress={scrollProgress}
-          />
-          
-          {/* メッセージ表示（Matrix風テキスト） */}
-          <MatrixTextOverlay 
-            scrollProgress={scrollProgress} 
-          />
-        </div>
-        
-        {/* 追加コンテンツ（オプション） */}
-        <div className={styles.contentSections}>
-          {children}
-        </div>
-        
-        {/* スクロールプログレスインジケーター */}
-        <div className={styles.scrollIndicator} style={{ width: `${scrollProgress * 100}%` }} />
-      </div>
-    </div>
-  );
-};
-
-// スクロールに反応する回転球体
-const RotatingSphere = ({ scrollProgress }) => {
-  const sphereRef = useRef<THREE.Mesh>(null);
-  
-  // フレームごとに回転を更新
-  useFrame(() => {
-    if (sphereRef.current) {
-      // スクロール進行に基づいて回転
-      const baseRotation = scrollProgress * Math.PI * 4; // スクロールに応じて回転（4π = 720度）
-      
-      // Y軸を中心に回転
-      sphereRef.current.rotation.y = baseRotation;
-      
-      // X軸とZ軸にも少しだけ回転を加えて動きを複雑に
-      sphereRef.current.rotation.x = Math.sin(baseRotation * 0.5) * 0.3;
-      sphereRef.current.rotation.z = Math.sin(baseRotation * 0.3) * 0.15;
-    }
-  });
-
-  // 球体テクスチャをロード
-  const texture = new THREE.TextureLoader().load('/images/cyberpunk-cityscape.png');
-  texture.mapping = THREE.EquirectangularReflectionMapping;
-
-  return (
-    <mesh ref={sphereRef}>
-      <sphereGeometry args={[2, 64, 64]} />
-      <meshBasicMaterial map={texture} side={THREE.BackSide} />
-    </mesh>
-  );
-};
-
-// Three.jsで3D球体を描画するキャンバス
-const MatrixSphereCanvas = ({ scrollProgress, backgroundImage }) => {
-  return (
-    <div className={styles.sphereContainer}>
-      <Canvas shadows>
-        {/* ライティング設定 */}
-        <ambientLight intensity={0.8} />
-        <directionalLight position={[5, 5, 5]} intensity={1.0} castShadow />
-        <spotLight position={[-5, 8, -5]} angle={0.15} penumbra={1} intensity={1.5} castShadow />
-        <hemisphereLight intensity={0.4} color="#88eeff" groundColor="#553333" />
-
-        {/* 回転する球体 */}
-        <RotatingSphere scrollProgress={scrollProgress} />
-
-        {/* カメラ設定 */}
-        <PerspectiveCamera makeDefault position={[0, 1, 4]} fov={45} />
-      </Canvas>
-      
-      {/* 情報オーバーレイ */}
-      <div className={styles.infoOverlay}>
-        <span className={styles.statusText}>LOADING MATRIX</span>
-        <span className={styles.progressText}>{Math.floor(scrollProgress * 100)}%</span>
-      </div>
-
-      {/* サイバーパンク風の装飾 */}
-      <div className={`${styles.decorLine} ${styles.decorLineTop}`}></div>
-      <div className={`${styles.decorLine} ${styles.decorLineBottom}`}></div>
-    </div>
-  );
-};
-
-// マトリックスコードのレイン効果
-const MatrixCodeRain = ({ scrollProgress }) => {
-  const canvasRef = useRef<HTMLCanvasElement>(null);
-  const animationRef = useRef<number>(null);
-  
-  // マトリックスコードのレイン効果を実装
-  useEffect(() => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-
-    const ctx = canvas.getContext('2d');
-    if (!ctx) return;
-
-    // キャンバスのサイズをウィンドウにフィット
-    const resizeCanvas = () => {
-      canvas.width = window.innerWidth;
-      canvas.height = window.innerHeight;
-    };
-
-    // 初期化
-    resizeCanvas();
-    window.addEventListener('resize', resizeCanvas);
-
-    // マトリックスの文字
-    const matrixChars = "アイウエオカキクケコサシスセソタチツテトナニヌネノハヒフヘホマミムメモヤユヨラリルレロワヲン0123456789".split("");
-    
-    // 縦列の数を計算（画面の幅に応じて）
-    const fontSize = 16;
-    const columns = Math.ceil(canvas.width / fontSize);
-    
-    // 各列の降下位置を保持
-    const drops: number[] = [];
-    for (let i = 0; i < columns; i++) {
-      drops[i] = Math.random() * -100; // ランダムな初期位置
-    }
-
-    // アニメーション関数
-    const draw = () => {
-      // 背景を半透明の黒でクリア（残像効果を出す）
-      ctx.fillStyle = "rgba(0, 0, 0, 0.05)";
-      ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-      // スクロール進行に応じて色の彩度を変化
-      const hue = 120; // 緑色のベース
-      const saturation = 100; // 彩度の最大値
-      const lightness = 40 + scrollProgress * 20; // スクロールに応じて明るさ変化
-      
-      // 文字の描画
-      ctx.fillStyle = `hsl(${hue}, ${saturation}%, ${lightness}%)`;
-      ctx.font = `${fontSize}px monospace`;
-      ctx.textAlign = "center";
-      
-      // 各列の文字を描画
-      for(let i = 0; i < drops.length; i++) {
-        // スクロール進行に応じて文字列を選択（進行に応じて複雑になる）
-        const charIndex = Math.floor(Math.random() * (matrixChars.length * (0.5 + scrollProgress * 0.5)));
-        const char = matrixChars[charIndex % matrixChars.length];
-        
-        // 文字の位置
-        const x = i * fontSize;
-        const y = drops[i] * fontSize;
-        
-        // 表示する文字の透明度（遠くなるほど薄く）
-        const alpha = 0.5 + Math.random() * 0.5;
-        ctx.fillStyle = `hsla(${hue}, ${saturation}%, ${lightness}%, ${alpha})`;
-        
-        // 文字を描画
-        ctx.fillText(char, x, y);
-        
-        // 各ドロップの位置を更新
-        // スクロール進行によって落下速度が加速
-        const fallSpeed = 0.5 + scrollProgress * 1.5;
-        drops[i] += fallSpeed;
-        
-        // 画面下に到達したらリセット（ランダム位置から再開）
-        if(drops[i] * fontSize > canvas.height && Math.random() > 0.975) {
-          drops[i] = 0;
-        }
-      }
-      
-      // 次のフレームをリクエスト
-      animationRef.current = requestAnimationFrame(draw);
-    };
-    
-    // アニメーションを開始
-    draw();
-    
-    // クリーンアップ
-    return () => {
-      if (animationRef.current) {
-        cancelAnimationFrame(animationRef.current);
-      }
-      window.removeEventListener('resize', resizeCanvas);
-    };
-  }, [scrollProgress]);
-
-  return (
-    <canvas 
-      ref={canvasRef} 
-      className={styles.matrixCanvas}
-    />
-  );
-};
-
-// スクロール進行に応じて表示されるマトリックス風メッセージ
-const MatrixTextOverlay = ({ scrollProgress }) => {
-  // メッセージ一覧
-  const messages = [
-    "Wake up, Neo...",
-    "The Matrix has you...",
-    "Follow the white rabbit.",
-    "Knock, knock, Neo.",
-    "The Matrix is everywhere.",
-    "Welcome... to the desert of the real."
-  ];
-  
-  // 現在表示すべきメッセージのインデックスを計算
-  const messageIndex = Math.min(
-    Math.floor(scrollProgress * messages.length),
-    messages.length - 1
-  );
-  
-  // スクロール進行に応じたメッセージの表示/非表示
-  const isVisible = scrollProgress > 0.05;
-  
-  // スクロール進行に応じたメッセージの不透明度
-  const opacity = Math.min(scrollProgress * 2, 1);
-  
-  if (!isVisible) return null;
-  
-  return (
-    <div className={styles.matrixMessage} style={{ opacity }}>
-      <div className={styles.messageBox}>
-        <div className={styles.messageHeader}>
-          <span className={styles.blinker}></span>
-          SYSTEM MESSAGE
-        </div>
-        <div className={styles.messageContent}>
-          {messages[messageIndex]}
-        </div>
-      </div>
-    </div>
-  );
-};
-
-export default MatrixScrollContainer;-e 
 ### FILE: ./src/app/components/glowing-3d-text/PepeFlavorModel.tsx
 
 'use client';
-import { useRef, useEffect } from 'react';
+import { useRef, useEffect, useState } from 'react';
 import { useGLTF } from '@react-three/drei';
 import { useFrame } from '@react-three/fiber';
 import { MotionValue } from 'framer-motion';
@@ -3534,7 +3082,7 @@ interface PepeFlavorModelProps {
 	preserveOriginalMaterials?: boolean; // Blenderのマテリアルをそのまま使用するかどうか
 }
 
-const PepeFlavorModel: React.FC<PepeFlavorModelProps> = ({ 
+const PepeFlavorModel: React.FC<PepeFlavorModelProps> = ({
 	scrollProgress,
 	preserveOriginalMaterials = true // デフォルトでBlenderのマテリアルを保持
 }) => {
@@ -3542,12 +3090,31 @@ const PepeFlavorModel: React.FC<PepeFlavorModelProps> = ({
 	const { scene, nodes, materials } = useGLTF(`${process.env.NEXT_PUBLIC_CLOUDFRONT_URL}/pepe/pepe_flavor.glb`);
 	const modelRef = useRef<THREE.Group>(null);
 
+	// 画面サイズの状態管理
+	const [isMobile, setIsMobile] = useState(false);
+
+	// 画面サイズの監視
+	useEffect(() => {
+		const checkMobile = () => {
+			setIsMobile(window.innerWidth <= 768); // 768px以下をモバイルと判定
+		};
+
+		// 初期チェック
+		checkMobile();
+
+		// リサイズイベントリスナーを追加
+		window.addEventListener('resize', checkMobile);
+
+		// クリーンアップ
+		return () => window.removeEventListener('resize', checkMobile);
+	}, []);
+
 	// モデルの初期設定
 	useEffect(() => {
 		if (!scene) return;
 
 		console.log("Loading Pepe Flavor model with materials:", materials);
-		
+
 		// 色管理を有効化 - これは常に有効にするとよい
 		THREE.ColorManagement.enabled = true;
 
@@ -3555,29 +3122,24 @@ const PepeFlavorModel: React.FC<PepeFlavorModelProps> = ({
 		scene.traverse((object) => {
 			if (object instanceof THREE.Mesh && object.material) {
 				console.log(`Found mesh: ${object.name} with material:`, object.material);
-				
+
 				if (preserveOriginalMaterials) {
 					// オリジナルのマテリアルを保持しつつ、設定を最適化
 					if (object.material instanceof THREE.Material) {
-						// 発光を強化
-						if ('emissive' in object.material && object.material.emissive) {
-							// Blenderの色をそのまま使用しつつ発光を強化
-							object.material.emissiveIntensity = 1.2;
-						}
-						
+
 						// トーンマッピングを無効化して色変換を防止
 						object.material.toneMapped = false;
-						
+
 						// メタリック・反射設定を微調整（必要に応じて）
 						if ('metalness' in object.material) object.material.metalness = 0.8;
 						if ('roughness' in object.material) object.material.roughness = 0.2;
-						
+
 						console.log(`Enhanced original material for ${object.name}`);
 					}
 				} else {
 					// オリジナルの色を保持
 					const originalColor = object.material.color ? object.material.color.clone() : new THREE.Color("#00ff9f");
-					
+
 					// マテリアルをカスタムシェーダーマテリアルに置き換え
 					const material = new THREE.MeshPhysicalMaterial({
 						color: originalColor, // オリジナルの色を使用
@@ -3595,7 +3157,7 @@ const PepeFlavorModel: React.FC<PepeFlavorModelProps> = ({
 					// オリジナルマテリアルから必要なプロパティをコピー
 					if (object.material.map) material.map = object.material.map;
 					if (object.material.normalMap) material.normalMap = object.material.normalMap;
-					
+
 					// マテリアルを置き換え
 					object.material = material;
 				}
@@ -3603,7 +3165,8 @@ const PepeFlavorModel: React.FC<PepeFlavorModelProps> = ({
 		});
 	}, [scene, preserveOriginalMaterials]);
 
-	const INITIAL_Y = Math.PI / 4; 
+	const INITIAL_Y = Math.PI / 4;
+
 	// スクロール位置に応じたアニメーション
 	useFrame((state, delta) => {
 		if (!modelRef.current) return;
@@ -3611,7 +3174,6 @@ const PepeFlavorModel: React.FC<PepeFlavorModelProps> = ({
 		// 現在のスクロール位置を取得
 		const progress = scrollProgress.get();
 
-		 //モデルの回転 - スクロールに応じて回転
 		modelRef.current.rotation.y = THREE.MathUtils.lerp(
 			modelRef.current.rotation.y,
 			Math.sin(state.clock.elapsedTime * 0.1) * 0.1 - progress * Math.PI * 0.1,
@@ -3630,18 +3192,19 @@ const PepeFlavorModel: React.FC<PepeFlavorModelProps> = ({
 	});
 
 	return (
+		// @ts-expect-error React Three Fiber JSX elements
 		<primitive
 			ref={modelRef}
 			object={scene}
-			scale={1}
+			scale={0.9}
 			position={[0, 0, 0]}
-			rotation={[ 0, 0, 0 ]}
+			rotation={[0, 0, 0]}
 		/>
 	);
 };
 
 // モデルの事前ロード
-useGLTF.preload('/models/pepe_flavor.glb');
+useGLTF.preload(`${process.env.NEXT_PUBLIC_CLOUDFRONT_URL}/pepe/pepe_flavor.glb`);
 
 export default PepeFlavorModel;-e 
 ### FILE: ./src/app/components/glowing-3d-text/GlowingTextScene.tsx
@@ -3660,7 +3223,13 @@ const GlowingTextScene: React.FC<GlowingTextSceneProps> = ({
 	scrollProgress
 }) => {
 	return (
-		<Canvas className="w-full h-full" shadows dpr={[1, 2]}>
+		<Canvas
+			className="w-full h-full"
+			gl={{ antialias: false }}
+			dpr={1}
+			shadows={false}
+			frameloop="always"
+		>
 			<PerspectiveCamera makeDefault position={[0, 0, 5]} fov={20} />
 			<Suspense fallback={null}>
 				<PepeFlavorModel scrollProgress={scrollProgress} />
@@ -3670,62 +3239,6 @@ const GlowingTextScene: React.FC<GlowingTextSceneProps> = ({
 };
 
 export default GlowingTextScene;-e 
-### FILE: ./src/app/components/glowing-3d-text/PostProcessEffects.tsx
-
-import { EffectComposer, Bloom, ChromaticAberration, Noise, Vignette } from '@react-three/postprocessing';
-import { BlendFunction } from 'postprocessing';
-
-const PostProcessEffects = () => {
-	return (
-		<EffectComposer multisampling={8}>
-			{/* HDRトーンマッピング */}
-			<ToneMapping
-				adaptive
-				resolution={256}
-				middleGrey={0.6}
-				maxLuminance={16.0}
-				averageLuminance={1.0}
-				adaptationRate={1.0}
-			/>
-
-			{/* 多層ブルームエフェクト */}
-			<Bloom
-				intensity={2.0}
-				luminanceThreshold={0.2}
-				luminanceSmoothing={0.9}
-				mipmapBlur
-				radius={0.8}
-			/>
-
-			{/* 2つ目のブルームレイヤー - 広い拡散用 */}
-			<Bloom
-				intensity={0.5}
-				luminanceThreshold={0.1}
-				luminanceSmoothing={0.9}
-				mipmapBlur
-				radius={1.2}
-			/>
-
-			{/* 色収差 */}
-			<ChromaticAberration
-				offset={[0.002, 0.002]}
-				radialModulation
-				modulationOffset={0.5}
-			/>
-
-			{/* ビネット効果 */}
-			<Vignette darkness={0.7} offset={0.3} />
-
-			{/* 微細なノイズテクスチャ */}
-			<Noise opacity={0.02} />
-
-			{/* シャープネス調整 */}
-			<SMAA />
-		</EffectComposer>
-	);
-};
-
-export default PostProcessEffects;-e 
 ### FILE: ./src/app/components/glowing-3d-text/HeroModel.tsx
 
 // src/app/components/hero-section/HeroModel.tsx
@@ -3744,7 +3257,6 @@ export const HeroModel: React.FC<HeroModelProps> = ({
 	return (
 		<ProteinModel
 			autoRotate={true}
-			mouseControl={true}
 			scale={scale}
 		/>
 	);
@@ -3765,21 +3277,17 @@ interface ErrorBoundaryProps {
 	children: React.ReactNode;
 	fallback: React.ReactNode;
 }
-
 interface ErrorBoundaryState {
 	hasError: boolean;
 }
-
 class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoundaryState> {
 	constructor(props: ErrorBoundaryProps) {
 		super(props);
 		this.state = { hasError: false };
 	}
-
 	static getDerivedStateFromError(error: any) {
 		return { hasError: true };
 	}
-
 	render() {
 		if (this.state.hasError) {
 			return this.props.fallback;
@@ -3791,124 +3299,104 @@ class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoundarySta
 // プロテインモデルコンテナ
 interface ProteinContainerProps {
 	autoRotate?: boolean;
-	mouseControl?: boolean;
 	scale?: number;
+	rotationSpeed?: number;
 }
-
-const ProteinContainer: React.FC<ProteinContainerProps> = ({
-	autoRotate = true,
-	mouseControl = false,
-	scale = 1
-}) => {
+const ProteinContainer: React.FC<ProteinContainerProps> = ({ autoRotate = true, scale = 1, rotationSpeed = 0.5 }) => {
 	const groupRef = useRef<THREE.Group>(null);
-
-	// GLTFモデルの読み込み
 	const { scene } = useGLTF(`${process.env.NEXT_PUBLIC_CLOUDFRONT_URL}/pepe/protein_powder.glb`);
 
-	// コンソールにモデル情報を表示（デバッグ用）
-	useEffect(() => {
-		console.log('Model scene:', scene);
-	}, [scene]);
-
-	// マウス位置に基づいた回転
-	const [mousePosition, setMousePosition] = useState({ x: 0, y: 0 });
-
-	// コンポーネントがマウントされたらマウス位置のリスナーを追加
-	useEffect(() => {
-		const handleMouseMove = (e: MouseEvent) => {
-			setMousePosition({
-				x: (e.clientX / window.innerWidth) * 2 - 1,
-				y: -(e.clientY / window.innerHeight) * 2 + 1
-			});
-		};
-
-		window.addEventListener('mousemove', handleMouseMove);
-		return () => window.removeEventListener('mousemove', handleMouseMove);
-	}, []);
-
-	// フレームごとの処理（回転アニメーション）
-	useFrame((state, delta) => {
-		if (!groupRef.current) return;
-
-		// 自動回転
-		if (autoRotate) {
-			groupRef.current.rotation.y += delta * 0.5; // 回転速度
-		}
-
-		// マウス位置に基づく追加の回転（マウスコントロールが有効な場合）
-		if (mouseControl) {
-			groupRef.current.rotation.x = mousePosition.y * 0.3;
-			groupRef.current.rotation.y += (mousePosition.x * 0.5 - groupRef.current.rotation.y) * 0.1;
+	useFrame((_, delta) => {
+		if (autoRotate && groupRef.current) {
+			groupRef.current.rotation.y += delta * rotationSpeed;
 		}
 	});
 
-	// モデルが読み込まれていない場合、プレースホルダーを表示
 	if (!scene) {
 		return (
+			//@ts-expect-error React Three Fiber JSX elements
 			<mesh>
+				{/* @ts-expect-error React Three Fiber JSX elements */}
 				<boxGeometry args={[1, 1, 1]} />
-				<meshStandardMaterial color="hotpink" />
+				{/* @ts-expect-error React Three Fiber JSX elements */}
+				<meshBasicMaterial color="hotpink" />
+				{/* @ts-expect-error React Three Fiber JSX elements */}
 			</mesh>
 		);
 	}
 
-	// GLTFモデル全体を表示する簡易アプローチ
 	return (
+		//@ts-expect-error React Three Fiber JSX elements
 		<group
 			ref={groupRef}
 			scale={[scale, scale, scale]}
-			position={[0, -0.5, 0]} // Y軸方向に少し下げて中央に表示
-			rotation={[0, Math.PI * 0.25, 0]} // 少し回転させて良い角度に
+			position={[0, -0.5, 0]}
+			rotation={[0, Math.PI * 0.25, 0]}
 		>
+			{/* @ts-expect-error React Three Fiber JSX elements */}
 			<primitive object={scene.clone()} />
+			{/* @ts-expect-error React Three Fiber JSX elements */}
 		</group>
 	);
 };
 
-// エラー処理をするためのFallback
-const ProteinModelWithErrorBoundary: React.FC<ProteinContainerProps> = (props) => {
-	return (
-		<ErrorBoundary fallback={<div>エラー: 3Dモデルの読み込みに失敗しました</div>}>
-			<ProteinContainer {...props} />
-		</ErrorBoundary>
-	);
-};
-
-// メインのエクスポートコンポーネント
+// メインコンポーネント
 interface ProteinModelProps extends ProteinContainerProps {
 	className?: string;
 }
-const ProteinModel: React.FC<ProteinModelProps> = ({ 
-  className = '', 
-  autoRotate = true, 
-  mouseControl = true, 
-  scale = 1 
-}) => {
-  return (
-    <div className={`w-full h-full ${className}`}>
-      <Canvas shadows>
-        <ambientLight intensity={0.7} /> {/* 明るさを上げる */}
-        <directionalLight position={[10, 10, 10]} intensity={1.2} castShadow /> {/* 明るさを上げる */}
-        <spotLight position={[-10, 10, 10]} angle={0.15} penumbra={1} intensity={1.5} castShadow /> {/* 明るさを上げる */}
-        
-        <ProteinModelWithErrorBoundary 
-          autoRotate={autoRotate} 
-          mouseControl={mouseControl} 
-          scale={scale} 
-        />
-        
-        <Environment preset="city" />
-        {mouseControl && <OrbitControls enableZoom={false} enablePan={false} />}
-        <PerspectiveCamera makeDefault position={[0, 0, 3]} fov={40} /> {/* カメラを近づけてfovを狭く */}
-      </Canvas>
-    </div>
-  );
+const ProteinModel: React.FC<ProteinModelProps> = ({ className = '', autoRotate = true, scale = 1, rotationSpeed = 0.5 }) => {
+	// モバイル判定
+	const [isMobile, setIsMobile] = useState(false);
+	useEffect(() => {
+		const check = () => setIsMobile(window.innerWidth <= 768);
+		check();
+		window.addEventListener('resize', check);
+		return () => window.removeEventListener('resize', check);
+	}, []);
+
+	return (
+		<div className={`w-full h-full ${className}`}>
+			<Canvas
+				gl={{ antialias: false }}
+				dpr={1}
+				shadows={false}
+				frameloop="always"
+				style={{ touchAction: 'pan-y' }}
+			>
+				<ErrorBoundary fallback={<div className="text-center p-4">エラー: 3Dモデルの読み込みに失敗しました</div>}>
+					<ProteinContainer autoRotate={autoRotate} scale={scale} rotationSpeed={rotationSpeed} />
+				</ErrorBoundary>
+
+				<Environment preset="city" />
+				<PerspectiveCamera makeDefault position={[0, 0, 3]} fov={40} />
+
+				{/* モバイルでは触れないよう完全シャットダウン、PC のみ水平回転許可 */}
+				{!isMobile && (
+					<OrbitControls
+						enableZoom={false}
+						enablePan={false}
+						enableRotate={true}
+						// Y軸水平回転全域
+						minAzimuthAngle={-Infinity}
+						maxAzimuthAngle={Infinity}
+						// X軸固定
+						minPolarAngle={Math.PI / 2.6}
+						maxPolarAngle={Math.PI / 2.6}
+						makeDefault
+					/>
+				)}
+			</Canvas>
+		</div>
+	);
 };
 
 export default ProteinModel;
 
-// グローバルにモデルをプリロード
-useGLTF.preload('/models/protein_powder.glb');-e 
+// モデルプリロード
+if (typeof window !== 'undefined' && process.env.NEXT_PUBLIC_CLOUDFRONT_URL) {
+	useGLTF.preload(`${process.env.NEXT_PUBLIC_CLOUDFRONT_URL}/pepe/protein_powder.glb`);
+}
+-e 
 ### FILE: ./src/app/components/glowing-3d-text/GlowingTextSection.tsx
 
 "use client";
@@ -3936,22 +3424,22 @@ const GlowingTextSection = () => {
 				animate={{ opacity: 1, y: 0 }}
 				transition={{ delay: 0.5, duration: 0.8, repeat: Infinity, repeatType: "reverse" }}
 			>
-				<div className="text-xl text-center mb-2 mt-10">↓</div>
+				<div className="text-xl text-center mb-2 mt-5">↓</div>
 				<div className="text-sm font-mono">SCROLL DOWN</div>
 			</motion.div>
 
 
-			<div className="flex justify-center mt-40">
+			<div className="flex w-full justify-center mt-40">
 				<div className="relative w-full h-[110px] md:w-[800px] md:h-[150px] lg:w-[1200px] lg:h-[200px] pointer-events-auto">
 					<GlowingTextScene scrollProgress={scrollYProgress} />
 				</div>
 			</div>
-			<div className="flex justify-center">
+			<div className="flex w-full justify-center">
 				<div className="w-[300px] h-[400px] md:w-[400px] md:h-[500px] lg:w-[500px] lg:h-[600px] pointer-events-auto">
 					<HeroModel scale={1.2} />
 				</div>
 			</div>
-			<p className="text-center text-white">
+			<p className="text-center w-full text-white">
 				Not just protein. It’s a story of courage and humor - encrypted in every scoop.
 			</p>
 			<div className="text-xs mt-8 w-full max-w-sm px-4">
@@ -3980,10 +3468,6 @@ const GlowingTextSection = () => {
 						<tr>
 							<td className="border border-white px-2 py-1 text-center">allergen</td>
 							<td className="border border-white px-2 py-1 text-left">Milk</td>
-						</tr>
-						<tr>
-							<td className="border border-white px-2 py-1 text-center">勇気</td>
-							<td className="border border-white px-2 py-1 text-left">1%</td>
 						</tr>
 					</tbody>
 				</table>
@@ -4049,52 +3533,78 @@ export interface ImageFile {
 // CDNパス
 const CDN_URL = process.env.NEXT_PUBLIC_CLOUDFRONT_URL || "";
 
+// 画面サイズ判定（768px以下をモバイルとする）
+const isMobile = () => {
+  if (typeof window === 'undefined') return false;
+  return window.innerWidth <= 768;
+};
+
+// 画像パスを生成する関数
+const generateImagePath = (filename: string): string => {
+  const folder = isMobile() ? 'gallery-small' : 'pepe';
+  return `${CDN_URL}/${folder}/${filename}`;
+};
+
 // 画像ファイルリスト
 export const imageFiles: ImageFile[] = [
-  { id: 1, filename: '1L.webp', size: 'L', path: `${CDN_URL}/pepe/1L.webp` },
-  { id: 2, filename: '2M.webp', size: 'M', path: `${CDN_URL}/pepe/2M.webp` },
-  { id: 3, filename: '3S.webp', size: 'S', path: `${CDN_URL}/pepe/3S.webp` },
-  { id: 4, filename: '4S.webp', size: 'S', path: `${CDN_URL}/pepe/4S.webp` },
-  { id: 5, filename: '5M.webp', size: 'M', path: `${CDN_URL}/pepe/5M.webp` },
-  { id: 6, filename: '6L.webp', size: 'L', path: `${CDN_URL}/pepe/6L.webp` },
-  { id: 7, filename: '7M.webp', size: 'M', path: `${CDN_URL}/pepe/7M.webp` },
-  { id: 8, filename: '8M.webp', size: 'M', path: `${CDN_URL}/pepe/8M.webp` },
-  { id: 9, filename: '9L.webp', size: 'L', path: `${CDN_URL}/pepe/9L.webp` },
-  { id: 10, filename: '10S.webp', size: 'S', path: `${CDN_URL}/pepe/10S.webp` },
-  { id: 11, filename: '11S.webp', size: 'S', path: `${CDN_URL}/pepe/11S.webp` },
-  { id: 12, filename: '12M.webp', size: 'M', path: `${CDN_URL}/pepe/12M.webp` },
-  { id: 13, filename: '13L.webp', size: 'L', path: `${CDN_URL}/pepe/13L.webp` },
-  { id: 14, filename: '14L.webp', size: 'L', path: `${CDN_URL}/pepe/14L.webp` },
-  { id: 15, filename: '15M.webp', size: 'M', path: `${CDN_URL}/pepe/15M.webp` },
-  { id: 16, filename: '16S.webp', size: 'S', path: `${CDN_URL}/pepe/16S.webp` },
-  { id: 17, filename: '17S.webp', size: 'S', path: `${CDN_URL}/pepe/17S.webp` },
-  { id: 18, filename: '18M.webp', size: 'M', path: `${CDN_URL}/pepe/18M.webp` },
-  { id: 19, filename: '19L.webp', size: 'L', path: `${CDN_URL}/pepe/19L.webp` },
-  { id: 20, filename: '20L.webp', size: 'L', path: `${CDN_URL}/pepe/20L.webp` },
-  { id: 21, filename: '21S.webp', size: 'S', path: `${CDN_URL}/pepe/21S.webp` },
-  { id: 22, filename: '22S.webp', size: 'S', path: `${CDN_URL}/pepe/22S.webp` },
-  { id: 23, filename: '23L.webp', size: 'L', path: `${CDN_URL}/pepe/23L.webp` },
-  { id: 24, filename: '24L.webp', size: 'L', path: `${CDN_URL}/pepe/24L.webp` },
-  { id: 25, filename: '25S.webp', size: 'S', path: `${CDN_URL}/pepe/25S.webp` },
-  { id: 26, filename: '26S.webp', size: 'S', path: `${CDN_URL}/pepe/26S.webp` },
-  { id: 27, filename: '27S.webp', size: 'S', path: `${CDN_URL}/pepe/27S.webp` },
-  { id: 28, filename: '28L.webp', size: 'L', path: `${CDN_URL}/pepe/28L.webp` },
-  { id: 29, filename: '29S.webp', size: 'S', path: `${CDN_URL}/pepe/29S.webp` },
-  { id: 30, filename: '30S.webp', size: 'S', path: `${CDN_URL}/pepe/30S.webp` },
-  { id: 31, filename: '31M.webp', size: 'M', path: `${CDN_URL}/pepe/31M.webp` },
-  { id: 32, filename: '32M.webp', size: 'M', path: `${CDN_URL}/pepe/32M.webp` },
-  { id: 33, filename: '33M.webp', size: 'M', path: `${CDN_URL}/pepe/33M.webp` },
-  { id: 34, filename: '34S.webp', size: 'S', path: `${CDN_URL}/pepe/34S.webp` },
-  { id: 35, filename: '35L.webp', size: 'L', path: `${CDN_URL}/pepe/35L.webp` },
+  { id: 1, filename: '1L.webp', size: 'L', path: generateImagePath('1L.webp') },
+  { id: 2, filename: '2M.webp', size: 'M', path: generateImagePath('2M.webp') },
+  { id: 3, filename: '3S.webp', size: 'S', path: generateImagePath('3S.webp') },
+  { id: 4, filename: '4S.webp', size: 'S', path: generateImagePath('4S.webp') },
+  { id: 5, filename: '5M.webp', size: 'M', path: generateImagePath('5M.webp') },
+  { id: 6, filename: '6L.webp', size: 'L', path: generateImagePath('6L.webp') },
+  { id: 7, filename: '7M.webp', size: 'M', path: generateImagePath('7M.webp') },
+  { id: 8, filename: '8M.webp', size: 'M', path: generateImagePath('8M.webp') },
+  { id: 9, filename: '9L.webp', size: 'L', path: generateImagePath('9L.webp') },
+  { id: 10, filename: '10S.webp', size: 'S', path: generateImagePath('10S.webp') },
+  { id: 11, filename: '11S.webp', size: 'S', path: generateImagePath('11S.webp') },
+  { id: 12, filename: '12M.webp', size: 'M', path: generateImagePath('12M.webp') },
+  { id: 13, filename: '13L.webp', size: 'L', path: generateImagePath('13L.webp') },
+  { id: 14, filename: '14L.webp', size: 'L', path: generateImagePath('14L.webp') },
+  { id: 15, filename: '15M.webp', size: 'M', path: generateImagePath('15M.webp') },
+  { id: 16, filename: '16S.webp', size: 'S', path: generateImagePath('16S.webp') },
+  { id: 17, filename: '17S.webp', size: 'S', path: generateImagePath('17S.webp') },
+  { id: 18, filename: '18M.webp', size: 'M', path: generateImagePath('18M.webp') },
+  { id: 19, filename: '19L.webp', size: 'L', path: generateImagePath('19L.webp') },
+  { id: 20, filename: '20L.webp', size: 'L', path: generateImagePath('20L.webp') },
+  { id: 21, filename: '21S.webp', size: 'S', path: generateImagePath('21S.webp') },
+  { id: 22, filename: '22S.webp', size: 'S', path: generateImagePath('22S.webp') },
+  { id: 23, filename: '23L.webp', size: 'L', path: generateImagePath('23L.webp') },
+  { id: 24, filename: '24L.webp', size: 'L', path: generateImagePath('24L.webp') },
+  { id: 25, filename: '25S.webp', size: 'S', path: generateImagePath('25S.webp') },
+  { id: 26, filename: '26S.webp', size: 'S', path: generateImagePath('26S.webp') },
+  { id: 27, filename: '27S.webp', size: 'S', path: generateImagePath('27S.webp') },
+  { id: 28, filename: '28L.webp', size: 'L', path: generateImagePath('28L.webp') },
+  { id: 29, filename: '29S.webp', size: 'S', path: generateImagePath('29S.webp') },
+  { id: 30, filename: '30S.webp', size: 'S', path: generateImagePath('30S.webp') },
+  { id: 31, filename: '31M.webp', size: 'M', path: generateImagePath('31M.webp') },
+  { id: 32, filename: '32M.webp', size: 'M', path: generateImagePath('32M.webp') },
+  { id: 33, filename: '33M.webp', size: 'M', path: generateImagePath('33M.webp') },
+  { id: 34, filename: '34S.webp', size: 'S', path: generateImagePath('34S.webp') },
+  { id: 35, filename: '35L.webp', size: 'L', path: generateImagePath('35L.webp') },
 ];
 
-// サイズに応じたスケール
-export const SCALE_MAP: Record<ImageSize, number> = {
+// サイズに応じたスケール（デスクトップ用）
+const DESKTOP_SCALE_MAP: Record<ImageSize, number> = {
   L: 4,
   M: 3,
   S: 2,
 };
--e 
+
+// サイズに応じたスケール（モバイル用）
+const MOBILE_SCALE_MAP: Record<ImageSize, number> = {
+  L: 2.5,
+  M: 2,
+  S: 1.5,
+};
+
+// 現在の画面サイズに応じたスケールマップを取得
+export const getScaleMap = (): Record<ImageSize, number> => {
+  return isMobile() ? MOBILE_SCALE_MAP : DESKTOP_SCALE_MAP;
+};
+
+// 後方互換性のため
+export const SCALE_MAP = DESKTOP_SCALE_MAP;-e 
 ### FILE: ./src/app/components/floating-images-fix/cyber-scroll-messages/constants.ts
 
 // src/app/components/floating-images-fix/cyber-scroll-messages/constants.ts
@@ -4128,29 +3638,29 @@ export interface GlitchEffectConfig {
 export const cyberMessages: MessageConfig[] = [
 	{
 		id: 'message-1',
-		text: 'Pepe Ascends.',
+		text: 'Pepe ascends.',
 		position: { start: 0, end: 200 },
 		style: 'horizontal',
 		size: '4rem',
 		align: 'left',
 		glitchEffect: 'rgb',
-		keywords: ['mystery', 'miracle'],
+		keywords: ['Pepe', 'Ascends'],
 		color: '#ffffff', // 白色ベース
 	},
 	{
 		id: 'message-2',
-		text: 'Pepe Summons Us Here.',
+		text: 'Pepe summons us here.',
 		position: { start: 200, end: 400 },
 		style: 'horizontal',
 		size: '4rem',
 		align: 'right',
 		glitchEffect: 'slice',
-		keywords: ['限られた', 'たどり着く'],
+		keywords: ['Pepe', 'Summons'],
 		color: '#ffffff', // 白色ベース
 	},
 	{
 		id: 'message-3',
-		text: 'The<br/>Awakening',
+		text: `Pepe <br/>Makes us <br/>Free.`,
 		position: { start: 400, end: 700 },
 		style: 'horizontal',
 		size: '10rem',
@@ -4210,149 +3720,6 @@ export const generateRandomHex = (length: number): string => {
 		() => hexChars[Math.floor(Math.random() * hexChars.length)]
 	).join('');
 };-e 
-### FILE: ./src/app/components/floating-images-fix/cyber-scroll-messages/CyberInterface.tsx
-
-// src/app/components/floating-images-fix/cyber-scroll-messages/CyberInterface.tsx
-
-'use client';
-
-import React, { useEffect, useState } from 'react';
-import styles from './styles.module.css';
-import {
-	generateRandomBinary,
-	generateRandomHex,
-	systemStatusText,
-	cyberMessages
-} from './constants';
-
-interface CyberInterfaceProps {
-	scrollProgress: number; // 0から1の間の値
-	activeIndex: number | null;
-	isFlashActive: boolean;
-}
-
-const CyberInterface: React.FC<CyberInterfaceProps> = ({
-	scrollProgress,
-	activeIndex,
-	isFlashActive
-}) => {
-	const [dataStream, setDataStream] = useState<string[]>([]);
-	const [systemTime, setSystemTime] = useState<string>('');
-	const [randomGlitch, setRandomGlitch] = useState<boolean>(false);
-
-	// システムステータステキスト
-	const getStatusText = () => {
-		if (activeIndex === null) return systemStatusText.loading;
-		if (activeIndex === 0) return systemStatusText.ready;
-		if (activeIndex === 1) return systemStatusText.awakening;
-		if (activeIndex === 2) return systemStatusText.complete;
-		return systemStatusText.loading;
-	};
-
-	// データストリームを生成
-	useEffect(() => {
-		// 初期データストリームを生成
-		const initialData: string[] = [];
-		for (let i = 0; i < 50; i++) {
-			if (Math.random() > 0.7) {
-				initialData.push(generateRandomHex(16));
-			} else {
-				initialData.push(generateRandomBinary(16));
-			}
-		}
-		setDataStream(initialData);
-
-		// 定期的にデータストリームを更新
-		const interval = setInterval(() => {
-			setDataStream(prev => {
-				const newData = [...prev];
-				// 1-3行をランダムに置き換え
-				const replaceCount = Math.floor(Math.random() * 3) + 1;
-				for (let i = 0; i < replaceCount; i++) {
-					const index = Math.floor(Math.random() * newData.length);
-					if (Math.random() > 0.7) {
-						newData[index] = generateRandomHex(16);
-					} else {
-						newData[index] = generateRandomBinary(16);
-					}
-				}
-				return newData;
-			});
-
-			// ランダムなグリッチ効果
-			if (Math.random() > 0.9) {
-				setRandomGlitch(true);
-				setTimeout(() => setRandomGlitch(false), 200);
-			}
-		}, 500);
-
-		// システム時間の更新
-		const timeInterval = setInterval(() => {
-			const now = new Date();
-			setSystemTime(`SYS://AWAKENING_SEQUENCE v2.4.7 | ${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}:${now.getSeconds().toString().padStart(2, '0')}`);
-		}, 1000);
-
-		return () => {
-			clearInterval(interval);
-			clearInterval(timeInterval);
-		};
-	}, []);
-
-	// エネルギーレベル（スクロール進行に基づく）
-	const energyLevel = Math.max(5, Math.min(100, scrollProgress * 100));
-
-	return (
-		<>
-			{/* スキャンライン */}
-			<div className={styles.scanline}></div>
-
-			{/* フラッシュエフェクト */}
-			<div className={`${styles.flashEffect} ${isFlashActive ? styles.flashActive : ''}`}></div>
-
-			{/* コーナーマーカー */}
-			<div className={styles.cyberFrame}>
-				<div className={`${styles.cornerMarker} ${styles.topLeft} ${randomGlitch ? styles.jitterEffect : ''}`}></div>
-				<div className={`${styles.cornerMarker} ${styles.topRight} ${randomGlitch ? styles.jitterEffect : ''}`}></div>
-				<div className={`${styles.cornerMarker} ${styles.bottomLeft} ${randomGlitch ? styles.jitterEffect : ''}`}></div>
-				<div className={`${styles.cornerMarker} ${styles.bottomRight} ${randomGlitch ? styles.jitterEffect : ''}`}></div>
-			</div>
-
-			{/* データストリーム */}
-			<div className={styles.dataStream}>
-				<div className={styles.dataContent}>
-					{dataStream.map((line, index) => (
-						<div key={index} className={randomGlitch && index % 5 === 0 ? styles.jitterEffect : ''}>
-							{line}
-						</div>
-					))}
-				</div>
-			</div>
-
-			{/* エネルギーメーター */}
-			<div className={styles.energyMeter}>
-				<div
-					className={styles.energyLevel}
-					style={{ height: `${energyLevel}%` }}
-				></div>
-			</div>
-
-			{/* システムステータス */}
-			<div className={styles.systemStatus}>
-				<div>{systemTime}</div>
-				<div>SECTION: {activeIndex !== null ? activeIndex + 1 : 0}/{cyberMessages.length}</div>
-				<div>ENERGY: {Math.floor(energyLevel)}%</div>
-				<div>{getStatusText()}</div>
-			</div>
-
-			{/* セクションインジケーター */}
-			<div className={styles.sectionIndicator}>
-				<div>SCROLL DEPTH: {Math.floor(scrollProgress * 100)}%</div>
-			</div>
-		</>
-	);
-};
-
-export default CyberInterface;-e 
 ### FILE: ./src/app/components/floating-images-fix/cyber-scroll-messages/MessageDisplay.tsx
 
 // src/app/components/floating-images-fix/cyber-scroll-messages/MessageDisplay.tsx
@@ -4377,6 +3744,16 @@ const MessageDisplay: React.FC<MessageDisplayProps> = ({
 	randomGlitch
 }) => {
 	const messageRef = useRef<HTMLDivElement>(null);
+	// ① モバイル判定用ステート
+	const [isMobile, setIsMobile] = useState(false);
+
+	useEffect(() => {
+		const mql = window.matchMedia('(max-width: 640px)');
+		const handler = (e: MediaQueryListEvent) => setIsMobile(e.matches);
+		setIsMobile(mql.matches);
+		mql.addEventListener('change', handler);
+		return () => mql.removeEventListener('change', handler);
+	}, []);
 
 	// グリッチエフェクトに対応するクラス名を取得
 	const getGlitchClass = (effect?: GlitchEffectType): string => {
@@ -4462,17 +3839,27 @@ const MessageDisplay: React.FC<MessageDisplayProps> = ({
 		} else if (message.id === 'message-2') {
 			// 「限られた者がたどり着く」- 横書き、中央右寄り
 			styleProps.position = 'fixed';
-			styleProps.top = '50vh';
+			styleProps.top = '40vh';
 			styleProps.transform = styleProps.transform
 				? `${styleProps.transform} translateY(-50%)`
 				: 'translateY(-50%)';
 		} else if (message.id === 'message-3') {
 			// 「境地」- 縦書き、中央左寄り
 			styleProps.position = 'fixed';
-			styleProps.top = '50vh';
+			styleProps.top = '60vh';
 			styleProps.transform = styleProps.transform
 				? `${styleProps.transform} translateY(-50%)`
 				: 'translateY(-50%)';
+		}
+		if (isMobile) {
+			styleProps.left = '10vw';
+			styleProps.right = undefined;
+			styleProps.textAlign = 'left';
+			styleProps.fontSize = '4rem';
+			// 縦方向の translate は必要なければ外して OK
+			if (styleProps.transform) {
+				styleProps.transform = styleProps.transform.replace(/translateY\(-50%\)/, '');
+			}
 		}
 
 		return styleProps;
@@ -4513,7 +3900,6 @@ export default CyberScrollMessages;
 
 import React, { useEffect, useState, useRef } from 'react';
 import { cyberMessages } from './constants';
-import CyberInterface from './CyberInterface';
 import MessageDisplay from './MessageDisplay';
 
 const CyberScrollMessages: React.FC = () => {
@@ -4677,14 +4063,6 @@ const CyberScrollMessages: React.FC = () => {
 
 	return (
 		<div className="absolute inset-0 pointer-events-none z-15 h-[800vh]">
-
-			<CyberInterface
-				scrollProgress={scrollProgress}
-				activeIndex={activeIndex}
-				isFlashActive={isFlashActive}
-			/>
-
-			{/* メッセージ表示 */}
 			{cyberMessages.map((message, index) => (
 				<MessageDisplay
 					key={message.id}
@@ -4753,25 +4131,134 @@ const FloatingImageFix: React.FC<FloatingImageFixProps> = ({
 	const height = scale / aspect;
 
 	return (
+		// @ts-expect-error React Three Fiber JSX elements
 		<mesh
 			ref={meshRef}
 			position={position}
 			castShadow={false}
 			receiveShadow={false}
 		>
+			{/* @ts-expect-error React Three Fiber JSX elements */}
 			<planeGeometry args={[width, height]} />
+			{/* @ts-expect-error React Three Fiber JSX elements */}
 			<meshBasicMaterial
 				map={texture}
 				transparent
-				opacity={0.5}
+				opacity={0.6}
 				toneMapped={false}
 			/>
+			{/* @ts-expect-error React Three Fiber JSX elements */}
 		</mesh>
 	);
 };
 
 export default FloatingImageFix;
 -e 
+### FILE: ./src/app/components/floating-images-fix/useResponsiveImages.ts
+
+// src/app/components/floating-images-fix/useResponsiveImages.ts
+
+import { useState, useEffect, useMemo } from 'react';
+import { ImageFile, ImageSize } from './constants';
+
+const CDN_URL = process.env.NEXT_PUBLIC_CLOUDFRONT_URL || "";
+
+// 画面サイズ判定（768px以下をモバイルとする）
+const isMobile = () => {
+	if (typeof window === 'undefined') return false;
+	return window.innerWidth <= 768;
+};
+
+// 画像データの基本定義
+const baseImageData = [
+	{ id: 1, filename: '1L.webp', size: 'L' as ImageSize },
+	{ id: 2, filename: '2M.webp', size: 'M' as ImageSize },
+	{ id: 3, filename: '3S.webp', size: 'S' as ImageSize },
+	{ id: 4, filename: '4S.webp', size: 'S' as ImageSize },
+	{ id: 5, filename: '5M.webp', size: 'M' as ImageSize },
+	{ id: 6, filename: '6L.webp', size: 'L' as ImageSize },
+	{ id: 7, filename: '7M.webp', size: 'M' as ImageSize },
+	{ id: 8, filename: '8M.webp', size: 'M' as ImageSize },
+	{ id: 9, filename: '9L.webp', size: 'L' as ImageSize },
+	{ id: 10, filename: '10S.webp', size: 'S' as ImageSize },
+	{ id: 11, filename: '11S.webp', size: 'S' as ImageSize },
+	{ id: 12, filename: '12M.webp', size: 'M' as ImageSize },
+	{ id: 13, filename: '13L.webp', size: 'L' as ImageSize },
+	{ id: 14, filename: '14L.webp', size: 'L' as ImageSize },
+	{ id: 15, filename: '15M.webp', size: 'M' as ImageSize },
+	{ id: 16, filename: '16S.webp', size: 'S' as ImageSize },
+	{ id: 17, filename: '17S.webp', size: 'S' as ImageSize },
+	{ id: 18, filename: '18M.webp', size: 'M' as ImageSize },
+	{ id: 19, filename: '19L.webp', size: 'L' as ImageSize },
+	{ id: 20, filename: '20L.webp', size: 'L' as ImageSize },
+	{ id: 21, filename: '21S.webp', size: 'S' as ImageSize },
+	{ id: 22, filename: '22S.webp', size: 'S' as ImageSize },
+	{ id: 23, filename: '23L.webp', size: 'L' as ImageSize },
+	{ id: 24, filename: '24L.webp', size: 'L' as ImageSize },
+	{ id: 25, filename: '25S.webp', size: 'S' as ImageSize },
+	{ id: 26, filename: '26S.webp', size: 'S' as ImageSize },
+	{ id: 27, filename: '27S.webp', size: 'S' as ImageSize },
+	{ id: 28, filename: '28L.webp', size: 'L' as ImageSize },
+	{ id: 29, filename: '29S.webp', size: 'S' as ImageSize },
+	{ id: 30, filename: '30S.webp', size: 'S' as ImageSize },
+	{ id: 31, filename: '31M.webp', size: 'M' as ImageSize },
+	{ id: 32, filename: '32M.webp', size: 'M' as ImageSize },
+	{ id: 33, filename: '33M.webp', size: 'M' as ImageSize },
+	{ id: 34, filename: '34S.webp', size: 'S' as ImageSize },
+	{ id: 35, filename: '35L.webp', size: 'L' as ImageSize },
+];
+
+// サイズに応じたスケール
+const DESKTOP_SCALE_MAP: Record<ImageSize, number> = {
+	L: 0.9,
+	M: 0.9,
+	S: 0.9,
+};
+
+const MOBILE_SCALE_MAP: Record<ImageSize, number> = {
+	L: 0.5,
+	M: 0.5,
+	S: 0.5,
+};
+
+export const useResponsiveImages = () => {
+	const [isMobileView, setIsMobileView] = useState(false);
+
+	// 初期化とリサイズイベントの監視
+	useEffect(() => {
+		const checkScreenSize = () => {
+			setIsMobileView(isMobile());
+		};
+
+		// 初期チェック
+		checkScreenSize();
+
+		// リサイズイベントを監視
+		window.addEventListener('resize', checkScreenSize);
+		return () => window.removeEventListener('resize', checkScreenSize);
+	}, []);
+
+	// 画像データを生成（画面サイズに応じてパスを切り替え）
+	const imageFiles: ImageFile[] = useMemo(() => {
+		const folder = isMobileView ? 'pepe/gallery-small2' : 'pepe';
+
+		return baseImageData.map(item => ({
+			...item,
+			path: `${CDN_URL}/${folder}/${item.filename}`
+		}));
+	}, [isMobileView]);
+
+	// スケールマップを取得
+	const scaleMap = useMemo(() => {
+		return isMobileView ? MOBILE_SCALE_MAP : DESKTOP_SCALE_MAP;
+	}, [isMobileView]);
+
+	return {
+		imageFiles,
+		scaleMap,
+		isMobileView
+	};
+};-e 
 ### FILE: ./src/app/components/floating-images-fix/FloatingImagesFixSection.tsx
 
 // src/app/components/floating-images-fix/FloatingImagesFixSection.tsx
@@ -4785,8 +4272,8 @@ import CyberScrollMessages from './cyber-scroll-messages';
 // コンポーネント定義
 const FloatingImagesFixSection: React.FC = () => {
 	return (<>
-		<div className='relative h-[150vh] bg-black'/>
-		<section 
+		<div className='w-full relative h-[150vh] bg-black' />
+		<section
 			className="w-screen h-[800vh] relative overflow-hidden bg-black floating-images-fix-section"
 			id="floating-images-fix-section"
 		>
@@ -4795,7 +4282,15 @@ const FloatingImagesFixSection: React.FC = () => {
 						bg-gradient-to-b from-black via-black/40 to-black/0
 						pointer-events-none"
 				/>
+				<div
+					className="absolute inset-0 z-10 block sm:hidden bg-center bg-cover"
+					style={{
+						backgroundImage: `url(${process.env.NEXT_PUBLIC_CLOUDFRONT_URL}/pepe/garally_small2.webp)`
+					}}
+				/>
+
 				<FloatingImagesFixCanvas />
+
 				<CyberScrollMessages />
 				<div className="absolute bottom-0 left-0 w-full h-[100vh] z-20
 						bg-gradient-to-b from-black/0 via-black/40 to-black
@@ -4803,7 +4298,7 @@ const FloatingImagesFixSection: React.FC = () => {
 				/>
 			</div>
 		</section>
-		<div className='relative h-[150vh] bg-black' />
+		<div className='w-full relative h-[150vh] bg-black' />
 	</>);
 };
 
@@ -4816,11 +4311,12 @@ export default FloatingImagesFixSection;-e
 import React, { useMemo } from 'react';
 import { Canvas, useThree } from '@react-three/fiber';
 import FloatingImageFix from './FloatingImageFix';
-import { imageFiles, SCALE_MAP, ImageSize } from './constants';
+import { ImageSize,ImageFile } from './constants';
+import { useResponsiveImages } from './useResponsiveImages';
 
-const CANVAS_DEPTH = 5; // 奥行き全体の幅
-const PADDING_X = 0.5;  // 横方向パディング
-const PADDING_Y = 2;  // 縦方向パディング
+const CANVAS_DEPTH = 3; // 奥行き全体の幅
+const PADDING_X = 0.2;  // 横方向パディング
+const PADDING_Y = 1.5;    // 縦方向パディング
 
 const getZBySize = (size: ImageSize) => {
 	if (size === 'L') return CANVAS_DEPTH * 0.42 + Math.random();
@@ -4828,7 +4324,10 @@ const getZBySize = (size: ImageSize) => {
 	return -CANVAS_DEPTH * 0.42 + Math.random();
 };
 
-const FloatingImagesFixInner: React.FC = () => {
+const FloatingImagesFixInner: React.FC<{
+	imageFiles: ImageFile[];  // any[] から ImageFile[] に変更
+	scaleMap: Record<ImageSize, number>;
+}> = ({ imageFiles, scaleMap }) => {
 	const { viewport } = useThree();
 	const count = imageFiles.length;
 	const cols = Math.ceil(Math.sqrt(count));
@@ -4873,53 +4372,56 @@ const FloatingImagesFixInner: React.FC = () => {
 					key={image.id}
 					image={image}
 					position={positions[i]}
-					scale={SCALE_MAP[image.size]}
+					scale={scaleMap[image.size]}
 					rotationSpeed={speeds[i]}
 				/>
 			))}
-	
 		</>
 	);
 };
 
 const FloatingImagesFixCanvas: React.FC = () => {
+	const { imageFiles, scaleMap } = useResponsiveImages();
+
 	return (
 		<Canvas
-			camera={{ position: [0, 0, 32], fov: 40 }}
-			style={{ width: '100%', height: '100%' }}
-			gl={{ antialias: true, alpha: false }}
-			dpr={[1, 2]}
+			className="w-full h-full hidden sm:block"
+			gl={{ antialias: false }}
+			dpr={1}
+			shadows={false}
+			frameloop="always"
 		>
-
-			<FloatingImagesFixInner />
+			<FloatingImagesFixInner imageFiles={imageFiles} scaleMap={scaleMap} />
 		</Canvas>
 	);
 };
 
-export default FloatingImagesFixCanvas;
--e 
+export default FloatingImagesFixCanvas;-e 
 ### FILE: ./src/app/components/floating-images-fix/TestThree.tsx
 
 import { Canvas } from '@react-three/fiber'
 
 export default function TestThree() {
-  return (
-    <div style={{ width: '100px', height: '100px' }}>
-      <Canvas>
-        <mesh>
-          <boxGeometry args={[1, 1, 1]} />
-          <meshBasicMaterial color="red" />
-        </mesh>
-      </Canvas>
-    </div>
-  )
+	return (
+		<div style={{ width: '100px', height: '100px' }}>
+			<Canvas>
+				{/* @ts-expect-error React Three Fiber JSX elements */}
+				<mesh>
+					{/* @ts-expect-error React Three Fiber JSX elements */}
+					<boxGeometry args={[1, 1, 1]} />
+					{/* @ts-expect-error React Three Fiber JSX elements */}
+					<meshBasicMaterial color="red" />
+					{/* @ts-expect-error React Three Fiber JSX elements */}
+				</mesh>
+			</Canvas>
+		</div>
+	)
 }-e 
 ### FILE: ./src/app/layout.tsx
 
-import { Montserrat, Space_Grotesk, DotGothic16 } from 'next/font/google';
+import { Montserrat, Space_Grotesk } from 'next/font/google';
 import './globals.css';
 import type { Metadata } from 'next';
-import SmoothScroll from './components/layout/SmoothScroll';
 // フォントの設定
 const montserrat = Montserrat({
 	subsets: ['latin'],
@@ -4932,13 +4434,6 @@ const spaceGrotesk = Space_Grotesk({
 	variable: '--font-space-grotesk',
 	display: 'swap',
 });
-const pixel = DotGothic16({
-  weight: '400',
-  subsets: ['latin', 'latin-ext'],
-  variable: '--font-pixel',
-  display: 'swap',
-});
-
 // メタデータ設定
 export const metadata: Metadata = {
 	title: 'We Are On-Chain | Pepe Protein',
@@ -4952,11 +4447,9 @@ export default function RootLayout({
 	children: React.ReactNode;
 }) {
 	return (
-		<html lang="en" className={`${montserrat.variable} ${spaceGrotesk.variable} ${pixel.variable}`}>
+		<html lang="en" className={`${montserrat.variable} ${spaceGrotesk.variable}`}>
 			<body className="bg-black text-white min-h-screen font-sans antialiased">
-
 				{children}
-
 			</body>
 		</html>
 	);
@@ -4971,64 +4464,63 @@ import PulsatingComponent from './components/layout/PulsatingComponent';
 import FloatingImagesFixSection from './components/floating-images-fix/FloatingImagesFixSection';
 import Header from './components/ui/Header';
 import Footer from './components/ui/Footer';
-export default function Home() {
-	return (
-		<main className="relative">
+import CyberInterface from './components/layout/CyberInterface';
+import ScanlineEffect from './components/layout/ScanlineEffect';
+import PepePush from './components/pepePush/PepePush';
+/*
+		
 			<Header/>
 			<HeroSection/>
-			<GlowingTextSection/>
-			<PulsatingComponent/>
-			<PepeTop/>
-			<FloatingImagesFixSection/>
-			<SphereTop/>
-			<div className='relative h-[100vh] bg-black z-20'/>
-			<Footer/>
+
+
+
+*/
+export default function Home() {
+	return (
+		<main className="relative flex flex-col items-center">
+			<Header />
+			<HeroSection />
+			<CyberInterface />
+			<GlowingTextSection />
+			<PulsatingComponent />
+			<PepeTop />
+			<FloatingImagesFixSection />
+			<SphereTop />
+			<div className='w-full relative h-[100vh] bg-black z-10'>
+				<PepePush />
+			</div>
+			<Footer />
 		</main>
 	);
 }
--e 
+/*
+
+*/-e 
 ### FILE: ./types/react-three-fiber.d.ts
 
 // types/react-three-fiber.d.ts
+import { ReactThreeFiber } from '@react-three/fiber'
 import * as THREE from 'three'
 
 declare global {
   namespace JSX {
     interface IntrinsicElements {
-      // Objects
-      mesh: any
-      group: any
-      
-      // Geometries  
-      boxGeometry: any
-      planeGeometry: any
-      sphereGeometry: any
-      
-      // Materials
-      meshBasicMaterial: any
-      meshStandardMaterial: any
-      
-      // Lights
-      ambientLight: any
-      directionalLight: any
-      spotLight: any
-      pointLight: any
+      mesh: ReactThreeFiber.Object3DNode<THREE.Mesh, typeof THREE.Mesh>
+      group: ReactThreeFiber.Object3DNode<THREE.Group, typeof THREE.Group>
+      planeGeometry: ReactThreeFiber.Node<THREE.PlaneGeometry, typeof THREE.PlaneGeometry>
+      boxGeometry: ReactThreeFiber.Node<THREE.BoxGeometry, typeof THREE.BoxGeometry>
+      sphereGeometry: ReactThreeFiber.Node<THREE.SphereGeometry, typeof THREE.SphereGeometry>
+      meshBasicMaterial: ReactThreeFiber.Node<THREE.MeshBasicMaterial, typeof THREE.MeshBasicMaterial>
+      meshStandardMaterial: ReactThreeFiber.Node<THREE.MeshStandardMaterial, typeof THREE.MeshStandardMaterial>
+      ambientLight: ReactThreeFiber.Object3DNode<THREE.AmbientLight, typeof THREE.AmbientLight>
+      directionalLight: ReactThreeFiber.Object3DNode<THREE.DirectionalLight, typeof THREE.DirectionalLight>
+      spotLight: ReactThreeFiber.Object3DNode<THREE.SpotLight, typeof THREE.SpotLight>
+      pointLight: ReactThreeFiber.Object3DNode<THREE.PointLight, typeof THREE.PointLight>
     }
   }
 }
 
 export {}-e 
-### FILE: ./r3f-jsx.d.ts
-
-// r3f-jsx.d.ts
-/// <reference types="@react-three/fiber" />
-
-// Make the `@react-three/fiber/jsx-runtime` module available to TS
-declare module '@react-three/fiber/jsx-runtime' {
-  // Re-export everything from the main package
-  export * from '@react-three/fiber';
-}
--e 
 ### FILE: ./tailwind.config.js
 
 /** @type {import('tailwindcss').Config} */

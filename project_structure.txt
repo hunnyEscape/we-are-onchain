@@ -13,13 +13,15 @@
 │   ├── file.svg
 │   ├── globe.svg
 │   ├── images
+│   │   ├── garally_small.png
 │   │   ├── noisy.webp
 │   │   └── noisy_grid.webp
 │   ├── models
+│   │   └── push-up-pepe.glb
 │   ├── next.svg
 │   ├── vercel.svg
 │   └── window.svg
-├── r3f-jsx.d.ts
+├── sphere.webm
 ├── src
 │   └── app
 │       ├── components
@@ -29,13 +31,13 @@
 │       │   │   ├── FloatingImagesFixSection.tsx
 │       │   │   ├── TestThree.tsx
 │       │   │   ├── constants.ts
-│       │   │   └── cyber-scroll-messages
-│       │   │       ├── CyberInterface.tsx
-│       │   │       ├── CyberScrollMessages.tsx
-│       │   │       ├── MessageDisplay.tsx
-│       │   │       ├── constants.ts
-│       │   │       ├── index.tsx
-│       │   │       └── styles.module.css
+│       │   │   ├── cyber-scroll-messages
+│       │   │   │   ├── CyberScrollMessages.tsx
+│       │   │   │   ├── MessageDisplay.tsx
+│       │   │   │   ├── constants.ts
+│       │   │   │   ├── index.tsx
+│       │   │   │   └── styles.module.css
+│       │   │   └── useResponsiveImages.ts
 │       │   ├── glowing-3d-text
 │       │   │   ├── GlowingText.module.css
 │       │   │   ├── GlowingTextScene.tsx
@@ -43,7 +45,6 @@
 │       │   │   ├── HeroModel.tsx
 │       │   │   ├── LightingSetup.tsx
 │       │   │   ├── PepeFlavorModel.tsx
-│       │   │   ├── PostProcessEffects.tsx
 │       │   │   └── ProteinModel.tsx
 │       │   ├── hero-section
 │       │   │   ├── GlitchEffects.tsx
@@ -52,16 +53,14 @@
 │       │   │   ├── HeroSection.tsx
 │       │   │   └── HeroTitle.tsx
 │       │   ├── layout
-│       │   │   ├── Navbar.tsx
+│       │   │   ├── CyberInterface.tsx
 │       │   │   ├── PulsatingComponent.tsx
-│       │   │   └── SmoothScroll.tsx
-│       │   ├── matrix-scroll
-│       │   │   ├── MatrixScroll.module.css
-│       │   │   └── MatrixScrollContainer.tsx
+│       │   │   ├── ScanlineEffect.tsx
+│       │   │   ├── constants.ts
+│       │   │   └── styles.module.css
 │       │   ├── pepe-gallery
 │       │   │   ├── GalleryTypography.tsx
 │       │   │   ├── ImageItem.tsx
-│       │   │   ├── PepeGallery.tsx
 │       │   │   ├── ScrollableImages.tsx
 │       │   │   ├── styles
 │       │   │   │   └── GalleryEffects.module.css
@@ -70,12 +69,13 @@
 │       │   │       ├── imageLoader.ts
 │       │   │       └── scrollAnimation.ts
 │       │   ├── pepe3d
-│       │   │   ├── CyberInterface.tsx
 │       │   │   ├── PepeModel3D.tsx
 │       │   │   ├── PepeStyles.module.css
 │       │   │   ├── PepeTop.tsx
 │       │   │   ├── ScrollMessage.tsx
 │       │   │   └── types.d.ts
+│       │   ├── pepePush
+│       │   │   └── PepePush.tsx
 │       │   ├── sphere
 │       │   │   ├── MessageOverlay.tsx
 │       │   │   ├── SmoothRotation.tsx
@@ -86,8 +86,7 @@
 │       │       ├── Footer.tsx
 │       │       ├── GlitchText.tsx
 │       │       ├── Header.tsx
-│       │       ├── ScanlineEffect.module.css
-│       │       └── ScanlineEffect.tsx
+│       │       └── ScanlineEffect.module.css
 │       ├── favicon.ico
 │       ├── globals.css
 │       ├── layout.tsx
@@ -97,4 +96,4 @@
 └── types
     └── react-three-fiber.d.ts
 
-19 directories, 78 files
+19 directories, 77 files

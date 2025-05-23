@@ -15,7 +15,7 @@ import ScanlineEffect from './components/layout/ScanlineEffect';
 
 
 
-			<FloatingImagesFixSection />
+
 			<SphereTop />
 			<div className='w-full relative h-[100vh] bg-black z-10' />
 			<Footer />
@@ -27,6 +27,7 @@ export default function Home() {
 			<PulsatingComponent/>
 			<PepeTop/>
 			<FloatingImagesFixSection/>
+			<SphereTop />
 		</main>
 	);
 }

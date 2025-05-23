@@ -54,12 +54,12 @@ const RotatingGroup: React.FC<RotatingGroupProps> = ({
 		if (!groupRef.current) return;
 
 		// 自動回転が有効な場合
-		if (autoRotate) {
+	//	if (autoRotate) {
 			groupRef.current.rotation.y += rotationSpeed * delta;
-		} else {
-			// 外部から渡された回転値を適用
-			groupRef.current.rotation.y = rotationY;
-		}
+	//	} else {
+	//		// 外部から渡された回転値を適用
+	//		groupRef.current.rotation.y = rotationY;
+	//	}
 	});
 
 	return (
@@ -165,11 +165,12 @@ const Sphere: React.FC<SphereProps> = ({
 			<div className={`${styles.decorLine} ${styles.decorLineBottom}`}></div>
 
 			<div className={styles.canvasWrapper}>
-				<Canvas 
-					shadows={!isMobile} 
-					gl={{ 
-						antialias: !isMobile 
-					}}
+				<Canvas
+					className="w-full h-full"
+					gl={{ antialias: false }}
+					dpr={1}
+					shadows={false}
+					frameloop="always"
 				>
 					<ErrorBoundary
 						fallback={
@@ -184,8 +185,8 @@ const Sphere: React.FC<SphereProps> = ({
 							rotationSpeed={rotationSpeed}
 							autoRotate={!isMobile && autoRotate}
 						>
-							<BackgroundSphere 
-								backgroundImage={backgroundImage} 
+							<BackgroundSphere
+								backgroundImage={backgroundImage}
 								isMobile={isMobile}
 							/>
 						</RotatingGroup>

@@ -133,22 +133,6 @@ const ScrollMessage: React.FC = () => {
 					}}
 				/>
 
-				{/* エネルギーメーター（スクロール進行度表示） */}
-				<div className="fixed right-8 top-1/2 transform -translate-y-1/2 z-40">
-					<div className="w-2 h-64 bg-gray-800/50 rounded-full overflow-hidden border border-green-400/30">
-						<div
-							className="w-full bg-gradient-to-t from-green-400 to-green-300 rounded-full transition-all duration-300"
-							style={{
-								height: `${scrollProgress * 100}%`,
-								transform: 'translateY(0)',
-								boxShadow: '0 0 10px rgba(0, 255, 102, 0.5)'
-							}}
-						/>
-					</div>
-					<div className="text-green-400 text-xs mt-2 text-center">
-						{Math.round(scrollProgress * 100)}%
-					</div>
-				</div>
 			</div>
 		</>
 	);

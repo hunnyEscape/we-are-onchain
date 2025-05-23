@@ -2868,7 +2868,7 @@ interface PepeModel3DProps {
 
 export default function PepeModel3D({
 	transform,
-	url = '/models/push-up-pepe.glb'
+	url = `${process.env.NEXT_PUBLIC_CLOUDFRONT_URL}/pepe/push-up-pepe.glb`
 }: PepeModel3DProps) {
 	const { scene, animations } = useGLTF(url);
 	const { actions, mixer } = useAnimations(animations, scene);
@@ -2989,7 +2989,7 @@ export default function PepeModel3D({
 }
 
 // モデルのプリロード
-useGLTF.preload('/models/push-up-pepe.glb');-e 
+useGLTF.preload(`${process.env.NEXT_PUBLIC_CLOUDFRONT_URL}/pepe/push-up-pepe.glb`);-e 
 ### FILE: ./src/app/components/pepePush/PepePush.tsx
 
 // components/PepePush.tsx
@@ -3150,100 +3150,129 @@ interface TextFragment {
 	isKeyword: boolean;
 	keywordType?: string;
 }-e 
-### FILE: ./src/app/components/pepe3d/ScrollMessage.tsx
+### FILE: ./src/app/components/pepe3d/types/messageTypes.ts
 
-// ScrollMessage.tsx
-'use client';
-import React, { useEffect, useRef, useState } from 'react';
-import styles from './PepeStyles.module.css';
-type MessageConfig = {
-	id: string;
-	text: string;
-	top?: string;
-	left?: string;
-	width?: string;
-	fontSize?: string;
-	glitchEffect?: 'rgb' | 'slice' | 'wave' | 'pulse' | 'jitter' | 'none';
-	keywords?: string[];
-	delay?: number;
-};
+// pepe3d/types/messageTypes.ts
 
-// テキストフラグメント処理用の型
-interface TextFragment {
-	text: string;
-	isKeyword: boolean;
-	keywordType?: string;
+export type GlitchEffectType = 'rgb' | 'slice' | 'wave' | 'pulse' | 'jitter' | 'none';
+
+export interface MessageConfig {
+  id: string;
+  text: string;
+  top?: string;
+  left?: string;
+  width?: string;
+  fontSize?: string;
+  glitchEffect?: GlitchEffectType;
+  keywords?: string[];
+  delay?: number;
 }
 
-const messages: MessageConfig[] = [
-	{
-		id: 'trigger-1',
-		text: 'The Deep Green Source — a spring hidden within an ancient forest.',
-		top: '20vh',
-		left: '10vw',
-		width: 'auto',
-		fontSize: '2rem',
-		glitchEffect: 'rgb',
-		keywords: ['Deep Green Source', 'legendary spring'],
-	},
-	{
-		id: 'trigger-2',
-		text: 'The Green Source — rich, deep and sweet.',
-		top: '30vh',
-		left: '30vw',
-		width: 'auto',
-		fontSize: '2rem',
-		glitchEffect: 'rgb',
-		keywords: ['green source'],
-	},
-	{
-		id: 'trigger-3',
-		text: 'It fuels your drive for what’s next.',
-		top: '40vh',
-		left: '10vw',
-		width: 'auto',
-		fontSize: '2rem',
-		glitchEffect: 'rgb',
-		keywords: ['pulse', 'blasting away fatigue'],
-	},
-	{
-		id: 'trigger-4',
-		text: 'Feel the green power — right in your hands.',
-		top: '60vh',
-		left: '30vw',
-		width: 'auto',
-		fontSize: '2rem',
-		glitchEffect: 'slice',
-		keywords: ['green power', 'transcends dimensions'],
-	},
-];
+export interface MessageControlPoint {
+  scrollProgress: number; // 0-1の範囲
+  message: MessageConfig;
+  visibility: number; // 0-1の透明度
+  animations?: GlitchEffectType[]; // 適用するアニメーション
+  fadeInDuration?: number; // フェードイン時間（ms）
+  fadeOutDuration?: number; // フェードアウト時間（ms）
+}
 
-const ScrollTriggerMessages: React.FC = () => {
-	const refs = useRef<(HTMLDivElement | null)[]>([]);
-	const [activeIndex, setActiveIndex] = useState<number | null>(null);
-	const [scrollProgress, setScrollProgress] = useState<number>(0);
-	const [randomTrigger, setRandomTrigger] = useState<boolean>(false);
-	// グリッチエフェクトに基づいてクラス名を取得
-	const getGlitchClass = (effect?: 'rgb' | 'slice' | 'wave' | 'pulse' | 'jitter' | 'none'): string => {
-		switch (effect) {
-			case 'rgb': return styles.rgbSplit;
-			case 'slice': return styles.sliceGlitch;
-			case 'wave': return styles.waveDistort;
-			case 'pulse': return styles.pulse;
-			case 'jitter': return styles.jitter;
-			default: return '';
-		}
-	};
+export interface ScrollMessageState {
+  scrollProgress: number;
+  activeMessageIndex: number | null;
+  visibleMessages: {
+    index: number;
+    opacity: number;
+    isActive: boolean;
+  }[];
+}
 
-	// レンダリングされる実際のテキスト
-	const renderMessageText = (message: MessageConfig) => {
+// 修正：実際の実装に合わせて型を統一
+export interface MessageVisibilityHookResult {
+  activeMessages: {
+    config: MessageControlPoint;  // MessageConfigではなくMessageControlPoint
+    opacity: number;
+    isActive: boolean;
+  }[];
+  scrollProgress: number;
+  debugInfo?: {
+    scrollProgress: number;
+    currentPointIndex: number;
+    nextPointIndex: number;
+    totalPoints: number;
+    activeMessages: number;
+  };
+  sectionRef: React.RefObject<HTMLDivElement>;  // オプショナルから必須に変更
+}
+
+// レスポンシブ設定
+export interface ResponsiveMessageConfig {
+  desktop: Partial<MessageConfig>;
+  mobile: Partial<MessageConfig>;
+}
+
+export interface PepeScrollConfig {
+  // セクションの高さ設定
+  SECTION_HEIGHT_VH: number;
+  
+  // スクロール感度
+  SCROLL_SENSITIVITY: number;
+  
+  // デバッグモード
+  DEBUG_MODE: boolean;
+  
+  // レスポンシブ設定
+  MOBILE_BREAKPOINT: number;
+  
+  // アニメーション設定
+  DEFAULT_FADE_DURATION: number;
+  SMOOTH_FACTOR: number;
+}-e 
+### FILE: ./src/app/components/pepe3d/ScrollMessage.tsx
+
+// pepe3d/ScrollMessage.tsx
+'use client';
+
+import React, { useState, useEffect } from 'react';
+import { useMessageVisibility } from './hooks/useMessageVisibility';
+import { getGlitchClass, ANIMATION_CONFIG } from './config/animationConfig';
+import { MessageConfig } from './types/messageTypes';
+import { CONFIG } from './config/messageControlPoints';
+import styles from './PepeStyles.module.css';
+
+const ScrollMessage: React.FC = () => {
+	const { activeMessages, scrollProgress, debugInfo, sectionRef } = useMessageVisibility() as any;
+	const [randomGlitch, setRandomGlitch] = useState<boolean>(false);
+
+	// ランダムグリッチエフェクト
+	useEffect(() => {
+		const interval = setInterval(() => {
+			if (Math.random() < ANIMATION_CONFIG.RANDOM_GLITCH.PROBABILITY) {
+				setRandomGlitch(true);
+				setTimeout(() => setRandomGlitch(false), ANIMATION_CONFIG.RANDOM_GLITCH.DURATION);
+			}
+		}, 100);
+
+		return () => clearInterval(interval);
+	}, []);
+
+	// キーワードを含むテキストをレンダリング
+	const renderMessageText = (message: MessageConfig, isActive: boolean) => {
 		if (!message.keywords || message.keywords.length === 0) {
-			return <span className={getGlitchClass(message.glitchEffect)}>{message.text}</span>;
+			return (
+				<span className={getGlitchClass(message.glitchEffect)}>
+					{message.text}
+				</span>
+			);
 		}
 
-		// キーワードを検出して強調
-		return message.text.split(' ').map((word, wordIndex) => {
-			const isKeyword = message.keywords?.some(keyword => keyword.includes(word) || word.includes(keyword));
+		// キーワードを検出してハイライト
+		const words = message.text.split(' ');
+		return words.map((word, wordIndex) => {
+			const isKeyword = message.keywords?.some(keyword =>
+				keyword.toLowerCase().includes(word.toLowerCase()) ||
+				word.toLowerCase().includes(keyword.toLowerCase())
+			);
 
 			if (isKeyword) {
 				return (
@@ -3251,6 +3280,11 @@ const ScrollTriggerMessages: React.FC = () => {
 						key={`word-${wordIndex}`}
 						className={`${styles.keywordGlitch} ${getGlitchClass(message.glitchEffect)}`}
 						data-text={word}
+						style={{
+							textShadow: isActive
+								? '0 0 12px rgba(0, 255, 102, 0.9)'
+								: '0 0 8px rgba(0, 255, 102, 0.7)'
+						}}
 					>
 						{word}{' '}
 					</span>
@@ -3268,192 +3302,493 @@ const ScrollTriggerMessages: React.FC = () => {
 		});
 	};
 
-	useEffect(() => {
-		// IntersectionObserverのオプションを調整
-		const observer = new IntersectionObserver(
-			(entries) => {
-				let found = false;
-				entries.forEach((entry) => {
-					const idx = refs.current.findIndex((r) => r === entry.target);
-					// 閾値を下げて、要素が少しでも見えたら検出するように
-					if (entry.isIntersecting) {
-						setActiveIndex(idx);
-						found = true;
-					}
-				});
-				if (!found) setActiveIndex(null);
-			},
-			{
-				root: null,
-				// rootMarginを調整してセクション開始時（上部が見えるとき）から検出
-				rootMargin: '100px 0px',
-				// thresholdを下げて少しでも見えたら反応するように
-				threshold: 0.01
-			}
-		);
-
-		refs.current.forEach((r) => r && observer.observe(r));
-
-		// スクロールイベントリスナー追加
-		const handleScroll = () => {
-			const scrollTop = window.scrollY;
-			const docHeight = document.documentElement.scrollHeight;
-			const winHeight = window.innerHeight;
-
-			// FloatingImagesFixSection の位置を取得
-			const section = document.querySelector('.floating-images-fix-section');
-			if (section) {
-				const rect = section.getBoundingClientRect();
-				const sectionTop = rect.top + scrollTop;
-				const sectionHeight = rect.height;
-
-				// セクション内のスクロール位置（0-1）を計算
-				let progress = 0;
-
-				// セクションが画面に入ったらカウント開始（オフセット調整）
-				if (scrollTop < sectionTop - winHeight) {
-					// セクションがまだ画面下方向に見えていない
-					progress = 0;
-				} else if (scrollTop > sectionTop + sectionHeight) {
-					// セクションを通り過ぎた
-					progress = 1;
-				} else {
-					// セクション内または接近中
-					// 開始位置を少し手前（viewport height分）にオフセット
-					progress = (scrollTop - (sectionTop - winHeight)) / (sectionHeight + winHeight);
-				}
-
-				setScrollProgress(progress);
-			} else {
-				// セクションが見つからない場合は通常通り計算
-				const scrollPercent = scrollTop / (docHeight - winHeight);
-				setScrollProgress(scrollPercent);
-			}
-
-			// ランダムなグリッチをトリガー
-			if (Math.random() < 0.01) {
-				setRandomTrigger(true);
-				setTimeout(() => setRandomTrigger(false), 150);
-			}
-		};
-
-		window.addEventListener('scroll', handleScroll);
-		// 初期化時に一度実行
-		handleScroll();
-
-		return () => {
-			refs.current.forEach((r) => r && observer.unobserve(r));
-			window.removeEventListener('scroll', handleScroll);
-		};
-	}, []);
-
 	return (
 		<>
-			{/* トリガー用ダミーゾーン */}
-			{messages.map((_, i) => (
-				<div
-					key={`zone-${i}`}
-					ref={(el) => {
-						if (el) {
-							refs.current[i] = el;
-						}
-					}}
-					className="h-[100vh] w-full"
-				/>
-			))}
-
-
-			{/* フローティングメッセージ */}
-			{messages.map((msg, i) => {
-				const isActive = activeIndex === i;
-				return (
-					<div
-						key={msg.id}
-						className={`fixed z-50 font-pixel text-white transition-opacity duration-700 ease-in-out
-							${isActive ? 'opacity-100' : 'opacity-0'} 
-							${randomTrigger ? styles.jitter : ''}
-							${msg.id === 'trigger-4' && isActive ? 'animate-pulse' : ''}
-							whitespace-pre-wrap
-						`}
-						style={{
-							top: msg.top,
-							left: msg.left,
-							width: msg.width,
-							fontSize: msg.fontSize,
-							textShadow: '0 0 8px rgba(0, 255, 102, 0.7)',
-						}}
-					>
-						{renderMessageText(msg)}
-					</div>
-				);
-			})}
-
-			{/* 追加の装飾エフェクト: グリッドバックグラウンド */}
+			{/* セクションの高さを設定するコンテナ */}
 			<div
-				className="fixed inset-0 pointer-events-none z-0"
-				style={{
-					backgroundImage: 'linear-gradient(rgba(0, 255, 102, 0.05) 1px, transparent 1px), linear-gradient(90deg, rgba(0, 255, 102, 0.05) 1px, transparent 1px)',
-					backgroundSize: '20px 20px',
-					backgroundPosition: 'center center',
-				}}
-			/>
+				ref={sectionRef}
+				className="relative w-full"
+				style={{ height: `${CONFIG.SECTION_HEIGHT_VH}vh` }}
+			>
+				{/* アクティブなメッセージを表示 */}
+				{activeMessages.map((messageData: any, index: number) => {
+					const { config, opacity, isActive } = messageData;
+					const message = config.message;
+
+					return (
+						<div
+							key={message.id}
+							className={`fixed z-50 font-pixel text-white pointer-events-none
+                ${randomGlitch ? styles.jitter : ''}
+                ${isActive ? 'animate-pulse' : ''}
+                whitespace-pre-wrap
+              `}
+							style={{
+								top: message.top,
+								left: message.left,
+								width: message.width,
+								fontSize: message.fontSize,
+								opacity: opacity,
+								textShadow: isActive
+									? '0 0 12px rgba(0, 255, 102, 0.9)'
+									: '0 0 8px rgba(0, 255, 102, 0.7)',
+								transition: ANIMATION_CONFIG.TRANSITIONS.ALL,
+								transform: `translateY(${(1 - opacity) * 20}px)`, // 滑らかな出現
+							}}
+						>
+							{renderMessageText(message, isActive)}
+						</div>
+					);
+				})}
+
+				{/* デバッグ情報表示 */}
+				{CONFIG.DEBUG_MODE && debugInfo && (
+					<div className="fixed top-4 left-4 bg-black/80 text-green-400 p-4 rounded-lg font-mono text-sm z-50">
+						<div>Scroll Progress: {debugInfo.scrollProgress.toFixed(3)}</div>
+						<div>Current Point: {debugInfo.currentPointIndex}</div>
+						<div>Next Point: {debugInfo.nextPointIndex}</div>
+						<div>Active Messages: {debugInfo.activeMessages}</div>
+						<div>Total Points: {debugInfo.totalPoints}</div>
+					</div>
+				)}
+
+				{/* サイバーパンク風グリッドバックグラウンド */}
+				<div
+					className="fixed inset-0 pointer-events-none z-0 opacity-30"
+					style={{
+						backgroundImage: `
+              linear-gradient(rgba(0, 255, 102, 0.05) 1px, transparent 1px), 
+              linear-gradient(90deg, rgba(0, 255, 102, 0.05) 1px, transparent 1px)
+            `,
+						backgroundSize: '20px 20px',
+						backgroundPosition: 'center center',
+					}}
+				/>
+
+			</div>
 		</>
 	);
 };
 
-export default ScrollTriggerMessages;-e 
+export default ScrollMessage;-e 
+### FILE: ./src/app/components/pepe3d/config/messageControlPoints.ts
+
+// pepe3d/config/messageControlPoints.ts
+import { MessageControlPoint, PepeScrollConfig } from '../types/messageTypes';
+
+// スマホ判定のヘルパー関数
+const isMobile = () => {
+	if (typeof window === 'undefined') return false;
+	return window.innerWidth <= 768;
+};
+
+// 基本設定
+export const CONFIG: PepeScrollConfig = {
+	SECTION_HEIGHT_VH: 400, // PepeTopセクションの高さ
+	SCROLL_SENSITIVITY: 1.0,
+	DEBUG_MODE: false,
+	MOBILE_BREAKPOINT: 768,
+	DEFAULT_FADE_DURATION: 700,
+	SMOOTH_FACTOR: 0.1
+};
+
+// レスポンシブ対応のメッセージ制御点
+export const getMessageControlPoints = (): MessageControlPoint[] => {
+	const mobile = isMobile();
+
+	return [
+		{
+			scrollProgress: 0.15,
+			visibility: 1,
+			fadeInDuration: 700,
+			fadeOutDuration: 500,
+			message: {
+				id: 'deep-green-source',
+				text: 'The Deep Green Source — a spring hidden within an ancient forest.',
+				top: mobile ? '15vh' : '20vh',
+				left: mobile ? '5vw' : '10vw',
+				width: 'auto',
+				fontSize: mobile ? '1.5rem' : '2rem',
+				glitchEffect: 'rgb',
+				keywords: ['Deep Green Source', 'ancient forest'],
+			}
+		},
+		{
+			scrollProgress: 0.35,
+			visibility: 1,
+			fadeInDuration: 700,
+			fadeOutDuration: 500,
+			message: {
+				id: 'green-source-rich',
+				text: 'The Green Source — rich, deep and sweet.',
+				top: mobile ? '35vh' : '30vh',
+				left: mobile ? '10vw' : '30vw',
+				width: 'auto',
+				fontSize: mobile ? '1.5rem' : '2rem',
+				glitchEffect: 'rgb',
+				keywords: ['Green Source'],
+			}
+		},
+		{
+			scrollProgress: 0.55,
+			visibility: 1,
+			fadeInDuration: 700,
+			fadeOutDuration: 500,
+			message: {
+				id: 'fuels-drive',
+				text: 'It fuels your drive for what\'s next.',
+				top: mobile ? '50vh' : '40vh',
+				left: mobile ? '5vw' : '10vw',
+				width: 'auto',
+				fontSize: mobile ? '1.5rem' : '2rem',
+				glitchEffect: 'wave',
+				keywords: ['fuels your drive'],
+			}
+		},
+		{
+			scrollProgress: 0.8,
+			visibility: 1,
+			fadeInDuration: 700,
+			fadeOutDuration: 500,
+			animations: ['pulse'],
+			message: {
+				id: 'green-power',
+				text: 'Feel the green power — right in your hands.',
+				top: mobile ? '65vh' : '60vh',
+				left: mobile ? '10vw' : '30vw',
+				width: 'auto',
+				fontSize: mobile ? '1.5rem' : '3rem',
+				glitchEffect: 'slice',
+				keywords: ['green power'],
+			}
+		}
+	];
+};
+
+// スクロール進行度に基づいてアクティブなメッセージを取得
+export const getActiveMessages = (scrollProgress: number) => {
+	const controlPoints = getMessageControlPoints();
+	const activeMessages: Array<{
+		config: MessageControlPoint;
+		opacity: number;
+		isActive: boolean;
+	}> = [];
+
+	controlPoints.forEach((point, index) => {
+		// 最後のメッセージかどうかを判定
+		const isLastMessage = index === controlPoints.length - 1;
+
+		// メッセージの表示範囲を計算
+		const showStart = point.scrollProgress - 0.15; // 表示開始（早める）
+		const showPeak = point.scrollProgress; // 完全表示
+
+		// 最後のメッセージは早めに終了、他は延長
+		const showEnd = isLastMessage
+			? point.scrollProgress + 0.15  // 最後のメッセージは通常の長さ
+			: point.scrollProgress + 0.25; // 他のメッセージは延長
+
+		let opacity = 0;
+		let isActive = false;
+
+		if (scrollProgress >= showStart && scrollProgress <= showEnd) {
+			if (scrollProgress <= showPeak) {
+				// フェードイン（より滑らかに）
+				const fadeInProgress = (scrollProgress - showStart) / (showPeak - showStart);
+				opacity = Math.max(0, Math.min(1, fadeInProgress));
+			} else {
+				// フェードアウト
+				const fadeOutProgress = (scrollProgress - showPeak) / (showEnd - showPeak);
+				opacity = Math.max(0, Math.min(1, 1 - fadeOutProgress));
+			}
+
+			// ピーク付近でアクティブ状態（範囲を拡大）
+			isActive = Math.abs(scrollProgress - showPeak) < 0.08;
+
+			if (opacity > 0) {
+				activeMessages.push({
+					config: point,
+					opacity,
+					isActive
+				});
+			}
+		}
+	});
+
+	return activeMessages;
+};
+
+// デバッグ情報を取得
+export const getDebugInfo = (scrollProgress: number) => {
+	const controlPoints = getMessageControlPoints();
+	let currentPointIndex = -1;
+	let nextPointIndex = -1;
+
+	for (let i = 0; i < controlPoints.length; i++) {
+		if (scrollProgress >= controlPoints[i].scrollProgress) {
+			currentPointIndex = i;
+		} else {
+			nextPointIndex = i;
+			break;
+		}
+	}
+
+	return {
+		scrollProgress,
+		currentPointIndex,
+		nextPointIndex,
+		totalPoints: controlPoints.length,
+		activeMessages: getActiveMessages(scrollProgress).length
+	};
+};-e 
+### FILE: ./src/app/components/pepe3d/config/animationConfig.ts
+
+// pepe3d/config/animationConfig.ts
+import { GlitchEffectType } from '../types/messageTypes';
+
+export const ANIMATION_CONFIG = {
+	// 基本的なトランジション設定
+	TRANSITIONS: {
+		OPACITY: 'opacity 0.7s ease-in-out',
+		TRANSFORM: 'transform 0.3s ease-out',
+		ALL: 'all 0.5s ease-in-out'
+	},
+
+	// グリッチエフェクトの設定
+	GLITCH_EFFECTS: {
+		rgb: {
+			duration: '0.4s',
+			intensity: 'normal',
+			textShadow: '-2px 0 #ff0000, 2px 0 #00ffff'
+		},
+		slice: {
+			duration: '3s',
+			intensity: 'high',
+			clipPath: true
+		},
+		wave: {
+			duration: '2s',
+			intensity: 'low',
+			transform: 'translateY'
+		},
+		pulse: {
+			duration: '1.5s',
+			intensity: 'medium',
+			scale: 1.05
+		},
+		jitter: {
+			duration: '0.1s',
+			intensity: 'high',
+			infinite: true
+		}
+	},
+
+	// ランダムグリッチの設定
+	RANDOM_GLITCH: {
+		PROBABILITY: 0.01, // 1%の確率
+		DURATION: 150, // ms
+		EFFECTS: ['jitter', 'rgb'] as GlitchEffectType[]
+	},
+
+	// メッセージ固有のアニメーション
+	MESSAGE_ANIMATIONS: {
+		FADE_IN: {
+			from: { opacity: 0, transform: 'translateY(20px)' },
+			to: { opacity: 1, transform: 'translateY(0)' },
+			duration: 700
+		},
+		FADE_OUT: {
+			from: { opacity: 1, transform: 'translateY(0)' },
+			to: { opacity: 0, transform: 'translateY(-10px)' },
+			duration: 500
+		},
+		GLOW_PULSE: {
+			textShadow: [
+				'0 0 8px rgba(0, 255, 102, 0.7)',
+				'0 0 16px rgba(0, 255, 102, 0.9)',
+				'0 0 8px rgba(0, 255, 102, 0.7)'
+			],
+			duration: 2000
+		}
+	}
+} as const;
+
+// グリッチエフェクトのCSSクラスマッピング
+export const getGlitchClass = (effect?: GlitchEffectType): string => {
+	const classMap = {
+		rgb: 'rgbSplit',
+		slice: 'sliceGlitch',
+		wave: 'waveDistort',
+		pulse: 'pulse',
+		jitter: 'jitter',
+		none: ''
+	};
+
+	return effect ? classMap[effect] || '' : '';
+};
+
+// キーワードハイライト用のクラス
+export const KEYWORD_CLASSES = {
+	GLITCH: 'keywordGlitch',
+	HIGHLIGHT: 'highlight',
+	GLOW: 'glow-effect'
+} as const;
+
+// レスポンシブアニメーション設定
+export const getResponsiveAnimationConfig = () => {
+	const isMobile = typeof window !== 'undefined' && window.innerWidth <= 768;
+
+	return {
+		SCALE_FACTOR: isMobile ? 0.8 : 1.0,
+		ANIMATION_SPEED: isMobile ? 0.8 : 1.0,
+		REDUCED_MOTION: isMobile,
+		GLITCH_INTENSITY: isMobile ? 'low' : 'normal'
+	};
+};-e 
 ### FILE: ./src/app/components/pepe3d/PepeTop.tsx
 
-// src/app/components/pepe3d/PepeTop.tsx
-"use client";
-import React, { useRef } from 'react';
+// pepe3d/PepeTop.tsx
+'use client';
+
+import React from 'react';
 import PepeModel3D from './PepeModel3D';
 import ScrollMessage from './ScrollMessage';
-const PepeTop: React.FC = () => {
-	// ScrollMessageへの参照を作成
-	const scrollMessageRef = useRef<HTMLDivElement>(null);
 
+const PepeTop: React.FC = () => {
 	return (
-		<div className="w-full relative h-full">
-			{/* Sticky PepeModel3D */}
-			<div className="sticky top-0 h-screen w-full overflow-hidden">
-				<PepeModel3D />
-				{/* 既存の放射状グラデーション*/}
+		<div className="w-full relative">
+			{/* Sticky PepeModel3D - 3Dモデルを背景として固定表示 */}
+			<div className="sticky top-0 h-screen w-full overflow-hidden z-10">
+				<PepeModel3D
+					autoRotate={true}
+					enableControls={false}
+					rotationSpeed={0.3}
+					useDefaultEnvironment={true}
+				/>
+
+				{/* 放射状グラデーションオーバーレイ - モデルの上に重ねる */}
 				<div
-					className="absolute inset-0 z-10 pointer-events-none"
+					className="absolute inset-0 z-20 pointer-events-none"
 					style={{
 						background: `radial-gradient(
               ellipse 100% 50% at center,
-              rgba(0, 0, 0, 0.2) 10%,
-              rgba(0, 0, 0, 0.6) 60%,
-              rgba(0, 0, 0, 0.9) 80%,
+              rgba(0, 0, 0, 0.1) 10%,
+              rgba(0, 0, 0, 0.4) 50%,
+              rgba(0, 0, 0, 0.7) 70%,
+              rgba(0, 0, 0, 0.9) 85%,
               rgba(0, 0, 0, 1) 100%
             )`,
 					}}
 				/>
 			</div>
 
-			{/* スクロールメッセージ（参照を追加） */}
-			<div ref={scrollMessageRef}>
-				<ScrollMessage />
-			</div>
+			{/* スクロールメッセージセクション - 改良されたトリガー管理 */}
+			<ScrollMessage />
+
+			{/* 最終的なグラデーションオーバーレイ - セクション全体の下部をフェードアウト */}
 			<div
-				className="absolute inset-0 z-10 pointer-events-none"
+				className="absolute bottom-0 left-0 w-full h-32 z-30 pointer-events-none"
 				style={{
-					background: `radial-gradient(
-						ellipse 100% 50% at center,
-						rgba(0, 0, 0, 0.2) 10%,
-						rgba(0, 0, 0, 0.6) 60%,
-						rgba(0, 0, 0, 1) 70%,
-						rgba(0, 0, 0, 1) 100%
-           			 )`,
+					background: `linear-gradient(
+            to bottom,
+            rgba(0, 0, 0, 0) 0%,
+            rgba(0, 0, 0, 0.8) 70%,
+            rgba(0, 0, 0, 1) 100%
+          )`,
 				}}
 			/>
+
+			{/* サイバーパンク風装飾要素 */}
+			<div className="absolute inset-0 z-25 pointer-events-none">
+				{/* コーナーマーカー */}
+				<div className="absolute top-4 left-4 w-8 h-8 border-l-2 border-t-2 border-green-400 opacity-60" />
+				<div className="absolute top-4 right-4 w-8 h-8 border-r-2 border-t-2 border-green-400 opacity-60" />
+				<div className="absolute bottom-4 left-4 w-8 h-8 border-l-2 border-b-2 border-green-400 opacity-60" />
+				<div className="absolute bottom-4 right-4 w-8 h-8 border-r-2 border-b-2 border-green-400 opacity-60" />
+
+				{/* システムステータス */}
+				<div className="absolute bottom-4 left-12 text-green-400 text-xs font-mono opacity-70">
+					SYSTEM: PEPE_NEURAL_NETWORK v2.1 | STATUS: ACTIVE
+				</div>
+			</div>
 		</div>
 	);
 };
 
 export default PepeTop;-e 
+### FILE: ./src/app/components/pepe3d/hooks/useMessageVisibility.ts
+
+// pepe3d/hooks/useMessageVisibility.ts
+'use client';
+
+import { useState, useEffect, useRef, useCallback } from 'react';
+import { MessageVisibilityHookResult } from '../types/messageTypes';
+import { getActiveMessages, getDebugInfo, CONFIG } from '../config/messageControlPoints';
+
+export function useMessageVisibility(): MessageVisibilityHookResult {
+	const [scrollProgress, setScrollProgress] = useState<number>(0);
+	const [isInSection, setIsInSection] = useState<boolean>(false);
+	const sectionRef = useRef<HTMLDivElement>(null);
+	const frameRef = useRef<number>(null);
+
+	const updateScrollProgress = useCallback(() => {
+		if (!sectionRef.current) return;
+
+		const rect = sectionRef.current.getBoundingClientRect();
+		const windowHeight = window.innerHeight;
+		const sectionHeight = rect.height;
+
+		// セクションが画面に入っているかチェック
+		const isInView = rect.top < windowHeight && rect.bottom > 0;
+		setIsInSection(isInView);
+
+		if (!isInView) return;
+
+		// スクロール進行度を計算（0-1の範囲）
+		const scrollTop = -rect.top;
+		const maxScroll = sectionHeight - windowHeight;
+		const progress = Math.max(0, Math.min(1, scrollTop / maxScroll));
+
+		setScrollProgress(progress);
+
+		if (CONFIG.DEBUG_MODE) {
+			console.log('PepeTop Scroll Progress:', progress.toFixed(3));
+		}
+	}, []);
+
+	useEffect(() => {
+		const handleScroll = () => {
+			if (frameRef.current) {
+				cancelAnimationFrame(frameRef.current);
+			}
+
+			frameRef.current = requestAnimationFrame(updateScrollProgress);
+		};
+
+		window.addEventListener('scroll', handleScroll, { passive: true });
+		handleScroll(); // 初期化
+
+		return () => {
+			window.removeEventListener('scroll', handleScroll);
+			if (frameRef.current) {
+				cancelAnimationFrame(frameRef.current);
+			}
+		};
+	}, [updateScrollProgress]);
+
+	// アクティブなメッセージを計算
+	const activeMessages = getActiveMessages(scrollProgress);
+
+	// デバッグ情報
+	const debugInfo = CONFIG.DEBUG_MODE ? getDebugInfo(scrollProgress) : undefined;
+
+	return {
+		activeMessages,
+		scrollProgress,
+		debugInfo,
+		// sectionRefを外部から使用できるように公開
+		sectionRef
+	} as MessageVisibilityHookResult & { sectionRef: React.RefObject<HTMLDivElement> };
+}-e 
 ### FILE: ./src/app/components/pepe3d/PepeModel3D.tsx
 
 'use client';
@@ -5090,10 +5425,7 @@ export default function Home() {
 			<Footer />
 		</main>
 	);
-}
-/*
-
-*/-e 
+}-e 
 ### FILE: ./types/react-three-fiber.d.ts
 
 // types/react-three-fiber.d.ts

@@ -17,7 +17,6 @@
 │   │   ├── noisy.webp
 │   │   └── noisy_grid.webp
 │   ├── models
-│   │   └── push-up-pepe.glb
 │   ├── next.svg
 │   ├── vercel.svg
 │   └── window.svg
@@ -73,6 +72,13 @@
 │       │   │   ├── PepeStyles.module.css
 │       │   │   ├── PepeTop.tsx
 │       │   │   ├── ScrollMessage.tsx
+│       │   │   ├── config
+│       │   │   │   ├── animationConfig.ts
+│       │   │   │   └── messageControlPoints.ts
+│       │   │   ├── hooks
+│       │   │   │   └── useMessageVisibility.ts
+│       │   │   ├── types
+│       │   │   │   └── messageTypes.ts
 │       │   │   └── types.d.ts
 │       │   ├── pepePush
 │       │   │   ├── PepeModel3D.tsx
@@ -107,4 +113,4 @@
 └── types
     └── react-three-fiber.d.ts
 
-22 directories, 85 files
+25 directories, 88 files

@@ -38,7 +38,7 @@ export const HeroBackground: React.FC<HeroBackgroundProps> = ({
 			<div
 				className={`${styles.darkOverlay} w-full`}
 				style={{
-					transform: `scale(1.02) ${midLayerTransform}`,
+					// transformを削除し、オーバーレイは固定に
 					transition: 'transform 1.5s ease-out',
 				}}
 			/>

@@ -52,9 +52,9 @@ const baseImageData = [
 
 // サイズに応じたスケール
 const DESKTOP_SCALE_MAP: Record<ImageSize, number> = {
-	L: 1,
-	M: 1,
-	S: 1,
+	L: 0.9,
+	M: 0.9,
+	S: 0.9,
 };
 
 const MOBILE_SCALE_MAP: Record<ImageSize, number> = {

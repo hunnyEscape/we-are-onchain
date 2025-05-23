@@ -7,8 +7,8 @@ import { ImageSize,ImageFile } from './constants';
 import { useResponsiveImages } from './useResponsiveImages';
 
 const CANVAS_DEPTH = 3; // 奥行き全体の幅
-const PADDING_X = 0.3;  // 横方向パディング
-const PADDING_Y = 2;    // 縦方向パディング
+const PADDING_X = 0.2;  // 横方向パディング
+const PADDING_Y = 1.5;    // 縦方向パディング
 
 const getZBySize = (size: ImageSize) => {
 	if (size === 'L') return CANVAS_DEPTH * 0.42 + Math.random();

@@ -63,7 +63,7 @@ const FloatingImageFix: React.FC<FloatingImageFixProps> = ({
 			<meshBasicMaterial
 				map={texture}
 				transparent
-				opacity={0.4}
+				opacity={0.6}
 				toneMapped={false}
 			/>
 			{/* @ts-expect-error React Three Fiber JSX elements */}

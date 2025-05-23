@@ -99,7 +99,7 @@ const BackgroundSphere: React.FC<BackgroundSphereProps> = ({ backgroundImage, is
 		// @ts-expect-error React Three Fiber JSX elements
 		<mesh>
 			{/* @ts-expect-error React Three Fiber JSX elements */}
-			<sphereGeometry args={[isMobile ? 2 : 2, isMobile ? 8 : 64, isMobile ? 8 : 64]} />
+			<sphereGeometry args={[isMobile ? 2 : 2, isMobile ? 32 : 64, isMobile ? 32 : 64]} />
 			{/* @ts-expect-error React Three Fiber JSX elements */}
 			<meshBasicMaterial map={texture} side={THREE.BackSide} />
 			{/* @ts-expect-error React Three Fiber JSX elements */}

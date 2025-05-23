@@ -58,7 +58,7 @@ const RotatingGroup: React.FC<RotatingGroupProps> = ({
 			groupRef.current.rotation.y += 0.2 * delta;
 		} else {
 			// 外部から渡された回転値を適用
-			groupRef.current.rotation.y += 1 * delta;
+			groupRef.current.rotation.y += 0.2 * delta;
 		}
 	});
 

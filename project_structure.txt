@@ -75,7 +75,18 @@
 │       │   │   ├── ScrollMessage.tsx
 │       │   │   └── types.d.ts
 │       │   ├── pepePush
-│       │   │   └── PepePush.tsx
+│       │   │   ├── PepeModel3D.tsx
+│       │   │   ├── PepePush.tsx
+│       │   │   ├── ScrollController.tsx
+│       │   │   ├── StickyCanvas.tsx
+│       │   │   ├── config
+│       │   │   │   ├── animations.ts
+│       │   │   │   └── controlPoints.ts
+│       │   │   ├── hooks
+│       │   │   │   ├── useModelPosition.ts
+│       │   │   │   └── useScrollProgress.ts
+│       │   │   └── types
+│       │   │       └── index.ts
 │       │   ├── sphere
 │       │   │   ├── MessageOverlay.tsx
 │       │   │   ├── SmoothRotation.tsx
@@ -96,4 +107,4 @@
 └── types
     └── react-three-fiber.d.ts
 
-19 directories, 77 files
+22 directories, 85 files

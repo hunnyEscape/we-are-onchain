@@ -453,8 +453,7 @@ const PulsatingComponent = () => {
 	}, []);
 
 	return (
-		<div className="w-full h-screen relative overflow-hidden bg-black">
-			{/* 中心を基準にするコンテナ */}
+		<div className="w-full h-[80vh] relative overflow-hidden bg-black">
 			<div className="absolute inset-0 flex items-center justify-center pointer-events-none">
 				{pulses.map(pulse => (
 					<div
@@ -2458,9 +2457,557 @@ export const applyFloatingAnimation = (
 		basePosition[2]
 	);
 };-e 
+### FILE: ./src/app/components/pepePush/types/index.ts
+
+// types/index.ts
+export interface ControlPoint {
+  scrollProgress: number; // 0-1の範囲
+  position: [number, number, number]; // x, y, z座標
+  rotation?: [number, number, number]; // オプショナルな回転
+  scale?: [number, number, number]; // オプショナルなスケール
+}
+
+export interface ScrollState {
+  scrollProgress: number; // 0-1の範囲でのスクロール進行度
+  isInSection: boolean; // セッション内にいるかどうか
+}
+
+export interface ModelTransform {
+  position: [number, number, number];
+  rotation: [number, number, number];
+  scale: [number, number, number];
+}
+
+export interface PepePushProps {
+  className?: string;
+}
+
+export interface StickyCanvasProps {
+  children: React.ReactNode;
+  className?: string;
+}-e 
+### FILE: ./src/app/components/pepePush/config/controlPoints.ts
+
+// config/controlPoints.ts
+import { ControlPoint } from '../types';
+
+// スマホ判定のヘルパー関数
+const isMobile = () => {
+	if (typeof window === 'undefined') return false;
+	return window.innerWidth <= 768;
+};
+
+export const controlPoints: ControlPoint[] = [
+	{
+		scrollProgress: 0,
+		position: [0, -1, 0],
+		rotation: [Math.PI / 4, -Math.PI / 12, 0],
+		scale: [1, 1, 1]
+	},
+	{
+		scrollProgress: 0.25,
+		position: [0, 0, 0],
+		rotation: [0, 0, 0],
+		scale: [1.2, 1.2, 1.2]
+	},
+	{
+		scrollProgress: 0.5,
+		position: [2, 1, -1],
+		rotation: [0, Math.PI / 3, 0],
+		scale: [1, 1, 1]
+	},
+	{
+		scrollProgress: 0.75,
+		position: [0, -1, 2],
+		rotation: [0, Math.PI, 0],
+		scale: [0.8, 0.8, 0.8]
+	},
+	{
+		scrollProgress: 1,
+		position: [0, -2, 0],
+		rotation: [0, -Math.PI / 2, 0],
+		scale: isMobile() ? [0.6, 0.6, 0.6] : [1, 1, 1] // スマホでは小さく
+	}
+];
+
+// レスポンシブ対応の制御点を取得する関数
+export const getResponsiveControlPoints = (): ControlPoint[] => {
+	const mobile = isMobile();
+
+	return [
+		{
+			scrollProgress: 0,
+			position: [0, -1, 0],
+			rotation: [Math.PI / 4, -Math.PI / 12, 0],
+			scale: [1, 1, 1]
+		},
+		{
+			scrollProgress: 0.25,
+			position: [0, 0, 0],
+			rotation: [0, 0, 0],
+			scale: [1.2, 1.2, 1.2]
+		},
+		{
+			scrollProgress: 0.5,
+			position: [2, 1, -1],
+			rotation: [0, Math.PI / 3, 0],
+			scale: [1, 1, 1]
+		},
+		{
+			scrollProgress: 0.75,
+			position: [0, -1, 2],
+			rotation: [0, Math.PI, 0],
+			scale: [0.8, 0.8, 0.8]
+		},
+		{
+			scrollProgress: 1,
+			position: [0, -2, 0],
+			rotation: [0, -Math.PI / 2, 0],
+			scale: mobile ? [0.6, 0.6, 0.6] : [1, 1, 1] // スマホでは60%のサイズ
+		}
+	];
+};
+
+// 設定値の調整用ヘルパー
+export const CONFIG = {
+	// セッションの高さ（vh）
+	SECTION_HEIGHT_VH: 600,
+
+	// アニメーション補間の滑らかさ
+	LERP_FACTOR: 0.1,
+
+	// デバッグモード（開発時にスクロール位置を表示）
+	DEBUG_MODE: false,
+
+	// レスポンシブ設定
+	MOBILE_BREAKPOINT: 768,
+	MOBILE_SCALE_FACTOR: 0.6 // スマホでの最終スケール
+} as const;-e 
+### FILE: ./src/app/components/pepePush/config/animations.ts
+
+// config/animations.ts
+
+export const ANIMATION_CONFIG = {
+	// 基本アニメーション設定
+	PRIMARY_ANIMATION: 'PushUp',
+	ARMATURE_FADE_IN_DURATION: 0.3,
+
+	// アニメーション速度調整
+	ANIMATION_SPEED: {
+		PUSH_UP: 1.0,
+		IDLE: 0.8,
+		TRANSITION: 1.2
+	},
+
+	// ループ設定
+	LOOP_SETTINGS: {
+		PUSH_UP: {
+			enabled: true,
+			count: Infinity // 無限ループ
+		}
+	},
+
+	// スクロール位置に応じたアニメーション変更（将来の拡張用）
+	SCROLL_BASED_ANIMATIONS: {
+		0: { animation: 'PushUp', speed: 0.5 },
+		0.25: { animation: 'PushUp', speed: 1.0 },
+		0.5: { animation: 'PushUp', speed: 1.5 },
+		0.75: { animation: 'PushUp', speed: 1.2 },
+		1: { animation: 'PushUp', speed: 0.8 }
+	},
+
+	// パフォーマンス設定
+	PERFORMANCE: {
+		// フレームレート制限（必要に応じて）
+		MAX_FPS: 60,
+
+		// LOD設定（距離に応じた詳細度）
+		LOD_DISTANCES: [10, 50, 100],
+
+		// アニメーション品質
+		ANIMATION_QUALITY: {
+			HIGH: { timeScale: 1.0, precision: 'high' },
+			MEDIUM: { timeScale: 0.8, precision: 'medium' },
+			LOW: { timeScale: 0.5, precision: 'low' }
+		}
+	}
+} as const;
+
+// アニメーション状態の型定義
+export type AnimationState = {
+	currentAnimation: string;
+	speed: number;
+	isPlaying: boolean;
+	loopCount: number;
+};
+
+// アニメーション制御のヘルパー関数
+export const getAnimationForScrollProgress = (progress: number) => {
+	const scrollAnimations = ANIMATION_CONFIG.SCROLL_BASED_ANIMATIONS;
+	const keys = Object.keys(scrollAnimations).map(Number).sort((a, b) => a - b);
+
+	let targetKey = keys[0];
+	for (const key of keys) {
+		if (progress >= key) {
+			targetKey = key;
+		} else {
+			break;
+		}
+	}
+
+	return scrollAnimations[targetKey as keyof typeof scrollAnimations];
+};-e 
+### FILE: ./src/app/components/pepePush/StickyCanvas.tsx
+
+// StickyCanvas.tsx
+'use client';
+
+import React from 'react';
+import { Canvas } from '@react-three/fiber';
+import { StickyCanvasProps } from './types';
+
+export default function StickyCanvas({ children, className = '' }: StickyCanvasProps) {
+	return (
+		<div className={`sticky top-0 w-full h-screen z-10 ${className}`}>
+			<Canvas
+				className="w-full h-full"
+				gl={{ antialias: false }}
+				shadows={false}
+				frameloop="always"
+				camera={{
+					position: [0, 0, 5],
+					fov: 75,
+					near: 0.1,
+					far: 1000
+				}}
+				dpr={1}
+			>
+				{/* @ts-expect-error React Three Fiber JSX elements */}
+				<ambientLight intensity={0.3} />
+				{/* @ts-expect-error React Three Fiber JSX elements */}
+				<directionalLight
+					position={[5, 10, 7]}
+					intensity={1}
+					castShadow={false}
+				/>
+
+				{/* 子コンポーネント（3Dモデルなど）を描画 */}
+				{children}
+			</Canvas>
+		</div>
+	);
+}-e 
+### FILE: ./src/app/components/pepePush/hooks/useScrollProgress.ts
+
+// hooks/useScrollProgress.ts
+'use client';
+
+import React,{ useState, useEffect, useRef, useCallback } from 'react';
+import { ScrollState } from '../types';
+import { CONFIG } from '../config/controlPoints';
+
+export function useScrollProgress() {
+  const [scrollState, setScrollState] = useState<ScrollState>({
+    scrollProgress: 0,
+    isInSection: false
+  });
+  
+  const sectionRef = useRef<HTMLDivElement>(null);
+  const frameRef = useRef<number>(null);
+
+  const updateScrollProgress = useCallback(() => {
+    if (!sectionRef.current) return;
+
+    const rect = sectionRef.current.getBoundingClientRect();
+    const windowHeight = window.innerHeight;
+    const sectionHeight = rect.height;
+    
+    // セクションが画面に入っているかチェック
+    const isInView = rect.top < windowHeight && rect.bottom > 0;
+    
+    if (!isInView) {
+      setScrollState(prev => ({ ...prev, isInSection: false }));
+      return;
+    }
+
+    // スクロール進行度を計算（0-1の範囲）
+    const scrollTop = -rect.top;
+    const maxScroll = sectionHeight - windowHeight;
+    const progress = Math.max(0, Math.min(1, scrollTop / maxScroll));
+
+    setScrollState({
+      scrollProgress: progress,
+      isInSection: true
+    });
+
+    if (CONFIG.DEBUG_MODE) {
+      console.log('Scroll Progress:', progress.toFixed(3));
+    }
+  }, []);
+
+  useEffect(() => {
+    const handleScroll = () => {
+      if (frameRef.current) {
+        cancelAnimationFrame(frameRef.current);
+      }
+      
+      frameRef.current = requestAnimationFrame(updateScrollProgress);
+    };
+
+    window.addEventListener('scroll', handleScroll, { passive: true });
+    handleScroll(); // 初期化
+
+    return () => {
+      window.removeEventListener('scroll', handleScroll);
+      if (frameRef.current) {
+        cancelAnimationFrame(frameRef.current);
+      }
+    };
+  }, [updateScrollProgress]);
+
+  return { scrollState, sectionRef };
+}-e 
+### FILE: ./src/app/components/pepePush/hooks/useModelPosition.ts
+
+// hooks/useModelPosition.ts
+'use client';
+
+import { useMemo } from 'react';
+import { ModelTransform } from '../types';
+import { getResponsiveControlPoints } from '../config/controlPoints';
+
+export function useModelPosition(scrollProgress: number): ModelTransform {
+	return useMemo(() => {
+		// レスポンシブ対応の制御点を取得
+		const controlPoints = getResponsiveControlPoints();
+
+		// スクロール進行度が0-1の範囲外の場合の処理
+		if (scrollProgress <= 0) {
+			const firstPoint = controlPoints[0];
+			return {
+				position: firstPoint.position,
+				rotation: firstPoint.rotation || [0, 0, 0],
+				scale: firstPoint.scale || [1, 1, 1]
+			};
+		}
+
+		if (scrollProgress >= 1) {
+			const lastPoint = controlPoints[controlPoints.length - 1];
+			return {
+				position: lastPoint.position,
+				rotation: lastPoint.rotation || [0, 0, 0],
+				scale: lastPoint.scale || [1, 1, 1]
+			};
+		}
+
+		// 現在のスクロール位置に対応する制御点のペアを見つける
+		let fromIndex = 0;
+		let toIndex = 1;
+
+		for (let i = 0; i < controlPoints.length - 1; i++) {
+			if (scrollProgress >= controlPoints[i].scrollProgress &&
+				scrollProgress <= controlPoints[i + 1].scrollProgress) {
+				fromIndex = i;
+				toIndex = i + 1;
+				break;
+			}
+		}
+
+		const fromPoint = controlPoints[fromIndex];
+		const toPoint = controlPoints[toIndex];
+
+		// 2つの制御点間での進行度を計算
+		const segmentProgress = (scrollProgress - fromPoint.scrollProgress) /
+			(toPoint.scrollProgress - fromPoint.scrollProgress);
+
+		// 線形補間
+		const lerp = (start: number, end: number, factor: number) =>
+			start + (end - start) * factor;
+
+		const lerpArray = (start: number[], end: number[], factor: number): [number, number, number] => [
+			lerp(start[0], end[0], factor),
+			lerp(start[1], end[1], factor),
+			lerp(start[2], end[2], factor)
+		];
+
+		return {
+			position: lerpArray(
+				fromPoint.position,
+				toPoint.position,
+				segmentProgress
+			),
+			rotation: lerpArray(
+				fromPoint.rotation || [0, 0, 0],
+				toPoint.rotation || [0, 0, 0],
+				segmentProgress
+			),
+			scale: lerpArray(
+				fromPoint.scale || [1, 1, 1],
+				toPoint.scale || [1, 1, 1],
+				segmentProgress
+			)
+		};
+	}, [scrollProgress]);
+}-e 
+### FILE: ./src/app/components/pepePush/PepeModel3D.tsx
+
+// PepeModel3D.tsx
+'use client';
+
+import React, { useEffect, useRef } from 'react';
+import { useFrame } from '@react-three/fiber';
+import { useGLTF, useAnimations } from '@react-three/drei';
+import * as THREE from 'three';
+import { ModelTransform } from './types';
+import { CONFIG } from './config/controlPoints';
+
+interface PepeModel3DProps {
+	transform: ModelTransform;
+	url?: string;
+}
+
+export default function PepeModel3D({
+	transform,
+	url = '/models/push-up-pepe.glb'
+}: PepeModel3DProps) {
+	const { scene, animations } = useGLTF(url);
+	const { actions, mixer } = useAnimations(animations, scene);
+	const groupRef = useRef<THREE.Group>(null);
+
+	// 現在の変換値を保持（スムーズな補間のため）
+	const currentTransform = useRef<ModelTransform>({
+		position: [0, 0, 0],
+		rotation: [0, 0, 0],
+		scale: [1, 1, 1]
+	});
+
+	// マテリアルとアニメーション初期化
+	useEffect(() => {
+		// 色管理を有効化
+		THREE.ColorManagement.enabled = true;
+
+		// 重ねられた2つのテキストオブジェクトの発光マテリアル設定
+		scene.traverse((child) => {
+			if (child instanceof THREE.Mesh && child.material) {
+				const materials = Array.isArray(child.material) ? child.material : [child.material];
+
+				materials.forEach((material) => {
+					if (material instanceof THREE.MeshStandardMaterial) {
+						// Text.001 (緑色発光)
+						if (child.name === 'Text.001') {
+							material.emissive = new THREE.Color(0x00ff00); // 緑色
+							material.emissiveIntensity = 3.0;
+							material.toneMapped = false; // 重要：色変換を防止
+							// 少し前に配置
+							child.position.z += 0.01;
+							console.log('Applied green emissive to Text.001');
+						}
+
+						// Text.004 (オレンジ色発光)
+						else if (child.name === 'Text.004') {
+							material.emissive = new THREE.Color(0xff4500); // オレンジ色
+							material.emissiveIntensity = 3.0;
+							material.toneMapped = false; // 重要：色変換を防止
+							// 少し後ろに配置
+							child.position.z -= 0.01;
+							console.log('Applied orange emissive to Text.004');
+						}
+
+						// その他のオブジェクトは既存のマテリアル設定を保持
+						else if (material.emissive && !material.emissive.equals(new THREE.Color(0x000000))) {
+							material.toneMapped = false; // 他の発光オブジェクトも色変換を防止
+							if (material.emissiveIntensity === undefined || material.emissiveIntensity === 0) {
+								material.emissiveIntensity = 1;
+							}
+						}
+					}
+				});
+			}
+		});
+
+		// 既存のアニメーションを停止
+		Object.values(actions).forEach((action) => action?.stop());
+
+		// PushUpアニメーションを再生
+		if (actions['PushUp']) {
+			actions['PushUp'].reset().play();
+		}
+
+		// Armatureアニメーションがあれば再生
+		const bodyKey = Object.keys(actions).find((key) =>
+			key.includes('Armature')
+		);
+		if (bodyKey && actions[bodyKey]) {
+			actions[bodyKey].reset().fadeIn(0.3).play();
+		}
+	}, [actions, scene]);
+
+	// フレームごとの更新
+	useFrame((_, delta) => {
+		// アニメーションミキサーを更新
+		mixer.update(delta);
+
+		// スムーズな位置変更（線形補間）
+		if (groupRef.current) {
+			const group = groupRef.current;
+			const lerpFactor = CONFIG.LERP_FACTOR;
+
+			// 位置の補間
+			const targetPos = new THREE.Vector3(...transform.position);
+			group.position.lerp(targetPos, lerpFactor);
+
+			// 回転の補間
+			const targetRot = new THREE.Euler(...transform.rotation);
+			group.rotation.x += (targetRot.x - group.rotation.x) * lerpFactor;
+			group.rotation.y += (targetRot.y - group.rotation.y) * lerpFactor;
+			group.rotation.z += (targetRot.z - group.rotation.z) * lerpFactor;
+
+			// スケールの補間
+			const targetScale = new THREE.Vector3(...transform.scale);
+			group.scale.lerp(targetScale, lerpFactor);
+
+			// デバッグ情報
+			if (CONFIG.DEBUG_MODE) {
+				currentTransform.current = {
+					position: [group.position.x, group.position.y, group.position.z],
+					rotation: [group.rotation.x, group.rotation.y, group.rotation.z],
+					scale: [group.scale.x, group.scale.y, group.scale.z]
+				};
+			}
+		}
+	});
+
+	// glTFファイルのマテリアルをそのまま適用
+	return (
+		// @ts-expect-error React Three Fiber JSX elements
+		<group ref={groupRef}>
+			{/* @ts-expect-error React Three Fiber JSX elements */}
+			<primitive object={scene} />
+			{/* @ts-expect-error React Three Fiber JSX elements */}
+		</group>
+	);
+}
+
+// モデルのプリロード
+useGLTF.preload('/models/push-up-pepe.glb');-e 
 ### FILE: ./src/app/components/pepePush/PepePush.tsx
 
 // components/PepePush.tsx
+// PepePush.tsx
+'use client';
+
+import React from 'react';
+import ScrollController from './ScrollController';
+import { PepePushProps } from './types';
+
+export default function PepePush({ className = '' }: PepePushProps) {
+	return (
+		<section className={`relative w-full ${className}`}>
+			<ScrollController className="bg-black" />
+		</section>
+	);
+}
+/*
 'use client';
 
 import React, { useEffect, Suspense } from 'react';
@@ -2512,7 +3059,68 @@ function PepeModel({ url }: { url: string }) {
 
 // モデルのプリロード
 useGLTF.preload('/models/push-up-pepe.glb');
+*/
 -e 
+### FILE: ./src/app/components/pepePush/ScrollController.tsx
+
+// ScrollController.tsx
+'use client';
+
+import React, { Suspense } from 'react';
+import StickyCanvas from './StickyCanvas';
+import PepeModel3D from './PepeModel3D';
+import { useScrollProgress } from './hooks/useScrollProgress';
+import { useModelPosition } from './hooks/useModelPosition';
+import { CONFIG } from './config/controlPoints';
+
+interface ScrollControllerProps {
+	className?: string;
+}
+
+export default function ScrollController({ className = '' }: ScrollControllerProps) {
+	const { scrollState, sectionRef } = useScrollProgress();
+	const modelTransform = useModelPosition(scrollState.scrollProgress);
+
+	return (
+		<div
+			ref={sectionRef}
+			className={`relative w-full ${className}`}
+			style={{ height: `${CONFIG.SECTION_HEIGHT_VH}vh` }}
+		>
+			{/* Sticky Canvas */}
+			<StickyCanvas>
+				<Suspense fallback={null}>
+					<PepeModel3D transform={modelTransform} />
+				</Suspense>
+			</StickyCanvas>
+
+			{/* デバッグ情報表示（開発時のみ） */}
+			{CONFIG.DEBUG_MODE && scrollState.isInSection && (
+				<div className="fixed top-4 right-4 bg-black/80 text-white p-4 rounded-lg font-mono text-sm z-50">
+					<div>Progress: {scrollState.scrollProgress.toFixed(3)}</div>
+					<div>Position: [{modelTransform.position.map(v => v.toFixed(2)).join(', ')}]</div>
+					<div>Rotation: [{modelTransform.rotation.map(v => v.toFixed(2)).join(', ')}]</div>
+					<div>Scale: [{modelTransform.scale.map(v => v.toFixed(2)).join(', ')}]</div>
+				</div>
+			)}
+
+			{/* スクロール進行を示すインジケーター（オプション） */}
+			{scrollState.isInSection && (
+				<div className="fixed top-8 left-1/2 transform -translate-x-1/2 z-40">
+					<div className="w-64 h-2 bg-white/20 rounded-full overflow-hidden">
+						<div
+							className="h-full bg-white/80 rounded-full transition-all duration-100"
+							style={{ width: `${scrollState.scrollProgress * 100}%` }}
+						/>
+					</div>
+					<div className="text-center text-white/60 text-xs mt-2">
+						Training Progress
+					</div>
+				</div>
+			)}
+		</div>
+	);
+}-e 
 ### FILE: ./src/app/components/pepe3d/types.d.ts
 
 // types.d.ts
@@ -2570,7 +3178,7 @@ interface TextFragment {
 const messages: MessageConfig[] = [
 	{
 		id: 'trigger-1',
-		text: 'The Deep Green Source — a legendary spring hidden within an ancient forest.',
+		text: 'The Deep Green Source — a spring hidden within an ancient forest.',
 		top: '20vh',
 		left: '10vw',
 		width: 'auto',
@@ -2590,7 +3198,7 @@ const messages: MessageConfig[] = [
 	},
 	{
 		id: 'trigger-3',
-		text: 'It pushes you toward your next challenge.',
+		text: 'It fuels your drive for what’s next.',
 		top: '40vh',
 		left: '10vw',
 		width: 'auto',
@@ -2750,7 +3358,7 @@ const ScrollTriggerMessages: React.FC = () => {
 							refs.current[i] = el;
 						}
 					}}
-					className="h-[150vh] w-full"
+					className="h-[100vh] w-full"
 				/>
 			))}
 
@@ -4272,7 +4880,7 @@ import CyberScrollMessages from './cyber-scroll-messages';
 // コンポーネント定義
 const FloatingImagesFixSection: React.FC = () => {
 	return (<>
-		<div className='w-full relative h-[150vh] bg-black' />
+		<div className='w-full relative h-[50vh] bg-black' />
 		<section
 			className="w-screen h-[800vh] relative overflow-hidden bg-black floating-images-fix-section"
 			id="floating-images-fix-section"
@@ -4465,16 +5073,8 @@ import FloatingImagesFixSection from './components/floating-images-fix/FloatingI
 import Header from './components/ui/Header';
 import Footer from './components/ui/Footer';
 import CyberInterface from './components/layout/CyberInterface';
-import ScanlineEffect from './components/layout/ScanlineEffect';
 import PepePush from './components/pepePush/PepePush';
-/*
-		
-			<Header/>
-			<HeroSection/>
 
-
-
-*/
 export default function Home() {
 	return (
 		<main className="relative flex flex-col items-center">
@@ -4486,9 +5086,7 @@ export default function Home() {
 			<PepeTop />
 			<FloatingImagesFixSection />
 			<SphereTop />
-			<div className='w-full relative h-[100vh] bg-black z-10'>
-				<PepePush />
-			</div>
+			<PepePush />
 			<Footer />
 		</main>
 	);

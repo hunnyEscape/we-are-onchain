@@ -38,8 +38,7 @@ const PulsatingComponent = () => {
 	}, []);
 
 	return (
-		<div className="w-full h-screen relative overflow-hidden bg-black">
-			{/* 中心を基準にするコンテナ */}
+		<div className="w-full h-[80vh] relative overflow-hidden bg-black">
 			<div className="absolute inset-0 flex items-center justify-center pointer-events-none">
 				{pulses.map(pulse => (
 					<div

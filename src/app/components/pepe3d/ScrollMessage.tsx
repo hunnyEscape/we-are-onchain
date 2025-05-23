@@ -24,7 +24,7 @@ interface TextFragment {
 const messages: MessageConfig[] = [
 	{
 		id: 'trigger-1',
-		text: 'The Deep Green Source — a legendary spring hidden within an ancient forest.',
+		text: 'The Deep Green Source — a spring hidden within an ancient forest.',
 		top: '20vh',
 		left: '10vw',
 		width: 'auto',
@@ -44,7 +44,7 @@ const messages: MessageConfig[] = [
 	},
 	{
 		id: 'trigger-3',
-		text: 'It pushes you toward your next challenge.',
+		text: 'It fuels your drive for what’s next.',
 		top: '40vh',
 		left: '10vw',
 		width: 'auto',
@@ -204,7 +204,7 @@ const ScrollTriggerMessages: React.FC = () => {
 							refs.current[i] = el;
 						}
 					}}
-					className="h-[150vh] w-full"
+					className="h-[100vh] w-full"
 				/>
 			))}
 

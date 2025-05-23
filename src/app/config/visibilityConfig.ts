@@ -182,7 +182,7 @@ export const getVisibilityConfig = (componentType: ComponentType): VisibilityCon
 }
 
 /**
- * パフォーマンス設定を取得するヘルパー関数
+ * パフォーマンス設定を取得するヘルパー関
  */
 export const getPerformanceConfig = () => {
 	const screenWidth = typeof window !== 'undefined' ? window.innerWidth : 1920

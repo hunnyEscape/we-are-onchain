@@ -21,7 +21,9 @@ const FloatingImagesFixSection: React.FC = () => {
 				/>
 				<div
 					className="absolute inset-0 z-10 block sm:hidden bg-center bg-cover"
-					style={{ backgroundImage: "url('/images/garally_small.png')" }}
+					style={{
+						backgroundImage: `url(${process.env.NEXT_PUBLIC_CLOUDFRONT_URL}/pepe/garally_small.webp)`
+					}}
 				/>
 
 				<FloatingImagesFixCanvas />

@@ -1,10 +1,11 @@
+/* pepe3d/PepeStyles.module.css - 強化されたスタイル */
+
 .modelContainer {
 	width: 100%;
 	height: 100%;
 	position: relative;
 	overflow: hidden;
 	background-color: #0f0f0f;
-	/* デフォルトの背景色 */
 }
 
 .canvasWrapper {
@@ -55,13 +56,8 @@
 }
 
 @keyframes spin {
-	0% {
-		transform: rotate(0deg);
-	}
-
-	100% {
-		transform: rotate(360deg);
-	}
+	0% { transform: rotate(0deg); }
+	100% { transform: rotate(360deg); }
 }
 
 /* 情報オーバーレイ */
@@ -86,14 +82,10 @@
 	width: 100%;
 }
 
-.decorLineTop {
-	top: 10px;
-}
+.decorLineTop { top: 10px; }
+.decorLineBottom { bottom: 10px; }
 
-.decorLineBottom {
-	bottom: 10px;
-}
-
+/* 改良されたメッセージスタイル */
 .message {
 	position: fixed;
 	z-index: 50;
@@ -106,97 +98,61 @@
 	padding: 0.5rem 1rem;
 	border-radius: 0.5rem;
 	box-shadow: 0 0 2px #00FF99, 0 0 10px #00FF99;
-	opacity: 0;
-	transition: opacity 0.7s ease-in-out;
+	transition: all 0.7s ease-in-out;
+	pointer-events: none;
 }
 
 .active {
 	opacity: 1;
-	pointer-events: auto;
+	transform: translateY(0);
 }
 
-.glitch {
-	animation: glitch 1s infinite;
+.inactive {
+	opacity: 0;
+	transform: translateY(20px);
 }
 
-.scan {
-	animation: scan 3s infinite;
-}
-
-.highlight {
-	color: #FF6600;
-}
-
-/* Optional noise overlay utility scoped to component */
-.noiseOverlay {
-	background-image: url('/images/noise.png');
-	opacity: 0.02;
-	pointer-events: none;
-}
-
-/* Responsive adjustments */
-@media (max-width: 768px) {
-	.message {
-		font-size: 1.5rem;
-		letter-spacing: 0.05em;
-		box-shadow: 0 0 1px #00FF99, 0 0 5px #00FF99;
-	}
-}
-
-
-/* PepeStyles.module.css */
-/* グリッチエフェクト定義 */
+/* グリッチエフェクト強化 */
 @keyframes glitch {
 	0% {
 		transform: translate(0);
 		text-shadow: 0 0 0 #0f0, 0 0 0 #f00, 0 0 0 #00f;
 	}
-
 	2% {
 		transform: translate(-2px, 0);
 		text-shadow: -2px 0 0 #0f0, 2px 0 0 #f00, 0 0 0 #00f;
 	}
-
 	4% {
 		transform: translate(-2px, 0);
 		text-shadow: -2px 0 0 #0f0, 2px 0 0 #f00, 0 0 0 #00f;
 	}
-
 	5% {
 		transform: translate(0);
 		text-shadow: 0 0 0 #0f0, 0 0 0 #f00, 0 0 0 #00f;
 	}
-
 	60% {
 		transform: translate(0);
 		text-shadow: 0 0 0 #0f0, 0 0 0 #f00, 0 0 0 #00f;
 	}
-
 	61% {
 		transform: translate(3px, 0);
 		text-shadow: 3px 0 0 #0f0, -3px 0 0 #f00, 0 0 0 #00f;
 	}
-
 	62% {
 		transform: translate(0);
 		text-shadow: 0 0 0 #0f0, 0 0 0 #f00, 0 0 0 #00f;
 	}
-
-	98% {
-		transform: translate(0);
-		text-shadow: 0 0 0 #0f0, 0 0 0 #f00, 0 0 0 #00f;
-	}
-
 	100% {
 		transform: translate(0);
 		text-shadow: 0 0 0 #0f0, 0 0 0 #f00, 0 0 0 #00f;
 	}
 }
 
-/* 特別なキーワード用の強化グリッチ */
+/* 強化されたキーワードグリッチ */
 .keywordGlitch {
 	position: relative;
 	display: inline-block;
+	transition: all 0.3s ease;
 }
 
 .keywordGlitch::before,
@@ -225,62 +181,25 @@
 }
 
 @keyframes glitch-1 {
-	0% {
-		transform: translateX(0);
-	}
-
-	80% {
-		transform: translateX(0);
-	}
-
-	85% {
-		transform: translateX(2px);
-	}
-
-	90% {
-		transform: translateX(-2px);
-	}
-
-	95% {
-		transform: translateX(1px);
-	}
-
-	100% {
-		transform: translateX(0);
-	}
+	0% { transform: translateX(0); }
+	80% { transform: translateX(0); }
+	85% { transform: translateX(2px); }
+	90% { transform: translateX(-2px); }
+	95% { transform: translateX(1px); }
+	100% { transform: translateX(0); }
 }
 
 @keyframes glitch-2 {
-	0% {
-		transform: translateX(0);
-	}
-
-	15% {
-		transform: translateX(0);
-	}
-
-	20% {
-		transform: translateX(-2px);
-	}
-
-	25% {
-		transform: translateX(2px);
-	}
-
-	30% {
-		transform: translateX(-1px);
-	}
-
-	35% {
-		transform: translateX(0);
-	}
-
-	100% {
-		transform: translateX(0);
-	}
+	0% { transform: translateX(0); }
+	15% { transform: translateX(0); }
+	20% { transform: translateX(-2px); }
+	25% { transform: translateX(2px); }
+	30% { transform: translateX(-1px); }
+	35% { transform: translateX(0); }
+	100% { transform: translateX(0); }
 }
 
-/* RGB分離効果 */
+/* RGB分離効果強化 */
 .rgbSplit {
 	position: relative;
 	text-shadow: -2px 0 #ff0000, 2px 0 #00ffff;
@@ -288,17 +207,9 @@
 }
 
 @keyframes rgb-shift {
-	0% {
-		text-shadow: -2px 0 #ff0000, 2px 0 #00ffff;
-	}
-
-	50% {
-		text-shadow: -3px 0 #ff0000, 3px 0 #00ffff;
-	}
-
-	100% {
-		text-shadow: -2px 0 #ff0000, 2px 0 #00ffff;
-	}
+	0% { text-shadow: -2px 0 #ff0000, 2px 0 #00ffff; }
+	50% { text-shadow: -3px 0 #ff0000, 3px 0 #00ffff; }
+	100% { text-shadow: -2px 0 #ff0000, 2px 0 #00ffff; }
 }
 
 /* 波形歪みエフェクト */
@@ -308,33 +219,25 @@
 }
 
 @keyframes wave {
-
-	0%,
-	100% {
-		transform: translateY(0);
-	}
-
-	50% {
-		transform: translateY(-5px)
-	}
+	0%, 100% { transform: translateY(0); }
+	50% { transform: translateY(-5px); }
 }
 
-/* パルス効果 */
+/* パルス効果強化 */
 .pulse {
 	animation: pulse-effect 1.5s ease-in-out infinite;
 }
 
 @keyframes pulse-effect {
-
-	0%,
-	100% {
+	0%, 100% {
 		transform: scale(1);
 		opacity: 1;
+		text-shadow: 0 0 8px rgba(0, 255, 102, 0.7);
 	}
-
 	50% {
 		transform: scale(1.05);
 		opacity: 0.9;
+		text-shadow: 0 0 16px rgba(0, 255, 102, 0.9);
 	}
 }
 
@@ -356,211 +259,65 @@
 }
 
 @keyframes slice {
-
-	0%,
-	90%,
-	100% {
-		height: 0;
-		top: 0;
-	}
-
-	10%,
-	14% {
-		height: 33%;
-		top: 33%;
-	}
-
-	15%,
-	19% {
-		height: 0;
-		top: 0;
-	}
-
-	20%,
-	24% {
-		height: 20%;
-		top: 10%;
-	}
-
-	25% {
-		height: 0;
-		top: 0;
-	}
+	0%, 90%, 100% { height: 0; top: 0; }
+	10%, 14% { height: 33%; top: 33%; }
+	15%, 19% { height: 0; top: 0; }
+	20%, 24% { height: 20%; top: 10%; }
+	25% { height: 0; top: 0; }
 }
 
-
-
-@keyframes scan {
-	0% {
-		transform: translateY(0);
-	}
-
-	100% {
-		transform: translateY(100vh);
-	}
-}
-
-/* データストリームアニメーション */
-.dataStream {
-	position: fixed;
-	left: 20px;
-	top: 0;
-	height: 100vh;
-	width: 40px;
-	overflow: hidden;
-	z-index: 5;
-	opacity: 0.6;
-	pointer-events: none;
-}
-
-.dataContent {
-	font-family: monospace;
-	font-size: 14px;
-	line-height: 14px;
-	color: #00ff66;
-	animation: data-fall 20s linear infinite;
-}
-
-@keyframes data-fall {
-	0% {
-		transform: translateY(-100%);
-	}
-
-	100% {
-		transform: translateY(100%);
-	}
-}
-
-/* サイバネティックインターフェースフレーム */
-.cyberFrame {
-	position: fixed;
-	top: 0;
-	left: 0;
-	width: 100%;
-	height: 100%;
-	pointer-events: none;
-	z-index: 5;
-}
-
-.cornerMarker {
-	position: absolute;
-	width: 30px;
-	height: 30px;
-	border: 2px solid #00ff66;
-	opacity: 0.8;
-}
-
-.topLeft {
-	top: 10px;
-	left: 10px;
-	border-right: none;
-	border-bottom: none;
-}
-
-.topRight {
-	top: 10px;
-	right: 10px;
-	border-left: none;
-	border-bottom: none;
-}
-
-.bottomLeft {
-	bottom: 10px;
-	left: 10px;
-	border-right: none;
-	border-top: none;
-}
-
-.bottomRight {
-	bottom: 10px;
-	right: 10px;
-	border-left: none;
-	border-top: none;
-}
-
-/* エネルギーメーター */
-.energyMeter {
-	position: fixed;
-	right: 20px;
-	height: 60vh;
-	width: 10px;
-	background: rgba(0, 51, 17, 0.5);
-	border: 1px solid #00ff66;
-	bottom: 20vh;
-	z-index: 5;
-	pointer-events: none;
-}
-
-.energyLevel {
-	position: absolute;
-	bottom: 0;
-	width: 100%;
-	background: linear-gradient(to top, #00ff66, #00aa44);
-	transition: height 0.5s ease;
-}
-
-/* システムステータス */
-.systemStatus {
-	position: fixed;
-	right: 20px;
-	bottom: 10px;
-	font-family: monospace;
-	font-size: 12px;
-	color: #00ff66;
-	z-index: 5;
-	pointer-events: none;
-}
-
-/* アニメーショングリッチ */
-@keyframes glitch-anim-1 {
-	0% {
-		clip-path: inset(40% 0 61% 0);
-	}
-
-	20% {
-		clip-path: inset(92% 0 1% 0);
-	}
-
-	40% {
-		clip-path: inset(43% 0 1% 0);
-	}
-
-	60% {
-		clip-path: inset(25% 0 58% 0);
-	}
-
-	80% {
-		clip-path: inset(54% 0 7% 0);
-	}
-
-	100% {
-		clip-path: inset(58% 0 43% 0);
-	}
-}
-
-/* ジッターエフェクト */
-@keyframes jitter {
-	0% {
-		transform: translate(0, 0);
-	}
-
-	25% {
-		transform: translate(1px, -1px);
-	}
-
-	50% {
-		transform: translate(-1px, 1px);
-	}
-
-	75% {
-		transform: translate(-1px, -1px);
-	}
-
-	100% {
-		transform: translate(0, 0);
-	}
-}
-
+/* ジッターエフェクト強化 */
 .jitter {
 	animation: jitter 0.1s linear infinite;
+}
+
+@keyframes jitter {
+	0% { transform: translate(0, 0); }
+	25% { transform: translate(1px, -1px); }
+	50% { transform: translate(-1px, 1px); }
+	75% { transform: translate(-1px, -1px); }
+	100% { transform: translate(0, 0); }
+}
+
+/* レスポンシブ調整 */
+@media (max-width: 768px) {
+	.message {
+		font-size: 1.2rem;
+		letter-spacing: 0.05em;
+		padding: 0.4rem 0.8rem;
+		box-shadow: 0 0 1px #00FF99, 0 0 5px #00FF99;
+	}
+	
+	.keywordGlitch::before,
+	.keywordGlitch::after {
+		animation-duration: 1.5s;
+	}
+	
+	.rgbSplit {
+		text-shadow: -1px 0 #ff0000, 1px 0 #00ffff;
+	}
+}
+
+/* 新しいグロー効果 */
+.glow-effect {
+	text-shadow: 
+		0 0 5px rgba(0, 255, 102, 0.8),
+		0 0 10px rgba(0, 255, 102, 0.6),
+		0 0 15px rgba(0, 255, 102, 0.4);
+	animation: glow-pulse 2s ease-in-out infinite alternate;
+}
+
+@keyframes glow-pulse {
+	from {
+		text-shadow: 
+			0 0 5px rgba(0, 255, 102, 0.8),
+			0 0 10px rgba(0, 255, 102, 0.6),
+			0 0 15px rgba(0, 255, 102, 0.4);
+	}
+	to {
+		text-shadow: 
+			0 0 8px rgba(0, 255, 102, 1),
+			0 0 16px rgba(0, 255, 102, 0.8),
+			0 0 24px rgba(0, 255, 102, 0.6);
+	}
 }

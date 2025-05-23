@@ -9,7 +9,7 @@ import Footer from './components/ui/Footer';
 import CyberInterface from './components/layout/CyberInterface';
 import ScanlineEffect from './components/layout/ScanlineEffect';
 /*
-			<CyberInterface/>
+		
 			<Header/>
 			<HeroSection/>
 
@@ -22,6 +22,7 @@ import ScanlineEffect from './components/layout/ScanlineEffect';
 export default function Home() {
 	return (
 		<main className="relative flex flex-col items-center">
+			<CyberInterface/>
 			<GlowingTextSection/>
 			<PulsatingComponent/>
 			<PepeTop/>

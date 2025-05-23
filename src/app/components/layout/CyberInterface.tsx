@@ -241,10 +241,10 @@ const CyberInterface: React.FC<CyberInterfaceProps> = ({
 				<div className={`${styles.cornerMarker} ${styles.bottomRight} ${randomGlitch ? styles.jitterEffect : ''}`}></div>
 			</div>
 
-			<div className={`hidden sm:block ${styles.thickScanline}`} />
-			<div className={`${styles.scanline} hidden sm:block`}></div>
+			<div className={`${styles.thickScanline}`} />
+			<div className={`${styles.scanline}`}></div>
 			{/* データストリーム */}
-			<div className={`${styles.dataStream} hidden sm:block`}>
+			<div className={`${styles.dataStream} `}>
 				<div className={styles.dataContent}>
 					{dataStream.map((line, index) => (
 						<div key={index} className={randomGlitch && index % 5 === 0 ? styles.jitterEffect : ''}>

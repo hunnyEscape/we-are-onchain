@@ -21,8 +21,7 @@ export const HeroBackground: React.FC<HeroBackgroundProps> = ({
 		<>
 			{/* 背景画像 - グリッチ効果に対応 */}
 			<div
-				className={`${styles.backgroundImage} ${glitchState.active ? styles.glitchActive : ''
-					}`}
+				className={`${styles.backgroundImage} ${glitchState.active ? styles.glitchActive : ''}`}
 				style={{
 					backgroundImage: `url('${process.env.NEXT_PUBLIC_CLOUDFRONT_URL}/pepe/pepe-cyberpunk.webp')`,
 					...(!glitchState.active
@@ -37,23 +36,22 @@ export const HeroBackground: React.FC<HeroBackgroundProps> = ({
 
 			{/* ライトとオーバーレイは常時レンダリング */}
 			<div
-				className={styles.darkOverlay}
+				className={`${styles.darkOverlay} w-full`}
 				style={{
 					transform: `scale(1.02) ${midLayerTransform}`,
 					transition: 'transform 1.5s ease-out',
 				}}
 			/>
 
-			<div
-				className={styles.centerLight}
-				style={{
-					transform: midLayerTransform,
-					transition: 'transform 1.5s ease-out',
-				}}
-			/>
-
 			{/* 重いエフェクト: モバイルでは非表示 */}
 			<div className="hidden sm:block">
+				<div
+					className={styles.centerLight}
+					style={{
+						transform: midLayerTransform,
+						transition: 'transform 1.5s ease-out',
+					}}
+				/>
 				{/* メインノイズ */}
 				<div className={`${styles.mainNoise} ${glitchState.active ? styles.noiseIntense : ''
 					}`} />

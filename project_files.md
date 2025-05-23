@@ -1,4 +1,4324 @@
 -e 
+### FILE: ./src/app/types/visibility.ts
+
+// src/app/types/visibility.ts
+
+/**
+ * 可視性状態の定義
+ */
+export type VisibilityState =
+	| 'hidden'      // 完全非表示（Canvas非レンダリング）
+	| 'approaching' // 接近中（初期化開始）
+	| 'visible'     // 可視（フルアニメーション）
+	| 'partial'     // 部分可視（制限付き処理）
+
+/**
+ * 3Dコンポーネントの種類
+ */
+export type ComponentType =
+	| 'sphere'
+	| 'pepe3d'
+	| 'floating-images'
+	| 'glowing-text'
+	| 'pepe-push'
+
+/**
+ * 可視性制御の設定
+ */
+export interface VisibilityConfig {
+	/** Intersection Observerの閾値 */
+	threshold: number | number[]
+	/** ルートマージン（事前準備の範囲） */
+	rootMargin: string
+	/** デバウンス時間（ms） */
+	debounceMs: number
+	/** 長時間非表示後のメモリ解放時間（ms） */
+	memoryReleaseDelay: number
+}
+
+/**
+ * 可視性状態の詳細情報
+ */
+export interface VisibilityInfo {
+	/** 現在の可視性状態 */
+	state: VisibilityState
+	/** 可視領域の割合（0-1） */
+	intersectionRatio: number
+	/** 要素が画面内にあるかどうか */
+	isIntersecting: boolean
+	/** 状態が変更された時刻 */
+	lastStateChange: number
+	/** コンポーネントの種類 */
+	componentType: ComponentType
+}
+
+/**
+ * Canvas制御の状態
+ */
+export interface CanvasControlState {
+	/** frameloopの状態 */
+	frameloop: 'always' | 'never' | 'demand'
+	/** レンダリング優先度（1-10、10が最高） */
+	priority: number
+	/** 初期化完了フラグ */
+	isInitialized: boolean
+	/** アニメーション実行フラグ */
+	isAnimating: boolean
+}
+
+/**
+ * パフォーマンス監視データ
+ */
+export interface PerformanceMetrics {
+	/** アクティブなCanvas数 */
+	activeCanvasCount: number
+	/** useFrame実行回数/フレーム */
+	frameCallsPerFrame: number
+	/** メモリ使用量（MB） */
+	memoryUsage: number
+	/** 現在のFPS */
+	currentFPS: number
+	/** 最後の測定時刻 */
+	lastMeasured: number
+}
+
+/**
+ * 可視性制御フックの戻り値
+ */
+export interface UseVisibilityControlReturn {
+	/** 現在の可視性情報 */
+	visibilityInfo: VisibilityInfo
+	/** Canvas制御状態 */
+	canvasState: CanvasControlState
+	/** 要素の参照（Intersection Observer用） */
+	elementRef: React.RefObject<HTMLElement>
+	/** Canvas制御関数 */
+	controls: {
+		/** アニメーション開始 */
+		startAnimation: () => void
+		/** アニメーション停止 */
+		stopAnimation: () => void
+		/** 強制的にレンダリング開始 */
+		forceRender: () => void
+		/** リソース解放 */
+		dispose: () => void
+	}
+}
+
+/**
+ * Intersection Observer フックの戻り値
+ */
+export interface UseIntersectionObserverReturn {
+	/** 要素の参照 */
+	elementRef: React.RefObject<HTMLElement>
+	/** 交差情報 */
+	entry: IntersectionObserverEntry | null
+	/** 可視性フラグ */
+	isIntersecting: boolean
+	/** 可視領域の割合 */
+	intersectionRatio: number
+}
+
+/**
+ * 可視性管理マネージャーのインターface
+ */
+export interface VisibilityManager {
+	/** コンポーネントを登録 */
+	register: (id: string, componentType: ComponentType, config?: Partial<VisibilityConfig>) => void
+	/** コンポーネントの登録解除 */
+	unregister: (id: string) => void
+	/** 状態を更新 */
+	updateState: (id: string, state: VisibilityState, intersectionRatio: number) => void
+	/** 優先度を取得 */
+	getPriority: (id: string) => number
+	/** アクティブなコンポーネント一覧を取得 */
+	getActiveComponents: () => string[]
+	/** パフォーマンス指標を取得 */
+	getMetrics: () => PerformanceMetrics
+}
+
+/**
+ * デバッグ情報
+ */
+export interface DebugInfo {
+	/** 登録されたコンポーネント一覧 */
+	registeredComponents: Record<string, {
+		type: ComponentType
+		state: VisibilityState
+		priority: number
+		lastUpdate: number
+	}>
+	/** パフォーマンス履歴 */
+	performanceHistory: PerformanceMetrics[]
+	/** エラーログ */
+	errors: {
+		timestamp: number
+		component: string
+		message: string
+		stack?: string
+	}[]
+}
+
+/**
+ * エラーハンドリング用の型
+ */
+export interface VisibilityError extends Error {
+	componentId?: string
+	componentType?: ComponentType
+	state?: VisibilityState
+	timestamp: number
+}-e 
+### FILE: ./src/app/config/visibilityConfig.ts
+
+// src/app/config/visibilityConfig.ts
+
+import { VisibilityConfig, ComponentType } from '../types/visibility'
+
+/**
+ * デフォルトの可視性制御設定
+ */
+export const DEFAULT_VISIBILITY_CONFIG: VisibilityConfig = {
+	// 10%が可視になった時点で検知
+	threshold: [0, 0.1, 0.25, 0.5, 0.75, 1.0],
+	// 画面端から200px手前で事前準備開始
+	rootMargin: '200px',
+	// イベント頻度制限（50ms）
+	debounceMs: 50,
+	// 5分間非表示後にメモリ解放
+	memoryReleaseDelay: 5 * 60 * 1000,
+}
+
+/**
+ * コンポーネント別の可視性制御設定
+ */
+export const COMPONENT_VISIBILITY_CONFIGS: Record<ComponentType, Partial<VisibilityConfig>> = {
+	// SphereTop - 大きなテクスチャを持つため早めに準備
+	sphere: {
+		rootMargin: '300px',
+		threshold: [0, 0.05, 0.1, 0.5, 1.0],
+		debounceMs: 100, // 少し長めのデバウンス
+	},
+
+	// PepeTop - スクロールメッセージとの協調が重要
+	'pepe3d': {
+		rootMargin: '250px',
+		threshold: [0, 0.1, 0.3, 0.5, 0.8, 1.0],
+		debounceMs: 30, // 細かい制御が必要
+	},
+
+	// FloatingImages - 35枚の画像、最も重要な最適化対象
+	'floating-images': {
+		rootMargin: '400px', // 最も早く準備開始
+		threshold: [0, 0.1, 0.25, 0.5, 0.75, 1.0],
+		debounceMs: 25, // 最も細かい制御
+		memoryReleaseDelay: 3 * 60 * 1000, // 3分で解放（頻繁なアクセス想定）
+	},
+
+	// GlowingText - 複数モデルの協調制御
+	'glowing-text': {
+		rootMargin: '200px',
+		threshold: [0, 0.1, 0.5, 1.0],
+		debounceMs: 50,
+	},
+
+	// PepePush - スクロール連動アニメーション
+	'pepe-push': {
+		rootMargin: '250px',
+		threshold: [0, 0.1, 0.3, 0.5, 0.7, 1.0],
+		debounceMs: 16, // 60FPS相当の細かい制御
+	},
+}
+
+/**
+ * パフォーマンス制御の設定
+ */
+export const PERFORMANCE_CONFIG = {
+	// 同時にアクティブにできる最大Canvas数
+	MAX_ACTIVE_CANVAS: 2,
+
+	// フレームレート制限
+	TARGET_FPS: 60,
+	MIN_FPS: 30,
+
+	// メモリ使用量の閾値（MB）
+	MEMORY_WARNING_THRESHOLD: 200,
+	MEMORY_CRITICAL_THRESHOLD: 400,
+
+	// パフォーマンス測定間隔（ms）
+	METRICS_UPDATE_INTERVAL: 1000,
+
+	// 優先度スコアの重み
+	PRIORITY_WEIGHTS: {
+		VISIBILITY_RATIO: 40,     // 可視領域の割合（40%）
+		DISTANCE_FROM_CENTER: 30, // 画面中央からの距離（30%）
+		COMPONENT_IMPORTANCE: 20,  // コンポーネントの重要度（20%）
+		USER_INTERACTION: 10,      // ユーザー操作履歴（10%）
+	},
+} as const
+
+/**
+ * コンポーネントの重要度設定（1-10、10が最高）
+ */
+export const COMPONENT_IMPORTANCE: Record<ComponentType, number> = {
+	'floating-images': 10, // 最重要（最も重い処理）
+	'sphere': 8,
+	'pepe3d': 7,
+	'pepe-push': 6,
+	'glowing-text': 5,
+}
+
+/**
+ * デバッグモードの設定
+ */
+export const DEBUG_CONFIG = {
+	// デバッグモードの有効化（開発環境のみ）
+	ENABLED: process.env.NODE_ENV === 'development',
+
+	// デバッグ情報の表示設定
+	SHOW_VISIBILITY_OVERLAY: false,
+	SHOW_PERFORMANCE_METRICS: true,
+	SHOW_COMPONENT_BOUNDARIES: false,
+
+	// ログレベル
+	LOG_LEVEL: 'info' as 'debug' | 'info' | 'warn' | 'error',
+
+	// パフォーマンス履歴の保持数
+	PERFORMANCE_HISTORY_SIZE: 100,
+
+	// エラーログの保持数
+	ERROR_LOG_SIZE: 50,
+}
+
+/**
+ * レスポンシブ設定
+ */
+export const RESPONSIVE_CONFIG = {
+	// モバイルでの設定調整
+	MOBILE: {
+		// より積極的なメモリ管理
+		memoryReleaseDelay: 2 * 60 * 1000, // 2分で解放
+		// より大きなマージン（タッチスクロールを考慮）
+		rootMarginMultiplier: 1.5,
+		// より少ない同時Canvas数
+		maxActiveCanvas: 1,
+		// より低いフレームレート目標
+		targetFPS: 30,
+	},
+
+	// タブレットでの設定調整
+	TABLET: {
+		memoryReleaseDelay: 3 * 60 * 1000, // 3分で解放
+		rootMarginMultiplier: 1.2,
+		maxActiveCanvas: 2,
+		targetFPS: 45,
+	},
+}
+
+/**
+ * 画面サイズ判定の閾値
+ */
+export const BREAKPOINTS = {
+	MOBILE: 768,
+	TABLET: 1024,
+	DESKTOP: 1280,
+} as const
+
+/**
+ * コンポーネント設定を取得するヘルパー関数
+ */
+export const getVisibilityConfig = (componentType: ComponentType): VisibilityConfig => {
+	const defaultConfig = DEFAULT_VISIBILITY_CONFIG
+	const componentConfig = COMPONENT_VISIBILITY_CONFIGS[componentType] || {}
+
+	// レスポンシブ設定の適用
+	const screenWidth = typeof window !== 'undefined' ? window.innerWidth : 1920
+	let responsiveConfig = {}
+
+	if (screenWidth <= BREAKPOINTS.MOBILE) {
+		responsiveConfig = {
+			rootMargin: `${parseInt(defaultConfig.rootMargin) * RESPONSIVE_CONFIG.MOBILE.rootMarginMultiplier}px`,
+			memoryReleaseDelay: RESPONSIVE_CONFIG.MOBILE.memoryReleaseDelay,
+		}
+	} else if (screenWidth <= BREAKPOINTS.TABLET) {
+		responsiveConfig = {
+			rootMargin: `${parseInt(defaultConfig.rootMargin) * RESPONSIVE_CONFIG.TABLET.rootMarginMultiplier}px`,
+			memoryReleaseDelay: RESPONSIVE_CONFIG.TABLET.memoryReleaseDelay,
+		}
+	}
+
+	return {
+		...defaultConfig,
+		...componentConfig,
+		...responsiveConfig,
+	}
+}
+
+/**
+ * パフォーマンス設定を取得するヘルパー関
+ */
+export const getPerformanceConfig = () => {
+	const screenWidth = typeof window !== 'undefined' ? window.innerWidth : 1920
+
+	if (screenWidth <= BREAKPOINTS.MOBILE) {
+		return {
+			...PERFORMANCE_CONFIG,
+			MAX_ACTIVE_CANVAS: RESPONSIVE_CONFIG.MOBILE.maxActiveCanvas,
+			TARGET_FPS: RESPONSIVE_CONFIG.MOBILE.targetFPS,
+		}
+	} else if (screenWidth <= BREAKPOINTS.TABLET) {
+		return {
+			...PERFORMANCE_CONFIG,
+			MAX_ACTIVE_CANVAS: RESPONSIVE_CONFIG.TABLET.maxActiveCanvas,
+			TARGET_FPS: RESPONSIVE_CONFIG.TABLET.targetFPS,
+		}
+	}
+
+	return PERFORMANCE_CONFIG
+}-e 
+### FILE: ./src/app/hooks/useIntersectionObserver.ts
+
+// src/app/hooks/useIntersectionObserver.ts
+
+'use client'
+
+import { useRef, useState, useEffect, useCallback } from 'react'
+import { UseIntersectionObserverReturn, VisibilityConfig } from '../types/visibility'
+import { DEFAULT_VISIBILITY_CONFIG, DEBUG_CONFIG } from '../config/visibilityConfig'
+
+/**
+ * Intersection Observer カスタムフック
+ * 要素の可視性を効率的に監視する
+ */
+export const useIntersectionObserver = (
+	config: Partial<VisibilityConfig> = {},
+	enabled: boolean = true
+): UseIntersectionObserverReturn => {
+	const elementRef = useRef<HTMLElement>(null)
+	const observerRef = useRef<IntersectionObserver | null>(null)
+	const debounceTimeoutRef = useRef<NodeJS.Timeout | null>(null)
+
+	// 設定のマージ
+	const finalConfig = { ...DEFAULT_VISIBILITY_CONFIG, ...config }
+
+	// 状態管理
+	const [entry, setEntry] = useState<IntersectionObserverEntry | null>(null)
+	const [isIntersecting, setIsIntersecting] = useState(false)
+	const [intersectionRatio, setIntersectionRatio] = useState(0)
+
+	// デバウンス処理付きの状態更新
+	const updateState = useCallback((newEntry: IntersectionObserverEntry) => {
+		if (debounceTimeoutRef.current) {
+			clearTimeout(debounceTimeoutRef.current)
+		}
+
+		debounceTimeoutRef.current = setTimeout(() => {
+			setEntry(newEntry)
+			setIsIntersecting(newEntry.isIntersecting)
+			setIntersectionRatio(newEntry.intersectionRatio)
+
+			// デバッグログ
+			if (DEBUG_CONFIG.ENABLED && DEBUG_CONFIG.LOG_LEVEL === 'debug') {
+				console.debug('[useIntersectionObserver] State updated:', {
+					isIntersecting: newEntry.isIntersecting,
+					intersectionRatio: newEntry.intersectionRatio,
+					boundingClientRect: newEntry.boundingClientRect,
+					rootBounds: newEntry.rootBounds,
+				})
+			}
+		}, finalConfig.debounceMs)
+	}, [finalConfig.debounceMs])
+
+	// Intersection Observer の初期化
+	useEffect(() => {
+		if (!enabled || !elementRef.current) {
+			return
+		}
+
+		// Intersection Observer 未対応ブラウザのフォールバック
+		if (!window.IntersectionObserver) {
+			console.warn('[useIntersectionObserver] IntersectionObserver not supported, falling back to always visible')
+			setIsIntersecting(true)
+			setIntersectionRatio(1)
+			return
+		}
+
+		const element = elementRef.current
+
+		// Observer のコールバック関数
+		const handleIntersection = (entries: IntersectionObserverEntry[]) => {
+			const [currentEntry] = entries
+			if (currentEntry) {
+				updateState(currentEntry)
+			}
+		}
+
+		// Observer の作成
+		try {
+			observerRef.current = new IntersectionObserver(handleIntersection, {
+				root: null, // viewport をルートとして使用
+				rootMargin: finalConfig.rootMargin,
+				threshold: finalConfig.threshold,
+			})
+
+			// 要素の監視開始
+			observerRef.current.observe(element)
+
+			if (DEBUG_CONFIG.ENABLED && DEBUG_CONFIG.LOG_LEVEL === 'info') {
+				console.info('[useIntersectionObserver] Observer initialized:', {
+					rootMargin: finalConfig.rootMargin,
+					threshold: finalConfig.threshold,
+					element: element.tagName,
+				})
+			}
+		} catch (error) {
+			console.error('[useIntersectionObserver] Failed to create observer:', error)
+			// エラー時は可視として扱う（安全側の動作）
+			setIsIntersecting(true)
+			setIntersectionRatio(1)
+		}
+
+		// クリーンアップ関数
+		return () => {
+			if (observerRef.current) {
+				observerRef.current.disconnect()
+				observerRef.current = null
+			}
+
+			if (debounceTimeoutRef.current) {
+				clearTimeout(debounceTimeoutRef.current)
+				debounceTimeoutRef.current = null
+			}
+
+			if (DEBUG_CONFIG.ENABLED && DEBUG_CONFIG.LOG_LEVEL === 'debug') {
+				console.debug('[useIntersectionObserver] Observer cleaned up')
+			}
+		}
+	}, [enabled, finalConfig.rootMargin, finalConfig.threshold, updateState])
+
+	// enabled が false になった時の処理
+	useEffect(() => {
+		if (!enabled) {
+			// 監視を停止し、状態をリセット
+			if (observerRef.current) {
+				observerRef.current.disconnect()
+				observerRef.current = null
+			}
+
+			setEntry(null)
+			setIsIntersecting(false)
+			setIntersectionRatio(0)
+
+			if (DEBUG_CONFIG.ENABLED && DEBUG_CONFIG.LOG_LEVEL === 'debug') {
+				console.debug('[useIntersectionObserver] Observer disabled')
+			}
+		}
+	}, [enabled])
+
+	// パフォーマンス監視（開発時のみ）
+	useEffect(() => {
+		if (!DEBUG_CONFIG.ENABLED || !DEBUG_CONFIG.SHOW_PERFORMANCE_METRICS) {
+			return
+		}
+
+		const startTime = performance.now()
+
+		return () => {
+			const endTime = performance.now()
+			const duration = endTime - startTime
+
+			if (duration > 100) { // 100ms を超える場合は警告
+				console.warn('[useIntersectionObserver] Long-running hook detected:', {
+					duration: `${duration.toFixed(2)}ms`,
+					config: finalConfig,
+				})
+			}
+		}
+	}, [finalConfig])
+
+	// Window resize イベントの処理（root bounds の更新）
+	useEffect(() => {
+		if (!enabled || !observerRef.current || !elementRef.current) {
+			return
+		}
+
+		const handleResize = () => {
+			// Observer を再初期化して root bounds を更新
+			if (observerRef.current && elementRef.current) {
+				observerRef.current.unobserve(elementRef.current)
+				observerRef.current.observe(elementRef.current)
+
+				if (DEBUG_CONFIG.ENABLED && DEBUG_CONFIG.LOG_LEVEL === 'debug') {
+					console.debug('[useIntersectionObserver] Observer refreshed due to resize')
+				}
+			}
+		}
+
+		// リサイズイベントをデバウンス
+		let resizeTimeout: NodeJS.Timeout
+		const debouncedResize = () => {
+			clearTimeout(resizeTimeout)
+			resizeTimeout = setTimeout(handleResize, 250)
+		}
+
+		window.addEventListener('resize', debouncedResize, { passive: true })
+
+		return () => {
+			window.removeEventListener('resize', debouncedResize)
+			clearTimeout(resizeTimeout)
+		}
+	}, [enabled])
+
+	return {
+		elementRef,
+		entry,
+		isIntersecting,
+		intersectionRatio,
+	}
+}-e 
+### FILE: ./src/app/hooks/useCanvasControl.ts
+
+// src/app/hooks/useCanvasControl.ts
+
+'use client'
+
+import { useState, useEffect, useCallback, useRef } from 'react'
+import { CanvasControlState } from '../types/visibility'
+import { getPerformanceConfig, DEBUG_CONFIG } from '../config/visibilityConfig'
+
+export interface CanvasControlOptions {
+	/** 初期のframeloop設定 */
+	initialFrameloop?: 'always' | 'never' | 'demand'
+	/** 自動FPS制限を有効にするか */
+	enableFPSLimit?: boolean
+	/** カスタムFPS目標値 */
+	targetFPS?: number
+	/** メモリ使用量の監視を有効にするか */
+	enableMemoryMonitoring?: boolean
+}
+
+export interface CanvasControlReturn {
+	/** 現在のCanvas制御状態 */
+	canvasState: CanvasControlState
+	/** frameloopを設定 */
+	setFrameloop: (frameloop: 'always' | 'never' | 'demand') => void
+	/** アニメーションを開始 */
+	startAnimation: () => void
+	/** アニメーションを停止 */
+	stopAnimation: () => void
+	/** 初期化状態を設定 */
+	setInitialized: (initialized: boolean) => void
+	/** 優先度を設定 */
+	setPriority: (priority: number) => void
+	/** パフォーマンス統計 */
+	performanceStats: {
+		currentFPS: number
+		averageFPS: number
+		frameTime: number
+		memoryUsage: number
+	}
+	/** Canvas要素の参照 */
+	canvasRef: React.RefObject<HTMLCanvasElement>
+}
+
+/**
+ * Canvas の frameloop とパフォーマンスを制御するフック
+ */
+export const useCanvasControl = (
+	componentId: string,
+	options: CanvasControlOptions = {}
+): CanvasControlReturn => {
+	const {
+		initialFrameloop = 'never',
+		enableFPSLimit = true,
+		targetFPS,
+		enableMemoryMonitoring = true,
+	} = options
+
+	const canvasRef = useRef<HTMLCanvasElement>(null)
+	const frameCountRef = useRef(0)
+	const lastTimeRef = useRef(performance.now())
+	const fpsHistoryRef = useRef<number[]>([])
+	const animationFrameRef = useRef<number | null>(null)
+
+	const performanceConfig = getPerformanceConfig()
+	const finalTargetFPS = targetFPS || performanceConfig.TARGET_FPS
+
+	// Canvas制御状態
+	const [canvasState, setCanvasState] = useState<CanvasControlState>({
+		frameloop: initialFrameloop,
+		priority: 1,
+		isInitialized: false,
+		isAnimating: false,
+	})
+
+	// パフォーマンス統計
+	const [performanceStats, setPerformanceStats] = useState({
+		currentFPS: 0,
+		averageFPS: 0,
+		frameTime: 0,
+		memoryUsage: 0,
+	})
+
+	// FPS測定
+	const measureFPS = useCallback(() => {
+		const now = performance.now()
+		const delta = now - lastTimeRef.current
+
+		if (delta >= 1000) { // 1秒ごとに測定
+			const fps = (frameCountRef.current * 1000) / delta
+
+			// FPS履歴を更新（最大100件保持）
+			fpsHistoryRef.current.push(fps)
+			if (fpsHistoryRef.current.length > 100) {
+				fpsHistoryRef.current.shift()
+			}
+
+			const averageFPS = fpsHistoryRef.current.reduce((a, b) => a + b, 0) / fpsHistoryRef.current.length
+
+			setPerformanceStats(prev => ({
+				...prev,
+				currentFPS: Math.round(fps),
+				averageFPS: Math.round(averageFPS),
+				frameTime: delta / frameCountRef.current,
+			}))
+
+			frameCountRef.current = 0
+			lastTimeRef.current = now
+
+			// FPS が目標を下回った場合の警告
+			if (DEBUG_CONFIG.ENABLED && fps < performanceConfig.MIN_FPS) {
+				console.warn(`[useCanvasControl] Low FPS detected for ${componentId}:`, {
+					currentFPS: fps,
+					targetFPS: finalTargetFPS,
+					minFPS: performanceConfig.MIN_FPS,
+				})
+			}
+		}
+
+		frameCountRef.current++
+	}, [componentId, finalTargetFPS, performanceConfig.MIN_FPS])
+
+	// メモリ使用量の測定
+	const measureMemoryUsage = useCallback(() => {
+		if (!enableMemoryMonitoring || !('memory' in performance)) {
+			return
+		}
+
+		try {
+			const memInfo = (performance as any).memory
+			const memoryUsage = memInfo.usedJSHeapSize / (1024 * 1024) // MB変換
+
+			setPerformanceStats(prev => ({
+				...prev,
+				memoryUsage: Math.round(memoryUsage),
+			}))
+
+			// メモリ使用量の警告
+			if (memoryUsage > performanceConfig.MEMORY_WARNING_THRESHOLD) {
+				const level = memoryUsage > performanceConfig.MEMORY_CRITICAL_THRESHOLD ? 'error' : 'warn'
+				console[level](`[useCanvasControl] High memory usage for ${componentId}:`, {
+					current: `${memoryUsage.toFixed(1)}MB`,
+					warning: `${performanceConfig.MEMORY_WARNING_THRESHOLD}MB`,
+					critical: `${performanceConfig.MEMORY_CRITICAL_THRESHOLD}MB`,
+				})
+			}
+		} catch (error) {
+			if (DEBUG_CONFIG.ENABLED) {
+				console.debug(`[useCanvasControl] Memory measurement failed for ${componentId}:`, error)
+			}
+		}
+	}, [componentId, enableMemoryMonitoring, performanceConfig])
+
+	// フレームループの監視
+	const frameLoop = useCallback(() => {
+		if (canvasState.frameloop === 'always' && canvasState.isAnimating) {
+			measureFPS()
+
+			// FPS制限の実装
+			if (enableFPSLimit) {
+				const targetFrameTime = 1000 / finalTargetFPS
+				const currentTime = performance.now()
+				const elapsedTime = currentTime - lastTimeRef.current
+
+				if (elapsedTime < targetFrameTime) {
+					// フレームレート制限のため次のフレームを遅延
+					setTimeout(() => {
+						animationFrameRef.current = requestAnimationFrame(frameLoop)
+					}, targetFrameTime - elapsedTime)
+					return
+				}
+			}
+
+			animationFrameRef.current = requestAnimationFrame(frameLoop)
+		}
+	}, [canvasState.frameloop, canvasState.isAnimating, measureFPS, enableFPSLimit, finalTargetFPS])
+
+	// フレームループの開始/停止制御
+	useEffect(() => {
+		if (canvasState.frameloop === 'always' && canvasState.isAnimating) {
+			animationFrameRef.current = requestAnimationFrame(frameLoop)
+		} else {
+			if (animationFrameRef.current !== null) {
+				cancelAnimationFrame(animationFrameRef.current)
+				animationFrameRef.current = null
+			}
+		}
+
+		return () => {
+			if (animationFrameRef.current !== null) {
+				cancelAnimationFrame(animationFrameRef.current)
+				animationFrameRef.current = null
+			}
+		}
+	}, [canvasState.frameloop, canvasState.isAnimating, frameLoop])
+
+	// メモリ測定の定期実行
+	useEffect(() => {
+		if (!enableMemoryMonitoring) return
+
+		const interval = setInterval(measureMemoryUsage, performanceConfig.METRICS_UPDATE_INTERVAL)
+
+		return () => clearInterval(interval)
+	}, [measureMemoryUsage, enableMemoryMonitoring, performanceConfig.METRICS_UPDATE_INTERVAL])
+
+	// 制御関数
+	const setFrameloop = useCallback((frameloop: 'always' | 'never' | 'demand') => {
+		setCanvasState(prev => ({ ...prev, frameloop }))
+
+		if (DEBUG_CONFIG.ENABLED) {
+			console.info(`[useCanvasControl] Frameloop changed for ${componentId}:`, {
+				from: canvasState.frameloop,
+				to: frameloop,
+			})
+		}
+	}, [componentId, canvasState.frameloop])
+
+	const startAnimation = useCallback(() => {
+		setCanvasState(prev => ({
+			...prev,
+			isAnimating: true,
+			frameloop: prev.frameloop === 'never' ? 'always' : prev.frameloop,
+		}))
+
+		if (DEBUG_CONFIG.ENABLED) {
+			console.info(`[useCanvasControl] Animation started for ${componentId}`)
+		}
+	}, [componentId])
+
+	const stopAnimation = useCallback(() => {
+		setCanvasState(prev => ({ ...prev, isAnimating: false }))
+
+		if (DEBUG_CONFIG.ENABLED) {
+			console.info(`[useCanvasControl] Animation stopped for ${componentId}`)
+		}
+	}, [componentId])
+
+	const setInitialized = useCallback((initialized: boolean) => {
+		setCanvasState(prev => ({ ...prev, isInitialized: initialized }))
+
+		if (DEBUG_CONFIG.ENABLED) {
+			console.info(`[useCanvasControl] Initialization state changed for ${componentId}:`, initialized)
+		}
+	}, [componentId])
+
+	const setPriority = useCallback((priority: number) => {
+		const clampedPriority = Math.max(1, Math.min(10, priority))
+		setCanvasState(prev => ({ ...prev, priority: clampedPriority }))
+
+		if (DEBUG_CONFIG.ENABLED && DEBUG_CONFIG.LOG_LEVEL === 'debug') {
+			console.debug(`[useCanvasControl] Priority changed for ${componentId}:`, {
+				from: canvasState.priority,
+				to: clampedPriority,
+			})
+		}
+	}, [componentId, canvasState.priority])
+
+	// Canvas要素の監視
+	useEffect(() => {
+		if (!canvasRef.current) return
+
+		const canvas = canvasRef.current
+
+		// Canvas のコンテキストロスト/復元の処理
+		const handleContextLost = (event: Event) => {
+			event.preventDefault()
+			console.warn(`[useCanvasControl] WebGL context lost for ${componentId}`)
+			setCanvasState(prev => ({ ...prev, isAnimating: false, frameloop: 'never' }))
+		}
+
+		const handleContextRestored = () => {
+			console.info(`[useCanvasControl] WebGL context restored for ${componentId}`)
+			setCanvasState(prev => ({ ...prev, isInitialized: false }))
+		}
+
+		canvas.addEventListener('webglcontextlost', handleContextLost)
+		canvas.addEventListener('webglcontextrestored', handleContextRestored)
+
+		return () => {
+			canvas.removeEventListener('webglcontextlost', handleContextLost)
+			canvas.removeEventListener('webglcontextrestored', handleContextRestored)
+		}
+	}, [componentId])
+
+	// デバッグ情報の出力
+	useEffect(() => {
+		if (!DEBUG_CONFIG.ENABLED || !DEBUG_CONFIG.SHOW_PERFORMANCE_METRICS) return
+
+		const interval = setInterval(() => {
+			console.debug(`[useCanvasControl] Performance stats for ${componentId}:`, {
+				canvasState,
+				performanceStats,
+			})
+		}, 5000) // 5秒ごと
+
+		return () => clearInterval(interval)
+	}, [componentId, canvasState, performanceStats])
+
+	return {
+		canvasState,
+		setFrameloop,
+		startAnimation,
+		stopAnimation,
+		setInitialized,
+		setPriority,
+		performanceStats,
+		canvasRef,
+	}
+}-e 
+### FILE: ./src/app/hooks/useVisibilityControl.ts
+
+// src/app/hooks/useVisibilityControl.ts
+
+'use client'
+
+import { useState, useEffect, useCallback, useRef } from 'react'
+import {
+	VisibilityState,
+	ComponentType,
+	VisibilityInfo,
+	CanvasControlState,
+	UseVisibilityControlReturn,
+	VisibilityConfig
+} from '../types/visibility'
+import { useIntersectionObserver } from './useIntersectionObserver'
+import { getVisibilityConfig, COMPONENT_IMPORTANCE, DEBUG_CONFIG } from '../config/visibilityConfig'
+
+/**
+ * 可視性制御の中心となるカスタムフック
+ * Intersection Observer と Canvas制御を統合管理
+ */
+export const useVisibilityControl = (
+	componentId: string,
+	componentType: ComponentType,
+	config?: Partial<VisibilityConfig>
+): UseVisibilityControlReturn => {
+	const configRef = useRef(getVisibilityConfig(componentType))
+	const lastStateChangeRef = useRef(Date.now())
+	const memoryReleaseTimeoutRef = useRef<NodeJS.Timeout | null>(null)
+	const initializationTimeoutRef = useRef<NodeJS.Timeout | null>(null)
+
+	// カスタム設定があれば適用
+	if (config) {
+		configRef.current = { ...configRef.current, ...config }
+	}
+
+	// Intersection Observer の初期化
+	const { elementRef, isIntersecting, intersectionRatio } = useIntersectionObserver(
+		configRef.current,
+		true
+	)
+
+	// 可視性状態の管理
+	const [visibilityState, setVisibilityState] = useState<VisibilityState>('hidden')
+	const [canvasState, setCanvasState] = useState<CanvasControlState>({
+		frameloop: 'never',
+		priority: 1,
+		isInitialized: false,
+		isAnimating: false,
+	})
+
+	// 可視性状態の計算
+	const calculateVisibilityState = useCallback((
+		intersecting: boolean,
+		ratio: number
+	): VisibilityState => {
+		if (!intersecting) {
+			return 'hidden'
+		}
+
+		if (ratio < 0.1) {
+			return 'approaching'
+		} else if (ratio < 0.5) {
+			return 'partial'
+		} else {
+			return 'visible'
+		}
+	}, [])
+
+	// 優先度の計算
+	const calculatePriority = useCallback((state: VisibilityState, ratio: number): number => {
+		const baseImportance = COMPONENT_IMPORTANCE[componentType] || 5
+
+		switch (state) {
+			case 'visible':
+				return Math.min(10, baseImportance + (ratio * 3))
+			case 'partial':
+				return Math.min(8, baseImportance + (ratio * 2))
+			case 'approaching':
+				return Math.min(6, baseImportance + 1)
+			case 'hidden':
+			default:
+				return 1
+		}
+	}, [componentType])
+
+	// Canvas制御の更新
+	const updateCanvasState = useCallback((newVisibilityState: VisibilityState, ratio: number) => {
+		const priority = calculatePriority(newVisibilityState, ratio)
+
+		setCanvasState(prev => {
+			const newState: CanvasControlState = { ...prev, priority }
+
+			switch (newVisibilityState) {
+				case 'hidden':
+					newState.frameloop = 'never'
+					newState.isAnimating = false
+					break
+
+				case 'approaching':
+					newState.frameloop = 'demand'
+					newState.isAnimating = false
+					// 初期化開始（遅延実行）
+					if (!prev.isInitialized) {
+						if (initializationTimeoutRef.current) {
+							clearTimeout(initializationTimeoutRef.current)
+						}
+						initializationTimeoutRef.current = setTimeout(() => {
+							setCanvasState(current => ({ ...current, isInitialized: true }))
+						}, 100)
+					}
+					break
+
+				case 'partial':
+					newState.frameloop = 'always'
+					newState.isAnimating = true
+					newState.isInitialized = true
+					break
+
+				case 'visible':
+					newState.frameloop = 'always'
+					newState.isAnimating = true
+					newState.isInitialized = true
+					break
+			}
+
+			return newState
+		})
+	}, [calculatePriority])
+
+	// メモリ解放の管理
+	const scheduleMemoryRelease = useCallback(() => {
+		if (memoryReleaseTimeoutRef.current) {
+			clearTimeout(memoryReleaseTimeoutRef.current)
+		}
+
+		memoryReleaseTimeoutRef.current = setTimeout(() => {
+			if (visibilityState === 'hidden') {
+				setCanvasState(prev => ({
+					...prev,
+					isInitialized: false,
+					frameloop: 'never',
+					isAnimating: false,
+				}))
+
+				if (DEBUG_CONFIG.ENABLED) {
+					console.info(`[useVisibilityControl] Memory released for ${componentId}`)
+				}
+			}
+		}, configRef.current.memoryReleaseDelay)
+	}, [componentId, visibilityState])
+
+	// 可視性状態の変更処理
+	useEffect(() => {
+		const newState = calculateVisibilityState(isIntersecting, intersectionRatio)
+
+		if (newState !== visibilityState) {
+			const now = Date.now()
+			lastStateChangeRef.current = now
+
+			setVisibilityState(newState)
+			updateCanvasState(newState, intersectionRatio)
+
+			// メモリ解放のスケジューリング
+			if (newState === 'hidden') {
+				scheduleMemoryRelease()
+			} else {
+				// 可視状態になったらメモリ解放をキャンセル
+				if (memoryReleaseTimeoutRef.current) {
+					clearTimeout(memoryReleaseTimeoutRef.current)
+					memoryReleaseTimeoutRef.current = null
+				}
+			}
+
+			if (DEBUG_CONFIG.ENABLED && DEBUG_CONFIG.LOG_LEVEL === 'info') {
+				console.info(`[useVisibilityControl] ${componentId} state changed:`, {
+					from: visibilityState,
+					to: newState,
+					ratio: intersectionRatio,
+					isIntersecting,
+				})
+			}
+		} else if (visibilityState !== 'hidden') {
+			// 状態は同じだが比率が変わった場合の優先度更新
+			updateCanvasState(newState, intersectionRatio)
+		}
+	}, [
+		isIntersecting,
+		intersectionRatio,
+		visibilityState,
+		calculateVisibilityState,
+		updateCanvasState,
+		scheduleMemoryRelease,
+		componentId
+	])
+
+	// 制御関数の定義
+	const controls = {
+		startAnimation: useCallback(() => {
+			setCanvasState(prev => ({
+				...prev,
+				isAnimating: true,
+				frameloop: 'always',
+			}))
+
+			if (DEBUG_CONFIG.ENABLED) {
+				console.info(`[useVisibilityControl] Animation started for ${componentId}`)
+			}
+		}, [componentId]),
+
+		stopAnimation: useCallback(() => {
+			setCanvasState(prev => ({
+				...prev,
+				isAnimating: false,
+				frameloop: prev.isInitialized ? 'demand' : 'never',
+			}))
+
+			if (DEBUG_CONFIG.ENABLED) {
+				console.info(`[useVisibilityControl] Animation stopped for ${componentId}`)
+			}
+		}, [componentId]),
+
+		forceRender: useCallback(() => {
+			setCanvasState(prev => ({
+				...prev,
+				frameloop: 'always',
+				isInitialized: true,
+				isAnimating: true,
+				priority: 10,
+			}))
+
+			if (DEBUG_CONFIG.ENABLED) {
+				console.info(`[useVisibilityControl] Force render triggered for ${componentId}`)
+			}
+		}, [componentId]),
+
+		dispose: useCallback(() => {
+			// すべてのタイマーをクリア
+			if (memoryReleaseTimeoutRef.current) {
+				clearTimeout(memoryReleaseTimeoutRef.current)
+				memoryReleaseTimeoutRef.current = null
+			}
+			if (initializationTimeoutRef.current) {
+				clearTimeout(initializationTimeoutRef.current)
+				initializationTimeoutRef.current = null
+			}
+
+			// 状態をリセット
+			setCanvasState({
+				frameloop: 'never',
+				priority: 1,
+				isInitialized: false,
+				isAnimating: false,
+			})
+
+			setVisibilityState('hidden')
+
+			if (DEBUG_CONFIG.ENABLED) {
+				console.info(`[useVisibilityControl] Disposed ${componentId}`)
+			}
+		}, [componentId]),
+	}
+
+	// クリーンアップ
+	useEffect(() => {
+		return () => {
+			controls.dispose()
+		}
+	}, [controls])
+
+	// パフォーマンス監視（開発時のみ）
+	useEffect(() => {
+		if (!DEBUG_CONFIG.ENABLED || !DEBUG_CONFIG.SHOW_PERFORMANCE_METRICS) {
+			return
+		}
+
+		const startTime = performance.now()
+
+		return () => {
+			const endTime = performance.now()
+			const duration = endTime - startTime
+
+			if (duration > 50) {
+				console.warn(`[useVisibilityControl] Performance warning for ${componentId}:`, {
+					duration: `${duration.toFixed(2)}ms`,
+					state: visibilityState,
+					canvasState,
+				})
+			}
+		}
+	}, [componentId, visibilityState, canvasState])
+
+	// 可視性情報の構築
+	const visibilityInfo: VisibilityInfo = {
+		state: visibilityState,
+		intersectionRatio,
+		isIntersecting,
+		lastStateChange: lastStateChangeRef.current,
+		componentType,
+	}
+
+	return {
+		visibilityInfo,
+		canvasState,
+		elementRef,
+		controls,
+	}
+}-e 
+### FILE: ./src/app/utils/visibilityManager.ts
+
+// src/app/utils/visibilityManager.ts
+
+'use client'
+
+import {
+	VisibilityManager,
+	VisibilityState,
+	ComponentType,
+	PerformanceMetrics,
+	DebugInfo,
+	VisibilityConfig
+} from '../types/visibility'
+import {
+	getPerformanceConfig,
+	COMPONENT_IMPORTANCE,
+	DEBUG_CONFIG
+} from '../config/visibilityConfig'
+
+interface ComponentInfo {
+	id: string
+	type: ComponentType
+	state: VisibilityState
+	intersectionRatio: number
+	priority: number
+	lastUpdate: number
+	config: VisibilityConfig
+	isActive: boolean
+}
+
+/**
+ * 可視性管理の中央制御システム
+ * 複数の3Dコンポーネントの優先度制御とパフォーマンス監視を行う
+ */
+class VisibilityManagerImpl implements VisibilityManager {
+	private components = new Map<string, ComponentInfo>()
+	private performanceHistory: PerformanceMetrics[] = []
+	private errorLog: DebugInfo['errors'] = []
+	private performanceConfig = getPerformanceConfig()
+	private metricsInterval: NodeJS.Timeout | null = null
+
+	constructor() {
+		this.startPerformanceMonitoring()
+
+		if (DEBUG_CONFIG.ENABLED) {
+			this.setupDebugMode()
+		}
+	}
+
+	/**
+	 * コンポーネントを登録
+	 */
+	register(id: string, componentType: ComponentType, config?: Partial<VisibilityConfig>): void {
+		try {
+			if (this.components.has(id)) {
+				console.warn(`[VisibilityManager] Component ${id} is already registered`)
+				return
+			}
+
+			const componentInfo: ComponentInfo = {
+				id,
+				type: componentType,
+				state: 'hidden',
+				intersectionRatio: 0,
+				priority: 1,
+				lastUpdate: Date.now(),
+				config: config as VisibilityConfig, // 実際の使用時には完全な設定が渡される
+				isActive: false,
+			}
+
+			this.components.set(id, componentInfo)
+
+			if (DEBUG_CONFIG.ENABLED) {
+				console.info(`[VisibilityManager] Registered component:`, {
+					id,
+					type: componentType,
+					totalComponents: this.components.size,
+				})
+			}
+		} catch (error) {
+			this.logError(id, `Failed to register component: ${error}`, error as Error)
+		}
+	}
+
+	/**
+	 * コンポーネントの登録解除
+	 */
+	unregister(id: string): void {
+		try {
+			if (!this.components.has(id)) {
+				console.warn(`[VisibilityManager] Component ${id} is not registered`)
+				return
+			}
+
+			this.components.delete(id)
+
+			if (DEBUG_CONFIG.ENABLED) {
+				console.info(`[VisibilityManager] Unregistered component:`, {
+					id,
+					remainingComponents: this.components.size,
+				})
+			}
+		} catch (error) {
+			this.logError(id, `Failed to unregister component: ${error}`, error as Error)
+		}
+	}
+
+	/**
+	 * 状態を更新し、優先度を再計算
+	 */
+	updateState(id: string, state: VisibilityState, intersectionRatio: number): void {
+		try {
+			const component = this.components.get(id)
+			if (!component) {
+				console.warn(`[VisibilityManager] Component ${id} is not registered`)
+				return
+			}
+
+			const previousState = component.state
+			const previousPriority = component.priority
+
+			// 状態更新
+			component.state = state
+			component.intersectionRatio = intersectionRatio
+			component.lastUpdate = Date.now()
+			component.priority = this.calculatePriority(component)
+			component.isActive = state !== 'hidden'
+
+			// 全体の優先度バランスを調整
+			this.rebalancePriorities()
+
+			// パフォーマンス制限の適用
+			this.enforcePerformanceLimits()
+
+			if (DEBUG_CONFIG.ENABLED && DEBUG_CONFIG.LOG_LEVEL === 'debug') {
+				console.debug(`[VisibilityManager] State updated for ${id}:`, {
+					state: `${previousState} → ${state}`,
+					priority: `${previousPriority} → ${component.priority}`,
+					ratio: intersectionRatio,
+					activeComponents: this.getActiveComponents().length,
+				})
+			}
+		} catch (error) {
+			this.logError(id, `Failed to update state: ${error}`, error as Error)
+		}
+	}
+
+	/**
+	 * 優先度を取得
+	 */
+	getPriority(id: string): number {
+		const component = this.components.get(id)
+		return component?.priority || 1
+	}
+
+	/**
+	 * アクティブなコンポーネント一覧を取得
+	 */
+	getActiveComponents(): string[] {
+		return Array.from(this.components.values())
+			.filter(component => component.isActive)
+			.sort((a, b) => b.priority - a.priority)
+			.map(component => component.id)
+	}
+
+	/**
+	 * パフォーマンス指標を取得
+	 */
+	getMetrics(): PerformanceMetrics {
+		const activeCount = this.getActiveComponents().length
+		const frameCallsPerFrame = this.estimateFrameCalls()
+		const memoryUsage = this.estimateMemoryUsage()
+		const currentFPS = this.estimateCurrentFPS()
+
+		return {
+			activeCanvasCount: activeCount,
+			frameCallsPerFrame,
+			memoryUsage,
+			currentFPS,
+			lastMeasured: Date.now(),
+		}
+	}
+
+	/**
+	 * デバッグ情報を取得
+	 */
+	getDebugInfo(): DebugInfo {
+		const registeredComponents: DebugInfo['registeredComponents'] = {}
+
+		this.components.forEach((component, id) => {
+			registeredComponents[id] = {
+				type: component.type,
+				state: component.state,
+				priority: component.priority,
+				lastUpdate: component.lastUpdate,
+			}
+		})
+
+		return {
+			registeredComponents,
+			performanceHistory: [...this.performanceHistory],
+			errors: [...this.errorLog],
+		}
+	}
+
+	/**
+	 * 優先度の計算
+	 */
+	private calculatePriority(component: ComponentInfo): number {
+		const baseImportance = COMPONENT_IMPORTANCE[component.type] || 5
+		const visibilityBonus = this.getVisibilityBonus(component.state, component.intersectionRatio)
+		const distanceFromCenter = this.getDistanceFromCenterBonus(component.intersectionRatio)
+
+		const priority = Math.min(10, baseImportance + visibilityBonus + distanceFromCenter)
+		return Math.max(1, priority)
+	}
+
+	/**
+	 * 可視性に基づくボーナス計算
+	 */
+	private getVisibilityBonus(state: VisibilityState, ratio: number): number {
+		switch (state) {
+			case 'visible':
+				return 3 + (ratio * 2) // 最大5ポイント
+			case 'partial':
+				return 2 + (ratio * 1.5) // 最大3.5ポイント
+			case 'approaching':
+				return 1 + (ratio * 0.5) // 最大1.5ポイント
+			case 'hidden':
+			default:
+				return 0
+		}
+	}
+
+	/**
+	 * 画面中央からの距離に基づくボーナス計算
+	 */
+	private getDistanceFromCenterBonus(ratio: number): number {
+		// 完全に中央に表示されている場合（ratio = 1）に最大ボーナス
+		return ratio > 0.5 ? (ratio - 0.5) * 2 : 0
+	}
+
+	/**
+	 * 全コンポーネントの優先度バランス調整
+	 */
+	private rebalancePriorities(): void {
+		const activeComponents = Array.from(this.components.values())
+			.filter(component => component.isActive)
+			.sort((a, b) => b.priority - a.priority)
+
+		// 上位コンポーネントの優先度を保証
+		activeComponents.forEach((component, index) => {
+			if (index === 0) {
+				// 最高優先度は10に固定
+				component.priority = Math.max(component.priority, 8)
+			} else if (index === 1) {
+				// 2番目は最高優先度より低く設定
+				component.priority = Math.min(component.priority, activeComponents[0].priority - 1)
+			}
+		})
+	}
+
+	/**
+	 * パフォーマンス制限の適用
+	 */
+	private enforcePerformanceLimits(): void {
+		const activeComponents = this.getActiveComponents()
+		const maxActive = this.performanceConfig.MAX_ACTIVE_CANVAS
+
+		if (activeComponents.length <= maxActive) {
+			return
+		}
+
+		// 優先度の低いコンポーネントを非アクティブ化
+		const componentsToDeactivate = activeComponents.slice(maxActive)
+
+		componentsToDeactivate.forEach(componentId => {
+			const component = this.components.get(componentId)
+			if (component && component.state !== 'hidden') {
+				// 強制的に approaching 状態にダウングレード
+				component.state = 'approaching'
+				component.isActive = false
+				component.priority = Math.max(1, component.priority - 3)
+
+				if (DEBUG_CONFIG.ENABLED) {
+					console.warn(`[VisibilityManager] Component ${componentId} deactivated due to performance limits`)
+				}
+			}
+		})
+	}
+
+	/**
+	 * フレーム呼び出し数の推定
+	 */
+	private estimateFrameCalls(): number {
+		let totalCalls = 0
+
+		this.components.forEach(component => {
+			if (component.isActive) {
+				switch (component.type) {
+					case 'floating-images':
+						totalCalls += 35 // 35枚の画像
+						break
+					case 'sphere':
+					case 'pepe3d':
+					case 'pepe-push':
+						totalCalls += 1
+						break
+					case 'glowing-text':
+						totalCalls += 2 // 2つのモデル
+						break
+				}
+			}
+		})
+
+		return totalCalls
+	}
+
+	/**
+	 * メモリ使用量の推定
+	 */
+	private estimateMemoryUsage(): number {
+		if (!('memory' in performance)) {
+			return 0
+		}
+
+		try {
+			const memInfo = (performance as any).memory
+			return memInfo.usedJSHeapSize / (1024 * 1024) // MB変換
+		} catch {
+			return 0
+		}
+	}
+
+	/**
+	 * 現在のFPSの推定
+	 */
+	private estimateCurrentFPS(): number {
+		if (this.performanceHistory.length === 0) {
+			return 60 // デフォルト値
+		}
+
+		const recent = this.performanceHistory.slice(-5) // 直近5回の平均
+		const avgFPS = recent.reduce((sum, metrics) => sum + metrics.currentFPS, 0) / recent.length
+		return Math.round(avgFPS)
+	}
+
+	/**
+	 * パフォーマンス監視の開始
+	 */
+	private startPerformanceMonitoring(): void {
+		this.metricsInterval = setInterval(() => {
+			const metrics = this.getMetrics()
+
+			// 履歴に追加（最大100件保持）
+			this.performanceHistory.push(metrics)
+			if (this.performanceHistory.length > 100) {
+				this.performanceHistory.shift()
+			}
+
+			// パフォーマンス警告
+			if (metrics.currentFPS < this.performanceConfig.MIN_FPS) {
+				console.warn('[VisibilityManager] Low FPS detected:', {
+					currentFPS: metrics.currentFPS,
+					activeComponents: metrics.activeCanvasCount,
+					frameCalls: metrics.frameCallsPerFrame,
+				})
+			}
+
+			if (metrics.memoryUsage > this.performanceConfig.MEMORY_WARNING_THRESHOLD) {
+				console.warn('[VisibilityManager] High memory usage detected:', {
+					current: `${metrics.memoryUsage}MB`,
+					threshold: `${this.performanceConfig.MEMORY_WARNING_THRESHOLD}MB`,
+				})
+			}
+		}, this.performanceConfig.METRICS_UPDATE_INTERVAL)
+	}
+
+	/**
+	 * デバッグモードの設定
+	 */
+	private setupDebugMode(): void {
+		if (typeof window !== 'undefined') {
+			// グローバル関数として公開
+			(window as any).visibilityManager = {
+				getComponents: () => Array.from(this.components.entries()),
+				getMetrics: () => this.getMetrics(),
+				getDebugInfo: () => this.getDebugInfo(),
+				forceRebalance: () => this.rebalancePriorities(),
+				setMaxActive: (max: number) => {
+					this.performanceConfig = { ...this.performanceConfig, MAX_ACTIVE_CANVAS: max }
+				},
+			}
+
+			console.info('[VisibilityManager] Debug mode enabled. Use window.visibilityManager for debugging.')
+		}
+
+		// デバッグ情報の定期出力
+		if (DEBUG_CONFIG.SHOW_PERFORMANCE_METRICS) {
+			setInterval(() => {
+				const activeComponents = this.getActiveComponents()
+				const metrics = this.getMetrics()
+
+				console.debug('[VisibilityManager] Debug Summary:', {
+					activeComponents: activeComponents.length,
+					totalComponents: this.components.size,
+					metrics,
+					topPriority: activeComponents.slice(0, 3),
+				})
+			}, 10000) // 10秒ごと
+		}
+	}
+
+	/**
+	 * エラーログの記録
+	 */
+	private logError(componentId: string, message: string, error?: Error): void {
+		const errorEntry = {
+			timestamp: Date.now(),
+			component: componentId,
+			message,
+			stack: error?.stack,
+		}
+
+		this.errorLog.push(errorEntry)
+
+		// エラーログの上限管理
+		if (this.errorLog.length > DEBUG_CONFIG.ERROR_LOG_SIZE) {
+			this.errorLog.shift()
+		}
+
+		console.error(`[VisibilityManager] Error in ${componentId}:`, message, error)
+	}
+
+	/**
+	 * クリーンアップ
+	 */
+	destroy(): void {
+		if (this.metricsInterval) {
+			clearInterval(this.metricsInterval)
+			this.metricsInterval = null
+		}
+
+		this.components.clear()
+		this.performanceHistory.length = 0
+		this.errorLog.length = 0
+
+		if (typeof window !== 'undefined') {
+			delete (window as any).visibilityManager
+		}
+
+		if (DEBUG_CONFIG.ENABLED) {
+			console.info('[VisibilityManager] Destroyed')
+		}
+	}
+}
+
+// シングルトンインスタンス
+let visibilityManagerInstance: VisibilityManagerImpl | null = null
+
+/**
+ * VisibilityManager のシングルトンインスタンスを取得
+ */
+export const getVisibilityManager = (): VisibilityManager => {
+	if (!visibilityManagerInstance) {
+		visibilityManagerInstance = new VisibilityManagerImpl()
+	}
+	return visibilityManagerInstance
+}
+
+/**
+ * VisibilityManager インスタンスを破棄
+ */
+export const destroyVisibilityManager = (): void => {
+	if (visibilityManagerInstance) {
+		visibilityManagerInstance.destroy()
+		visibilityManagerInstance = null
+	}
+}
+
+// ページ離脱時のクリーンアップ
+if (typeof window !== 'undefined') {
+	window.addEventListener('beforeunload', () => {
+		destroyVisibilityManager()
+	})
+}-e 
+### FILE: ./src/app/components/layered-gallery/constants.ts
+
+// src/app/components/layered-gallery/constants.ts
+
+import { LayeredImageConfig, LayeredGallerySectionConfig, ResponsiveConfig } from './types'
+import { imageFiles, ImageFile, ImageSize } from '../floating-images-fix/constants'
+
+/**
+ * 画面サイズ判定関数
+ */
+const isMobile = (): boolean => {
+	if (typeof window === 'undefined') return false
+	return window.innerWidth <= 768
+}
+
+/**
+ * CDNパス設定（直接定義）
+ */
+const CDN_URL = process.env.NEXT_PUBLIC_CLOUDFRONT_URL || ""
+
+/**
+ * 画像パスを生成する関数（floating-images-fixと同じロジック）
+ */
+const generateImagePath = (filename: string): string => {
+	const folder = isMobile() ? 'gallery-small' : 'pepe'
+	return `${CDN_URL}/${folder}/${filename}`
+}
+
+/**
+ * 基本画像データ（パスなし）- floating-images-fixから基本データのみ抽出
+ */
+const baseImageData: Array<{ id: number; filename: string; size: ImageSize }> = [
+	{ id: 1, filename: '1L.webp', size: 'L' },
+	{ id: 2, filename: '2M.webp', size: 'M' },
+	{ id: 3, filename: '3S.webp', size: 'S' },
+	{ id: 4, filename: '4S.webp', size: 'S' },
+	{ id: 5, filename: '5M.webp', size: 'M' },
+	{ id: 6, filename: '6L.webp', size: 'L' },
+	{ id: 7, filename: '7M.webp', size: 'M' },
+	{ id: 8, filename: '8M.webp', size: 'M' },
+	{ id: 9, filename: '9L.webp', size: 'L' },
+	{ id: 10, filename: '10S.webp', size: 'S' },
+	{ id: 11, filename: '11S.webp', size: 'S' },
+	{ id: 12, filename: '12M.webp', size: 'M' },
+	{ id: 13, filename: '13L.webp', size: 'L' },
+	{ id: 14, filename: '14L.webp', size: 'L' },
+	{ id: 15, filename: '15M.webp', size: 'M' },
+	{ id: 16, filename: '16S.webp', size: 'S' },
+	{ id: 17, filename: '17S.webp', size: 'S' },
+	{ id: 18, filename: '18M.webp', size: 'M' },
+	{ id: 19, filename: '19L.webp', size: 'L' },
+	{ id: 20, filename: '20L.webp', size: 'L' },
+	{ id: 21, filename: '21S.webp', size: 'S' },
+	{ id: 22, filename: '22S.webp', size: 'S' },
+	{ id: 23, filename: '23L.webp', size: 'L' },
+	{ id: 24, filename: '24L.webp', size: 'L' },
+	{ id: 25, filename: '25S.webp', size: 'S' },
+	{ id: 26, filename: '26S.webp', size: 'S' },
+	{ id: 27, filename: '27S.webp', size: 'S' },
+	{ id: 28, filename: '28L.webp', size: 'L' },
+	{ id: 29, filename: '29S.webp', size: 'S' },
+	{ id: 30, filename: '30S.webp', size: 'S' },
+	{ id: 31, filename: '31M.webp', size: 'M' },
+	{ id: 32, filename: '32M.webp', size: 'M' },
+	{ id: 33, filename: '33M.webp', size: 'M' },
+	{ id: 34, filename: '34S.webp', size: 'S' },
+	{ id: 35, filename: '35L.webp', size: 'L' },
+]
+
+/**
+ * 実行時に正しいパスで画像ファイルを生成
+ */
+const generateRuntimeImageFiles = (): ImageFile[] => {
+	return baseImageData.map(image => ({
+		...image,
+		path: generateImagePath(image.filename)
+	}))
+}
+
+/**
+ * レスポンシブ設定
+ */
+export const RESPONSIVE_CONFIG: ResponsiveConfig = {
+	desktop: {
+		scaleMultiplier: 1.0,
+		positionMultiplier: 1.0,
+		zoomMultiplier: 1.0,
+	},
+	mobile: {
+		scaleMultiplier: 0.7,
+		positionMultiplier: 0.8,
+		zoomMultiplier: 0.8,
+	}
+}
+
+/**
+ * セクション基本設定
+ */
+export const SECTION_CONFIG: LayeredGallerySectionConfig = {
+	sectionHeight: 4, // 4倍のviewport height
+	padding: {
+		top: 100,
+		bottom: 100,
+	},
+	camera: {
+		fov: 75,
+		near: 0.1,
+		far: 1000,
+		position: {
+			x: 0,
+			y: 0,
+			z: 10,
+		}
+	},
+	responsive: RESPONSIVE_CONFIG,
+}
+
+/**
+ * サイズ別基本Z位置
+ */
+const Z_POSITIONS = {
+	L: 0,   // 最前面
+	M: -5,  // 中間
+	S: -10, // 最奥
+} as const
+
+/**
+ * サイズ別基本スケール
+ */
+const BASE_SCALES = {
+	L: 4,
+	M: 3,
+	S: 2,
+} as const
+
+/**
+ * 拡張画像設定を生成
+ * 実行時に正しいパスで画像設定を作成
+ */
+export const layeredImageConfigs: LayeredImageConfig[] = (() => {
+	// 実行時に画像ファイルリストを取得
+	const runtimeImageFiles = generateRuntimeImageFiles()
+
+	return runtimeImageFiles.map((image, index) => {
+		const totalImages = runtimeImageFiles.length
+		const progress = index / (totalImages - 1) // 0-1の進行度
+
+		// 基本位置の計算（縦一列ではなく、ある程度ランダムに配置）
+		const baseX = (Math.random() - 0.5) * 8 // -4 to 4
+		const baseY = progress * 20 - 10 // -10 to 10（縦方向に分散）
+		const baseZ = Z_POSITIONS[image.size]
+
+		// スクロール範囲の計算（各画像が異なるタイミングでズーム）
+		const scrollStart = Math.max(0, progress - 0.15) // 少し重なりを持たせる
+		const scrollEnd = Math.min(1, progress + 0.15)
+		const scrollPeak = progress
+
+		// ズーム倍率の計算（サイズに応じて調整）
+		const baseScale = BASE_SCALES[image.size]
+		const zoomMin = baseScale * 0.5
+		const zoomMax = baseScale * 1.8
+
+		// 視差速度（奥にあるものほど遅く）
+		const parallaxSpeed = image.size === 'L' ? 1.0 :
+			image.size === 'M' ? 0.85 : 0.7
+
+		// イージングカーブ（バリエーションを持たせる）
+		const easingTypes = ['easeInOut', 'easeOutQuart', 'easeInQuart'] as const
+		const easing = easingTypes[index % easingTypes.length]
+
+		return {
+			...image,
+			position: {
+				x: baseX,
+				y: baseY,
+				z: baseZ,
+			},
+			randomOffset: {
+				x: 1.5, // ±1.5の範囲でランダムオフセット
+				y: 1.0, // ±1.0の範囲でランダムオフセット
+			},
+			scrollRange: {
+				start: scrollStart,
+				end: scrollEnd,
+				peak: scrollPeak,
+			},
+			zoom: {
+				min: zoomMin,
+				max: zoomMax,
+				curve: easing,
+			},
+			parallax: {
+				speed: parallaxSpeed,
+			},
+			// 一部の画像に微細な回転を追加
+			...(index % 7 === 0 && {
+				rotation: {
+					axis: ['x', 'y', 'z'][index % 3] as 'x' | 'y' | 'z',
+					amount: (Math.random() - 0.5) * 0.2, // ±0.1ラジアン
+				}
+			}),
+		}
+	})
+})()
+
+/**
+ * 特定画像の設定をカスタマイズ
+ * 重要な画像やアクセント画像の個別調整
+ */
+export const customizeImageConfig = (configs: LayeredImageConfig[]): LayeredImageConfig[] => {
+	return configs.map((config, index) => {
+		// 最初と最後の画像は特別扱い
+		if (index === 0) {
+			return {
+				...config,
+				position: { ...config.position, x: 0, y: -12 }, // 中央配置
+				zoom: { ...config.zoom, max: config.zoom.max * 1.2 }, // より大きくズーム
+				scrollRange: { start: 0, end: 0.3, peak: 0.15 }, // 早めに登場
+			}
+		}
+
+		if (index === configs.length - 1) {
+			return {
+				...config,
+				position: { ...config.position, x: 0, y: 12 }, // 中央配置
+				zoom: { ...config.zoom, max: config.zoom.max * 1.2 }, // より大きくズーム
+				scrollRange: { start: 0.7, end: 1, peak: 0.85 }, // 最後に登場
+			}
+		}
+
+		// Lサイズの画像は少し特別扱い
+		if (config.size === 'L') {
+			return {
+				...config,
+				zoom: { ...config.zoom, max: config.zoom.max * 1.1 }, // 少し大きめ
+			}
+		}
+
+		return config
+	})
+}
+
+/**
+ * 最終的な画像設定
+ */
+export const LAYERED_IMAGES = customizeImageConfig(layeredImageConfigs)
+
+/**
+ * デバッグ用設定
+ */
+export const DEBUG_CONFIG = {
+	showBoundingBoxes: true,     // 境界ボックス表示
+	showScrollRanges: true,      // スクロール範囲表示
+	showPositionLabels: true,    // 位置ラベル表示
+	logAnimationStates: true,    // アニメーション状態ログ
+	logImagePaths: true,         // 画像パス確認ログ
+	showTestImage: true,         // テスト画像表示
+}
+
+/**
+ * テスト用：画像パスの確認
+ */
+export const logImagePaths = () => {
+	if (DEBUG_CONFIG.logImagePaths) {
+		const testPaths = generateRuntimeImageFiles().slice(0, 5) // 最初の5枚をテスト
+		console.log('[LayeredGallery] Image paths test:', {
+			CDN_URL,
+			envVariable: process.env.NEXT_PUBLIC_CLOUDFRONT_URL,
+			isMobile: isMobile(),
+			folder: isMobile() ? 'gallery-small' : 'pepe',
+			samplePaths: testPaths.map(img => ({
+				filename: img.filename,
+				path: img.path,
+				fullURL: `${CDN_URL}/${isMobile() ? 'gallery-small' : 'pepe'}/${img.filename}`
+			}))
+		})
+	}
+}
+
+/**
+ * アニメーション設定
+ */
+export const ANIMATION_CONFIG = {
+	// スクロール制御
+	scrollDamping: 0.1,
+	scrollThreshold: 0.001,
+
+	// フレームレート制御
+	targetFPS: 60,
+	animationTolerance: 0.001,
+
+	// イージング設定
+	easingStiffness: 0.1,
+	easingDamping: 0.8,
+}
+
+/**
+ * 現在の設定を取得（レスポンシブ対応）
+ */
+export const getCurrentConfig = () => {
+	const mobile = isMobile()
+
+	// デバッグ：画像パスの確認
+	logImagePaths()
+
+	return {
+		images: LAYERED_IMAGES,
+		section: SECTION_CONFIG,
+		responsive: mobile ? RESPONSIVE_CONFIG.mobile : RESPONSIVE_CONFIG.desktop,
+		animation: ANIMATION_CONFIG,
+		debug: DEBUG_CONFIG,
+	}
+}-e 
+### FILE: ./src/app/components/layered-gallery/types/index.ts
+
+// src/app/components/layered-gallery/types/index.ts
+
+import { ImageFile, ImageSize } from '../../../floating-images-fix/constants'
+
+// React Three Fiber の型拡張
+declare global {
+	namespace JSX {
+		interface IntrinsicElements {
+			group: any
+			mesh: any
+			planeGeometry: any
+			meshBasicMaterial: any
+			boxGeometry: any
+			axesHelper: any
+			gridHelper: any
+		}
+	}
+}
+
+/**
+ * レイヤードギャラリー用の拡張画像設定
+ */
+export interface LayeredImageConfig extends ImageFile {
+	// 3D配置設定
+	position: {
+		x: number
+		y: number
+		z: number
+	}
+
+	// ランダムオフセット範囲（オプション）
+	randomOffset?: {
+		x: number
+		y: number
+	}
+
+	// 個別スクロール範囲（全体進行度 0-1 に対する相対値）
+	scrollRange: {
+		start: number    // アニメーション開始位置
+		end: number      // アニメーション終了位置
+		peak: number     // 最大ズーム位置
+	}
+
+	// ズーム設定
+	zoom: {
+		min: number      // 最小倍率
+		max: number      // 最大倍率
+		curve: EasingType // イージングカーブ
+	}
+
+	// 視差効果設定
+	parallax: {
+		speed: number    // 視差速度（1.0が標準）
+	}
+
+	// 回転設定（オプション）
+	rotation?: {
+		axis: 'x' | 'y' | 'z'
+		amount: number   // 回転量（ラジアン）
+	}
+}
+
+/**
+ * イージングタイプ
+ */
+export type EasingType =
+	| 'linear'
+	| 'easeIn'
+	| 'easeOut'
+	| 'easeInOut'
+	| 'easeInQuart'
+	| 'easeOutQuart'
+
+/**
+ * スクロール進行度情報
+ */
+export interface ScrollProgress {
+	// 全体の進行度（0-1）
+	overall: number
+
+	// セクション内での進行度（0-1）
+	section: number
+
+	// スクロール方向
+	direction: 'up' | 'down'
+
+	// スクロール速度
+	velocity: number
+}
+
+/**
+ * 画像アニメーション状態
+ */
+export interface ImageAnimationState {
+	// 現在の位置
+	position: {
+		x: number
+		y: number
+		z: number
+	}
+
+	// 現在のスケール
+	scale: number
+
+	// 現在の透明度
+	opacity: number
+
+	// 現在の回転
+	rotation: {
+		x: number
+		y: number
+		z: number
+	}
+
+	// アニメーション中かどうか
+	isAnimating: boolean
+
+	// 可視状態
+	isVisible: boolean
+}
+
+/**
+ * レスポンシブ設定
+ */
+export interface ResponsiveConfig {
+	// デスクトップ設定
+	desktop: {
+		scaleMultiplier: number
+		positionMultiplier: number
+		zoomMultiplier: number
+	}
+
+	// モバイル設定
+	mobile: {
+		scaleMultiplier: number
+		positionMultiplier: number
+		zoomMultiplier: number
+	}
+}
+
+/**
+ * セクション設定
+ */
+export interface LayeredGallerySectionConfig {
+	// セクションの高さ（viewport height の倍数）
+	sectionHeight: number
+
+	// パディング設定
+	padding: {
+		top: number
+		bottom: number
+	}
+
+	// カメラ設定
+	camera: {
+		fov: number
+		near: number
+		far: number
+		position: {
+			x: number
+			y: number
+			z: number
+		}
+	}
+
+	// レスポンシブ設定
+	responsive: ResponsiveConfig
+}-e 
+### FILE: ./src/app/components/layered-gallery/LayeredGallerySection.tsx
+
+// src/app/components/layered-gallery/LayeredGallerySection.tsx
+
+'use client'
+
+import React, { useRef, useEffect, useState } from 'react'
+import dynamic from 'next/dynamic'
+import { SECTION_CONFIG, getCurrentConfig, DEBUG_CONFIG } from './constants'
+
+// LayeredGalleryCanvasを動的インポートでSSR回避
+const LayeredGalleryCanvas = dynamic(() => import('./LayeredGalleryCanvas'), {
+  ssr: false,
+  loading: () => (
+    <div
+      style={{
+        position: 'absolute',
+        top: '50%',
+        left: '50%',
+        transform: 'translate(-50%, -50%)',
+        color: '#666',
+        fontSize: '18px',
+        textAlign: 'center',
+      }}
+    >
+      <div>Loading 3D Gallery...</div>
+      <div style={{ fontSize: '12px', marginTop: '5px', opacity: 0.7 }}>
+        Initializing Three.js Scene
+      </div>
+    </div>
+  )
+})
+
+export interface LayeredGallerySectionProps {
+  className?: string
+  id?: string
+}
+
+/**
+ * レイヤードギャラリーのメインセクションコンテナ
+ * スクロール可能エリアの定義と基本レイアウトを提供
+ */
+export const LayeredGallerySection: React.FC<LayeredGallerySectionProps> = ({
+  className = '',
+  id = 'layered-gallery-section'
+}) => {
+  const sectionRef = useRef<HTMLElement>(null)
+  const [sectionHeight, setSectionHeight] = useState<number>(0)
+  const [isClient, setIsClient] = useState(false)
+
+  // クライアントサイドでのみ実行
+  useEffect(() => {
+    setIsClient(true)
+  }, [])
+
+  // セクション高さの計算
+  useEffect(() => {
+    if (!isClient) return
+
+    const calculateHeight = () => {
+      const viewportHeight = window.innerHeight
+      const calculatedHeight = viewportHeight * SECTION_CONFIG.sectionHeight
+      setSectionHeight(calculatedHeight)
+      
+      if (DEBUG_CONFIG.logAnimationStates) {
+        console.log('[LayeredGallerySection] Height calculated:', {
+          viewportHeight,
+          multiplier: SECTION_CONFIG.sectionHeight,
+          totalHeight: calculatedHeight,
+        })
+      }
+    }
+
+    calculateHeight()
+
+    // リサイズ対応
+    const handleResize = () => {
+      calculateHeight()
+    }
+
+    window.addEventListener('resize', handleResize)
+    return () => window.removeEventListener('resize', handleResize)
+  }, [isClient])
+
+  // セクション要素の監視（デバッグ用）
+  useEffect(() => {
+    if (!DEBUG_CONFIG.logAnimationStates || !sectionRef.current) return
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        entries.forEach((entry) => {
+          console.log('[LayeredGallerySection] Intersection changed:', {
+            isIntersecting: entry.isIntersecting,
+            intersectionRatio: entry.intersectionRatio,
+            boundingClientRect: entry.boundingClientRect,
+          })
+        })
+      },
+      {
+        threshold: [0, 0.1, 0.25, 0.5, 0.75, 1.0],
+        rootMargin: '100px',
+      }
+    )
+
+    observer.observe(sectionRef.current)
+
+    return () => observer.disconnect()
+  }, [])
+
+  // レスポンシブ設定の取得
+  const config = getCurrentConfig()
+
+  if (!isClient) {
+    // SSR時は基本的なプレースホルダーを返す
+    return (
+      <section
+        id={id}
+        className={`layered-gallery-section ${className}`}
+        style={{
+          minHeight: '400vh',
+          position: 'relative',
+          overflow: 'hidden',
+        }}
+      >
+        <div 
+          style={{
+            position: 'absolute',
+            top: '50%',
+            left: '50%',
+            transform: 'translate(-50%, -50%)',
+            color: '#666',
+            fontSize: '18px',
+          }}
+        >
+          Loading Gallery...
+        </div>
+      </section>
+    )
+  }
+
+  return (
+    <section
+      ref={sectionRef}
+      id={id}
+      className={`layered-gallery-section ${className}`}
+      style={{
+        height: sectionHeight,
+        position: 'relative',
+        overflow: 'hidden',
+        paddingTop: SECTION_CONFIG.padding.top,
+        paddingBottom: SECTION_CONFIG.padding.bottom,
+        width: '100%', // セクション自体も幅を確保
+        minWidth: '100vw', // 最小幅を保証
+      }}
+    >
+      {/* Three.js Canvas */}
+      <div
+        className="layered-gallery-canvas-container"
+        style={{
+          position: 'sticky',
+          top: 0,
+          left: 0,
+          width: '100vw', // ビューポート全体の幅
+          height: '100vh',
+          zIndex: 1,
+          backgroundColor: 'rgba(255, 0, 0, 0.1)', // 赤い背景で確認用
+          border: '2px solid red', // 境界を見やすく
+          boxSizing: 'border-box',
+        }}
+      >
+        {/* デバッグ表示 */}
+        <div
+          style={{
+            position: 'absolute',
+            top: '20px',
+            left: '20px',
+            background: 'rgba(0, 0, 0, 0.8)',
+            color: 'white',
+            padding: '10px',
+            borderRadius: '5px',
+            fontSize: '14px',
+            zIndex: 10,
+          }}
+        >
+          <div>✅ LayeredGallerySection is working!</div>
+          <div>Section Height: {Math.round(sectionHeight)}px</div>
+          <div>Is Client: {isClient ? 'Yes' : 'No'}</div>
+          <div>Images Count: {getCurrentConfig().images.length}</div>
+          <div>Container Width: 100vw</div>
+          <div>Container Height: 100vh</div>
+        </div>
+
+        <LayeredGalleryCanvas />
+      </div>
+
+      {/* スクロール進行度インジケーター（デバッグ用） */}
+      {DEBUG_CONFIG.showScrollRanges && (
+        <div
+          style={{
+            position: 'fixed',
+            top: '20px',
+            right: '20px',
+            background: 'rgba(0, 0, 0, 0.8)',
+            color: 'white',
+            padding: '10px',
+            borderRadius: '5px',
+            fontSize: '12px',
+            fontFamily: 'monospace',
+            zIndex: 1000,
+          }}
+        >
+          <div>Section Config:</div>
+          <div>Height Multiplier: {SECTION_CONFIG.sectionHeight}x</div>
+          <div>Total Height: {Math.round(sectionHeight)}px</div>
+          <div>Images: {config.images.length}</div>
+          <div>Mobile: {config.responsive === config.section.responsive.mobile ? 'Yes' : 'No'}</div>
+        </div>
+      )}
+
+      {/* スクロール可能エリアの可視化（デバッグ用） */}
+      {DEBUG_CONFIG.showBoundingBoxes && (
+        <div
+          style={{
+            position: 'absolute',
+            top: 0,
+            left: 0,
+            width: '100%',
+            height: '100%',
+            border: '2px dashed #ff0000',
+            pointerEvents: 'none',
+            zIndex: 100,
+          }}
+        >
+          <div
+            style={{
+              position: 'absolute',
+              top: '10px',
+              left: '10px',
+              background: 'rgba(255, 0, 0, 0.8)',
+              color: 'white',
+              padding: '5px',
+              fontSize: '12px',
+            }}
+          >
+            Layered Gallery Section Bounds
+          </div>
+        </div>
+      )}
+
+      {/* 次のステップで実装予定のコンポーネント */}
+      {/* <LayeredGalleryCanvas /> */}
+      {/* <ScrollController /> */}
+
+      {/* テスト用画像表示 */}
+      {DEBUG_CONFIG.showTestImage && <TestImageDisplay />}
+    </section>
+  )
+}
+
+/**
+ * テスト用：CDN画像の表示確認
+ */
+const TestImageDisplay: React.FC = () => {
+  const [testImageLoaded, setTestImageLoaded] = useState<boolean>(false)
+  const [testImageError, setTestImageError] = useState<string | null>(null)
+  const [isClient, setIsClient] = useState(false)
+
+  useEffect(() => {
+    setIsClient(true)
+  }, [])
+  
+  if (!isClient) return null
+
+  const config = getCurrentConfig()
+  const testImage = config.images[0] // 最初の画像でテスト
+  
+  if (!testImage) return null
+
+  return (
+    <div
+      style={{
+        position: 'fixed',
+        bottom: '20px',
+        right: '20px',
+        width: '200px',
+        background: 'rgba(0, 0, 0, 0.8)',
+        color: 'white',
+        padding: '10px',
+        borderRadius: '5px',
+        fontSize: '12px',
+        zIndex: 1000,
+      }}
+    >
+      <div style={{ marginBottom: '10px' }}>
+        <strong>Test Image:</strong><br />
+        {testImage.filename}
+      </div>
+      
+      <div style={{ marginBottom: '10px' }}>
+        <strong>Path:</strong><br />
+        <div style={{ 
+          wordBreak: 'break-all', 
+          fontSize: '10px', 
+          opacity: 0.8 
+        }}>
+          {testImage.path}
+        </div>
+      </div>
+
+      <div style={{ marginBottom: '10px' }}>
+        <img
+          src={testImage.path}
+          alt={testImage.filename}
+          style={{
+            width: '100%',
+            height: 'auto',
+            border: testImageError ? '2px solid red' : '1px solid #333'
+          }}
+          onLoad={() => {
+            setTestImageLoaded(true)
+            setTestImageError(null)
+            console.log(`[TestImage] Successfully loaded: ${testImage.filename}`)
+          }}
+          onError={(e) => {
+            setTestImageLoaded(false)
+            setTestImageError('Failed to load')
+            console.error(`[TestImage] Failed to load: ${testImage.filename}`, e)
+          }}
+        />
+      </div>
+
+      <div style={{ fontSize: '10px' }}>
+        Status: {testImageLoaded ? '✅ Loaded' : testImageError ? '❌ Error' : '⏳ Loading'}
+      </div>
+    </div>
+  )
+}
+export default LayeredGallerySection-e 
+### FILE: ./src/app/components/layered-gallery/hooks/useScrollProgress.ts
+
+// src/app/components/layered-gallery/hooks/useScrollProgress.ts
+
+'use client'
+
+import { useState, useEffect, useCallback, useRef } from 'react'
+import { ScrollProgress } from '../types'
+import { ANIMATION_CONFIG, DEBUG_CONFIG } from '../constants'
+
+/**
+ * スクロール進行度を計算・管理するカスタムフック
+ */
+export const useScrollProgress = (
+	sectionId: string = 'layered-gallery-section'
+): ScrollProgress | null => {
+	const [scrollProgress, setScrollProgress] = useState<ScrollProgress | null>(null)
+	const lastScrollY = useRef<number>(0)
+	const lastTimestamp = useRef<number>(0)
+	const velocityHistory = useRef<number[]>([])
+
+	// スクロール進行度の計算
+	const calculateProgress = useCallback((element: HTMLElement): ScrollProgress => {
+		const rect = element.getBoundingClientRect()
+		const viewportHeight = window.innerHeight
+		const elementHeight = rect.height
+		const elementTop = rect.top
+
+		// セクション全体の進行度（0-1）
+		// 要素が画面下端に入った時を0、画面上端を出た時を1とする
+		const totalScrollRange = elementHeight + viewportHeight
+		const scrolled = viewportHeight - elementTop
+		const overallProgress = Math.max(0, Math.min(1, scrolled / totalScrollRange))
+
+		// セクション内での進行度（0-1）
+		// セクションが完全に画面内にある部分での進行度
+		const visibleStart = Math.max(0, -elementTop)
+		const visibleEnd = Math.min(elementHeight, viewportHeight - elementTop)
+		const visibleRange = Math.max(0, visibleEnd - visibleStart)
+		const sectionProgress = elementHeight > 0 ? visibleRange / elementHeight : 0
+
+		// スクロール方向の判定
+		const currentScrollY = window.scrollY
+		const direction = currentScrollY >= lastScrollY.current ? 'down' : 'up'
+		lastScrollY.current = currentScrollY
+
+		// スクロール速度の計算
+		const currentTime = performance.now()
+		const timeDelta = currentTime - lastTimestamp.current
+		const scrollDelta = Math.abs(currentScrollY - lastScrollY.current)
+		const instantVelocity = timeDelta > 0 ? scrollDelta / timeDelta : 0
+
+		// 速度履歴を更新（過去5フレーム分の平均を取る）
+		velocityHistory.current.push(instantVelocity)
+		if (velocityHistory.current.length > 5) {
+			velocityHistory.current.shift()
+		}
+
+		const averageVelocity = velocityHistory.current.length > 0
+			? velocityHistory.current.reduce((sum, v) => sum + v, 0) / velocityHistory.current.length
+			: 0
+
+		lastTimestamp.current = currentTime
+
+		return {
+			overall: overallProgress,
+			section: sectionProgress,
+			direction,
+			velocity: averageVelocity,
+		}
+	}, [])
+
+	// スクロールイベントハンドラー
+	const handleScroll = useCallback(() => {
+		const element = document.getElementById(sectionId)
+		if (!element) return
+
+		const newProgress = calculateProgress(element)
+
+		// 微細な変化は無視（パフォーマンス最適化）
+		if (scrollProgress &&
+			Math.abs(newProgress.overall - scrollProgress.overall) < ANIMATION_CONFIG.scrollThreshold &&
+			Math.abs(newProgress.section - scrollProgress.section) < ANIMATION_CONFIG.scrollThreshold) {
+			return
+		}
+
+		setScrollProgress(newProgress)
+
+		// デバッグログ
+		if (DEBUG_CONFIG.logAnimationStates) {
+			console.log('[useScrollProgress] Progress updated:', {
+				overall: newProgress.overall.toFixed(3),
+				section: newProgress.section.toFixed(3),
+				direction: newProgress.direction,
+				velocity: newProgress.velocity.toFixed(3),
+			})
+		}
+	}, [sectionId, calculateProgress, scrollProgress])
+
+	// デバウンス処理付きスクロールハンドラー
+	const debouncedHandleScroll = useCallback(() => {
+		const debounceMs = ANIMATION_CONFIG.scrollDamping * 1000
+
+		if (debounceMs <= 0) {
+			handleScroll()
+			return
+		}
+
+		// requestAnimationFrame を使用してスムーズな更新
+		requestAnimationFrame(handleScroll)
+	}, [handleScroll])
+
+	// Intersection Observer による要素の可視性監視
+	const [isElementVisible, setIsElementVisible] = useState<boolean>(false)
+
+	useEffect(() => {
+		const element = document.getElementById(sectionId)
+		if (!element) return
+
+		const observer = new IntersectionObserver(
+			(entries) => {
+				const [entry] = entries
+				setIsElementVisible(entry.isIntersecting)
+
+				if (DEBUG_CONFIG.logAnimationStates) {
+					console.log('[useScrollProgress] Element visibility changed:', {
+						isIntersecting: entry.isIntersecting,
+						intersectionRatio: entry.intersectionRatio,
+					})
+				}
+			},
+			{
+				threshold: [0, 0.1, 0.5, 1.0],
+				rootMargin: '100px', // 要素に近づいた時点で検知開始
+			}
+		)
+
+		observer.observe(element)
+
+		return () => observer.disconnect()
+	}, [sectionId])
+
+	// スクロールイベントの登録
+	useEffect(() => {
+		if (!isElementVisible) {
+			// 要素が見えていない時は進行度をnullにリセット
+			setScrollProgress(null)
+			return
+		}
+
+		// 初期値の計算
+		const element = document.getElementById(sectionId)
+		if (element) {
+			const initialProgress = calculateProgress(element)
+			setScrollProgress(initialProgress)
+		}
+
+		// スクロールイベントリスナーの登録
+		const handleScrollWithPassive = () => debouncedHandleScroll()
+
+		window.addEventListener('scroll', handleScrollWithPassive, { passive: true })
+		window.addEventListener('resize', handleScrollWithPassive, { passive: true })
+
+		return () => {
+			window.removeEventListener('scroll', handleScrollWithPassive)
+			window.removeEventListener('resize', handleScrollWithPassive)
+		}
+	}, [sectionId, isElementVisible, calculateProgress, debouncedHandleScroll])
+
+	// パフォーマンス監視（開発時のみ）
+	useEffect(() => {
+		if (!DEBUG_CONFIG.logAnimationStates || !scrollProgress) return
+
+		const startTime = performance.now()
+
+		return () => {
+			const endTime = performance.now()
+			const duration = endTime - startTime
+
+			if (duration > 16) { // 60FPSを下回る場合
+				console.warn('[useScrollProgress] Performance warning:', {
+					duration: `${duration.toFixed(2)}ms`,
+					progress: scrollProgress,
+				})
+			}
+		}
+	}, [scrollProgress])
+
+	return scrollProgress
+}
+
+/**
+ * 特定の画像のスクロール範囲内にいるかどうかを判定するヘルパーフック
+ */
+export const useImageScrollRange = (
+	imageScrollRange: { start: number; end: number; peak: number },
+	globalProgress: ScrollProgress | null
+) => {
+	const [isInRange, setIsInRange] = useState<boolean>(false)
+	const [localProgress, setLocalProgress] = useState<number>(0)
+
+	useEffect(() => {
+		if (!globalProgress) {
+			setIsInRange(false)
+			setLocalProgress(0)
+			return
+		}
+
+		const { start, end } = imageScrollRange
+		const progress = globalProgress.overall
+
+		const inRange = progress >= start && progress <= end
+		setIsInRange(inRange)
+
+		if (inRange) {
+			// 画像のスクロール範囲内での相対進行度を計算（0-1）
+			const rangeProgress = (progress - start) / (end - start)
+			setLocalProgress(Math.max(0, Math.min(1, rangeProgress)))
+		} else {
+			setLocalProgress(progress < start ? 0 : 1)
+		}
+
+	}, [globalProgress, imageScrollRange])
+
+	return { isInRange, localProgress }
+}
+
+export default useScrollProgress-e 
+### FILE: ./src/app/components/layered-gallery/hooks/useImageAnimation.ts
+
+// src/app/components/layered-gallery/hooks/useImageAnimation.ts
+
+'use client'
+
+import { useState, useEffect, useMemo } from 'react'
+import { LayeredImageConfig, ScrollProgress, ImageAnimationState } from '../types'
+import { useImageScrollRange } from './useScrollProgress'
+import { calculateScrollBasedPosition, calculateFinalPosition } from '../utils/positionCalculator'
+import { calculateZoomScale, calculateOpacity } from '../utils/zoomCalculator'
+import { DEBUG_CONFIG, ANIMATION_CONFIG } from '../constants'
+
+/**
+ * 個別画像のアニメーション状態を管理するカスタムフック
+ */
+export const useImageAnimation = (
+	imageConfig: LayeredImageConfig,
+	globalScrollProgress: ScrollProgress | null
+): ImageAnimationState | null => {
+
+	// 画像のスクロール範囲内判定
+	const { isInRange, localProgress } = useImageScrollRange(
+		imageConfig.scrollRange,
+		globalScrollProgress
+	)
+
+	// アニメーション状態
+	const [animationState, setAnimationState] = useState<ImageAnimationState | null>(null)
+
+	// 基本位置の計算（メモ化）
+	const basePosition = useMemo(() => {
+		return calculateFinalPosition(imageConfig, imageConfig.id)
+	}, [imageConfig])
+
+	// アニメーション状態の計算
+	useEffect(() => {
+		if (!globalScrollProgress) {
+			setAnimationState(null)
+			return
+		}
+
+		// 現在位置の計算
+		const currentPosition = calculateScrollBasedPosition(
+			basePosition,
+			imageConfig,
+			globalScrollProgress
+		)
+
+		// ズームスケールの計算
+		const zoomScale = calculateZoomScale(
+			imageConfig.zoom,
+			localProgress,
+			isInRange
+		)
+
+		// 透明度の計算
+		const opacity = calculateOpacity(
+			localProgress,
+			isInRange,
+			globalScrollProgress.overall,
+			imageConfig.scrollRange
+		)
+
+		// 回転の計算
+		let rotation = { x: 0, y: 0, z: 0 }
+		if (imageConfig.rotation && isInRange) {
+			const rotationProgress = Math.sin(localProgress * Math.PI) // サイン波で滑らかな回転
+			const { axis, amount } = imageConfig.rotation
+
+			switch (axis) {
+				case 'x':
+					rotation.x = rotationProgress * amount
+					break
+				case 'y':
+					rotation.y = rotationProgress * amount
+					break
+				case 'z':
+					rotation.z = rotationProgress * amount
+					break
+			}
+		}
+
+		// 可視性の判定
+		const isVisible = opacity > ANIMATION_CONFIG.animationTolerance
+		const isAnimating = isInRange && isVisible
+
+		const newState: ImageAnimationState = {
+			position: currentPosition,
+			scale: zoomScale,
+			opacity,
+			rotation,
+			isAnimating,
+			isVisible,
+		}
+
+		// 状態の変化をチェック（パフォーマンス最適化）
+		setAnimationState(prevState => {
+			if (!prevState) return newState
+
+			// 微細な変化は無視
+			const positionChanged =
+				Math.abs(prevState.position.x - newState.position.x) > ANIMATION_CONFIG.animationTolerance ||
+				Math.abs(prevState.position.y - newState.position.y) > ANIMATION_CONFIG.animationTolerance ||
+				Math.abs(prevState.position.z - newState.position.z) > ANIMATION_CONFIG.animationTolerance
+
+			const scaleChanged =
+				Math.abs(prevState.scale - newState.scale) > ANIMATION_CONFIG.animationTolerance
+
+			const opacityChanged =
+				Math.abs(prevState.opacity - newState.opacity) > ANIMATION_CONFIG.animationTolerance
+
+			const rotationChanged =
+				Math.abs(prevState.rotation.x - newState.rotation.x) > ANIMATION_CONFIG.animationTolerance ||
+				Math.abs(prevState.rotation.y - newState.rotation.y) > ANIMATION_CONFIG.animationTolerance ||
+				Math.abs(prevState.rotation.z - newState.rotation.z) > ANIMATION_CONFIG.animationTolerance
+
+			const stateChanged =
+				prevState.isAnimating !== newState.isAnimating ||
+				prevState.isVisible !== newState.isVisible
+
+			if (positionChanged || scaleChanged || opacityChanged || rotationChanged || stateChanged) {
+				return newState
+			}
+
+			return prevState
+		})
+
+		// デバッグログ
+		if (DEBUG_CONFIG.logAnimationStates && isInRange) {
+			console.log(`[useImageAnimation] ${imageConfig.filename} animation updated:`, {
+				localProgress: localProgress.toFixed(3),
+				globalProgress: globalScrollProgress.overall.toFixed(3),
+				isInRange,
+				scale: zoomScale.toFixed(3),
+				opacity: opacity.toFixed(3),
+				position: {
+					x: currentPosition.x.toFixed(2),
+					y: currentPosition.y.toFixed(2),
+					z: currentPosition.z.toFixed(2),
+				},
+			})
+		}
+
+	}, [
+		globalScrollProgress,
+		localProgress,
+		isInRange,
+		imageConfig,
+		basePosition
+	])
+
+	return animationState
+}
+
+/**
+ * 複数画像の一括アニメーション管理フック
+ */
+export const useMultipleImageAnimations = (
+	imageConfigs: LayeredImageConfig[],
+	globalScrollProgress: ScrollProgress | null
+): (ImageAnimationState | null)[] => {
+
+	const [animationStates, setAnimationStates] = useState<(ImageAnimationState | null)[]>([])
+
+	useEffect(() => {
+		if (!globalScrollProgress) {
+			setAnimationStates(new Array(imageConfigs.length).fill(null))
+			return
+		}
+
+		const newStates = imageConfigs.map(config => {
+			// 各画像のアニメーション状態を個別計算
+			const { isInRange, localProgress } = useImageScrollRange(
+				config.scrollRange,
+				globalScrollProgress
+			)
+
+			if (!isInRange) return null
+
+			const basePosition = calculateFinalPosition(config, config.id)
+			const currentPosition = calculateScrollBasedPosition(
+				basePosition,
+				config,
+				globalScrollProgress
+			)
+
+			const zoomScale = calculateZoomScale(
+				config.zoom,
+				localProgress,
+				isInRange
+			)
+
+			const opacity = calculateOpacity(
+				localProgress,
+				isInRange,
+				globalScrollProgress.overall,
+				config.scrollRange
+			)
+
+			let rotation = { x: 0, y: 0, z: 0 }
+			if (config.rotation) {
+				const rotationProgress = Math.sin(localProgress * Math.PI)
+				const { axis, amount } = config.rotation
+
+				switch (axis) {
+					case 'x':
+						rotation.x = rotationProgress * amount
+						break
+					case 'y':
+						rotation.y = rotationProgress * amount
+						break
+					case 'z':
+						rotation.z = rotationProgress * amount
+						break
+				}
+			}
+
+			return {
+				position: currentPosition,
+				scale: zoomScale,
+				opacity,
+				rotation,
+				isAnimating: true,
+				isVisible: opacity > ANIMATION_CONFIG.animationTolerance,
+			}
+		})
+
+		setAnimationStates(newStates)
+
+	}, [imageConfigs, globalScrollProgress])
+
+	return animationStates
+}
+
+/**
+ * アニメーション状態の統計情報を取得するフック
+ */
+export const useAnimationStats = (
+	animationStates: (ImageAnimationState | null)[]
+) => {
+	const stats = useMemo(() => {
+		const activeAnimations = animationStates.filter(state => state?.isAnimating).length
+		const visibleImages = animationStates.filter(state => state?.isVisible).length
+		const totalImages = animationStates.length
+
+		const averageOpacity = animationStates.reduce((sum, state) => {
+			return sum + (state?.opacity || 0)
+		}, 0) / totalImages
+
+		const averageScale = animationStates.reduce((sum, state) => {
+			return sum + (state?.scale || 1)
+		}, 0) / totalImages
+
+		return {
+			activeAnimations,
+			visibleImages,
+			totalImages,
+			averageOpacity,
+			averageScale,
+			animationRatio: activeAnimations / totalImages,
+			visibilityRatio: visibleImages / totalImages,
+		}
+	}, [animationStates])
+
+	// パフォーマンス警告
+	useEffect(() => {
+		if (DEBUG_CONFIG.logAnimationStates && stats.activeAnimations > 10) {
+			console.warn('[useAnimationStats] High number of active animations:', {
+				active: stats.activeAnimations,
+				total: stats.totalImages,
+				ratio: stats.animationRatio,
+			})
+		}
+	}, [stats])
+
+	return stats
+}
+
+export default useImageAnimation-e 
+### FILE: ./src/app/components/layered-gallery/utils/zoomCalculator.ts
+
+// src/app/components/layered-gallery/utils/zoomCalculator.ts
+
+import { EasingType } from '../types'
+import { getCurrentConfig } from '../constants'
+
+/**
+ * ズーム計算の中心ロジック
+ */
+
+/**
+ * イージング関数の実装
+ */
+export const easeInOut = (t: number): number => {
+	return t < 0.5 ? 2 * t * t : -1 + (4 - 2 * t) * t
+}
+
+export const easeIn = (t: number): number => {
+	return t * t
+}
+
+export const easeOut = (t: number): number => {
+	return t * (2 - t)
+}
+
+export const easeInQuart = (t: number): number => {
+	return t * t * t * t
+}
+
+export const easeOutQuart = (t: number): number => {
+	return 1 - (--t) * t * t * t
+}
+
+export const linear = (t: number): number => {
+	return t
+}
+
+/**
+ * イージングタイプに応じた関数を取得
+ */
+export const getEasingFunction = (easingType: EasingType): ((t: number) => number) => {
+	switch (easingType) {
+		case 'easeIn':
+			return easeIn
+		case 'easeOut':
+			return easeOut
+		case 'easeInOut':
+			return easeInOut
+		case 'easeInQuart':
+			return easeInQuart
+		case 'easeOutQuart':
+			return easeOutQuart
+		case 'linear':
+		default:
+			return linear
+	}
+}
+
+/**
+ * ズームスケールを計算
+ * @param zoomConfig ズーム設定
+ * @param localProgress 画像のローカル進行度（0-1）
+ * @param isInRange 画像がスクロール範囲内にあるか
+ * @returns 計算されたスケール値
+ */
+export const calculateZoomScale = (
+	zoomConfig: { min: number; max: number; curve: EasingType },
+	localProgress: number,
+	isInRange: boolean
+): number => {
+	const config = getCurrentConfig()
+
+	if (!isInRange) {
+		return zoomConfig.min * config.responsive.scaleMultiplier
+	}
+
+	// ベルカーブ（山型）のズーム効果を計算
+	// 0 → peak → 1 の進行で min → max → min のズーム
+	const easingFunc = getEasingFunction(zoomConfig.curve)
+
+	// 山型カーブの計算（0.5で最大値）
+	const normalizedProgress = Math.abs(0.5 - localProgress) * 2 // 0-1の範囲で中央が0
+	const invertedProgress = 1 - normalizedProgress // 中央で最大値
+	const easedProgress = easingFunc(invertedProgress)
+
+	// スケール値の補間
+	const scaleRange = zoomConfig.max - zoomConfig.min
+	const calculatedScale = zoomConfig.min + (scaleRange * easedProgress)
+
+	// レスポンシブ調整を適用
+	const responsiveScale = calculatedScale * config.responsive.scaleMultiplier
+
+	// 最小値の保証
+	return Math.max(zoomConfig.min * config.responsive.scaleMultiplier, responsiveScale)
+}
+
+/**
+ * 透明度を計算
+ * @param localProgress 画像のローカル進行度（0-1）
+ * @param isInRange 画像がスクロール範囲内にあるか
+ * @param globalProgress 全体のスクロール進行度
+ * @param scrollRange 画像のスクロール範囲
+ * @returns 計算された透明度（0-1）
+ */
+export const calculateOpacity = (
+	localProgress: number,
+	isInRange: boolean,
+	globalProgress: number,
+	scrollRange: { start: number; end: number; peak: number }
+): number => {
+	const baseOpacity = 0.7 // 基本透明度
+	const fadeDistance = 0.1 // フェード距離（範囲の10%）
+
+	if (!isInRange) {
+		// 範囲外での距離に基づくフェード
+		const distanceFromRange = Math.min(
+			Math.abs(globalProgress - scrollRange.start),
+			Math.abs(globalProgress - scrollRange.end)
+		)
+
+		if (distanceFromRange > fadeDistance) {
+			return 0 // 完全に透明
+		}
+
+		// 範囲端でのフェード効果
+		const fadeRatio = 1 - (distanceFromRange / fadeDistance)
+		return baseOpacity * fadeRatio * 0.3 // 範囲外は薄く表示
+	}
+
+	// 範囲内でのフェードイン/アウト
+	const fadeInThreshold = 0.1
+	const fadeOutThreshold = 0.9
+
+	let opacityMultiplier = 1
+
+	// フェードイン（範囲開始時）
+	if (localProgress < fadeInThreshold) {
+		opacityMultiplier = localProgress / fadeInThreshold
+	}
+	// フェードアウト（範囲終了時）
+	else if (localProgress > fadeOutThreshold) {
+		opacityMultiplier = (1 - localProgress) / (1 - fadeOutThreshold)
+	}
+
+	// ピーク付近で最大透明度
+	const peakDistance = Math.abs(localProgress - 0.5) // ピークは中央（0.5）
+	const peakBonus = Math.max(0, 1 - peakDistance * 2) * 0.3 // ピーク付近で30%ボーナス
+
+	const finalOpacity = baseOpacity * opacityMultiplier + peakBonus
+	return Math.max(0, Math.min(1, finalOpacity))
+}
+
+/**
+ * 視差効果によるポジションオフセットを計算
+ * @param basePosition 基本位置
+ * @param parallaxSpeed 視差速度（1.0が標準）
+ * @param globalProgress 全体のスクロール進行度
+ * @returns オフセット値
+ */
+export const calculateParallaxOffset = (
+	basePosition: { x: number; y: number; z: number },
+	parallaxSpeed: number,
+	globalProgress: number
+): { x: number; y: number; z: number } => {
+	// Y軸方向の視差効果（主要）
+	const yOffset = globalProgress * 20 * (1 - parallaxSpeed)
+
+	// X軸方向の微細な視差効果
+	const xOffset = globalProgress * 2 * (1 - parallaxSpeed) * Math.sin(globalProgress * Math.PI)
+
+	// Z軸方向の奥行き効果
+	const zOffset = globalProgress * 5 * (1 - parallaxSpeed)
+
+	return {
+		x: xOffset,
+		y: yOffset,
+		z: zOffset,
+	}
+}
+
+/**
+ * スケールに基づく相対的な位置調整
+ * 大きくズームした画像は画面中央に寄る効果
+ */
+export const calculateScaleBasedPositionAdjustment = (
+	basePosition: { x: number; y: number; z: number },
+	currentScale: number,
+	maxScale: number
+): { x: number; y: number; z: number } => {
+	// スケールが大きいほど中央に寄る効果
+	const scaleRatio = Math.min(1, currentScale / maxScale)
+	const centeringStrength = scaleRatio * 0.3 // 最大30%中央に寄る
+
+	return {
+		x: basePosition.x * (1 - centeringStrength),
+		y: basePosition.y * (1 - centeringStrength),
+		z: basePosition.z,
+	}
+}
+
+/**
+ * 画像サイズと距離に基づくLOD（Level of Detail）計算
+ */
+export const calculateLOD = (
+	imageSize: 'L' | 'M' | 'S',
+	distanceFromCamera: number,
+	currentScale: number
+): 1 | 2 | 3 => {
+	// 基本LODレベル
+	let baseLOD: 1 | 2 | 3 = imageSize === 'L' ? 1 : imageSize === 'M' ? 2 : 3
+
+	// 距離による調整
+	if (distanceFromCamera > 15) {
+		baseLOD = Math.min(3, baseLOD + 1) as 1 | 2 | 3
+	} else if (distanceFromCamera < 5) {
+		baseLOD = Math.max(1, baseLOD - 1) as 1 | 2 | 3
+	}
+
+	// スケールによる調整
+	if (currentScale > 2) {
+		baseLOD = Math.max(1, baseLOD - 1) as 1 | 2 | 3
+	} else if (currentScale < 0.5) {
+		baseLOD = Math.min(3, baseLOD + 1) as 1 | 2 | 3
+	}
+
+	return baseLOD
+}
+
+/**
+ * 複数画像の相対的ズーム調整
+ * 同時に表示される画像間でのズーム競合を解決
+ */
+export const adjustRelativeZoom = (
+	imageConfigs: Array<{
+		id: number
+		currentScale: number
+		priority: number
+		scrollRange: { start: number; end: number }
+	}>,
+	globalProgress: number
+): Array<{ id: number; adjustedScale: number }> => {
+	// 現在のスクロール位置で影響を受ける画像を特定
+	const activeImages = imageConfigs.filter(config => {
+		return globalProgress >= config.scrollRange.start - 0.1 &&
+			globalProgress <= config.scrollRange.end + 0.1
+	})
+
+	// 優先度に基づくスケール調整
+	return activeImages.map(config => {
+		let adjustedScale = config.currentScale
+
+		// 他の画像との競合チェック
+		const competitors = activeImages.filter(other =>
+			other.id !== config.id &&
+			Math.abs(other.priority - config.priority) < 2
+		)
+
+		if (competitors.length > 0) {
+			// 競合がある場合、優先度に基づいて調整
+			const competitorScales = competitors.map(c => c.currentScale)
+			const maxCompetitorScale = Math.max(...competitorScales)
+
+			if (config.currentScale > maxCompetitorScale && config.priority < Math.max(...competitors.map(c => c.priority))) {
+				// 優先度が低いのにスケールが大きい場合、調整
+				adjustedScale = config.currentScale * 0.8
+			}
+		}
+
+		return {
+			id: config.id,
+			adjustedScale: Math.max(0.1, adjustedScale)
+		}
+	})
+}
+
+/**
+ * デバッグ用：ズーム状態の詳細情報を生成
+ */
+export const generateZoomDebugInfo = (
+	zoomConfig: { min: number; max: number; curve: EasingType },
+	localProgress: number,
+	calculatedScale: number,
+	opacity: number
+) => {
+	return {
+		config: zoomConfig,
+		progress: {
+			local: localProgress.toFixed(3),
+			eased: getEasingFunction(zoomConfig.curve)(localProgress).toFixed(3),
+		},
+		scale: {
+			calculated: calculatedScale.toFixed(3),
+			min: zoomConfig.min.toFixed(3),
+			max: zoomConfig.max.toFixed(3),
+			range: (zoomConfig.max - zoomConfig.min).toFixed(3),
+		},
+		opacity: opacity.toFixed(3),
+	}
+}-e 
+### FILE: ./src/app/components/layered-gallery/utils/positionCalculator.ts
+
+// src/app/components/layered-gallery/utils/positionCalculator.ts
+
+import { LayeredImageConfig, ScrollProgress, ImageAnimationState } from '../types'
+import { getCurrentConfig } from '../constants'
+
+/**
+ * 3D位置計算のユーティリティ関数群
+ */
+
+/**
+ * ランダムオフセットを適用した最終位置を計算
+ */
+export const calculateFinalPosition = (
+	imageConfig: LayeredImageConfig,
+	seed?: number
+): { x: number; y: number; z: number } => {
+	const config = getCurrentConfig()
+	const { position, randomOffset } = imageConfig
+
+	// シード値を使った擬似ランダム生成（一貫性のため）
+	const pseudoRandom = (index: number): number => {
+		const seedValue = seed || imageConfig.id
+		const x = Math.sin(seedValue * index) * 10000
+		return x - Math.floor(x)
+	}
+
+	let finalX = position.x
+	let finalY = position.y
+	let finalZ = position.z
+
+	// ランダムオフセットの適用
+	if (randomOffset) {
+		const offsetX = (pseudoRandom(1) - 0.5) * 2 * randomOffset.x
+		const offsetY = (pseudoRandom(2) - 0.5) * 2 * randomOffset.y
+
+		finalX += offsetX
+		finalY += offsetY
+	}
+
+	// レスポンシブ調整の適用
+	finalX *= config.responsive.positionMultiplier
+	finalY *= config.responsive.positionMultiplier
+
+	return { x: finalX, y: finalY, z: finalZ }
+}
+
+/**
+ * スクロール進行度に基づく動的位置を計算
+ */
+export const calculateScrollBasedPosition = (
+	basePosition: { x: number; y: number; z: number },
+	imageConfig: LayeredImageConfig,
+	scrollProgress: ScrollProgress
+): { x: number; y: number; z: number } => {
+	const { parallax } = imageConfig
+	const { overall } = scrollProgress
+
+	// 視差効果による位置調整
+	const parallaxOffset = overall * 20 * (1 - parallax.speed) // 視差速度に基づくオフセット
+
+	return {
+		x: basePosition.x,
+		y: basePosition.y - parallaxOffset, // Y軸方向に視差効果を適用
+		z: basePosition.z,
+	}
+}
+
+/**
+ * 画像間の衝突検出
+ */
+export const checkCollision = (
+	pos1: { x: number; y: number; z: number },
+	pos2: { x: number; y: number; z: number },
+	size1: number,
+	size2: number,
+	threshold: number = 0.5
+): boolean => {
+	const distance = Math.sqrt(
+		Math.pow(pos1.x - pos2.x, 2) +
+		Math.pow(pos1.y - pos2.y, 2) +
+		Math.pow(pos1.z - pos2.z, 2)
+	)
+
+	const combinedRadius = (size1 + size2) * threshold
+	return distance < combinedRadius
+}
+
+/**
+ * 衝突を回避する位置を計算
+ */
+export const resolveCollisions = (
+	positions: Array<{ config: LayeredImageConfig; position: { x: number; y: number; z: number } }>,
+	maxIterations: number = 10
+): Array<{ x: number; y: number; z: number }> => {
+	const resolvedPositions = positions.map(p => ({ ...p.position }))
+
+	for (let iteration = 0; iteration < maxIterations; iteration++) {
+		let hasCollision = false
+
+		for (let i = 0; i < positions.length; i++) {
+			for (let j = i + 1; j < positions.length; j++) {
+				const pos1 = resolvedPositions[i]
+				const pos2 = resolvedPositions[j]
+				const config1 = positions[i].config
+				const config2 = positions[j].config
+
+				// 同じZ軸レベルでの衝突のみチェック
+				if (Math.abs(pos1.z - pos2.z) > 2) continue
+
+				const size1 = config1.zoom.max
+				const size2 = config2.zoom.max
+
+				if (checkCollision(pos1, pos2, size1, size2)) {
+					hasCollision = true
+
+					// 衝突解決：より重要度の低い画像を移動
+					const moveIndex = config1.size === 'L' ? j :
+						config2.size === 'L' ? i :
+							config1.size === 'M' ? j : i
+
+					// 移動方向の計算
+					const dx = pos2.x - pos1.x
+					const dy = pos2.y - pos1.y
+					const distance = Math.sqrt(dx * dx + dy * dy) || 1
+
+					const moveDistance = (size1 + size2) * 0.6
+					const moveX = (dx / distance) * moveDistance
+					const moveY = (dy / distance) * moveDistance
+
+					if (moveIndex === i) {
+						resolvedPositions[i].x -= moveX * 0.5
+						resolvedPositions[i].y -= moveY * 0.5
+					} else {
+						resolvedPositions[j].x += moveX * 0.5
+						resolvedPositions[j].y += moveY * 0.5
+					}
+				}
+			}
+		}
+
+		if (!hasCollision) break
+	}
+
+	return resolvedPositions
+}
+
+/**
+ * 画面境界内での位置制限
+ */
+export const constrainToBounds = (
+	position: { x: number; y: number; z: number },
+	bounds: { minX: number; maxX: number; minY: number; maxY: number },
+	margin: number = 1
+): { x: number; y: number; z: number } => {
+	return {
+		x: Math.max(bounds.minX + margin, Math.min(bounds.maxX - margin, position.x)),
+		y: Math.max(bounds.minY + margin, Math.min(bounds.maxY - margin, position.y)),
+		z: position.z,
+	}
+}
+
+/**
+ * 複数画像の位置を一括計算
+ */
+export const calculateAllPositions = (
+	imageConfigs: LayeredImageConfig[],
+	scrollProgress: ScrollProgress | null,
+	options: {
+		resolveCollisions?: boolean
+		constrainToBounds?: boolean
+		bounds?: { minX: number; maxX: number; minY: number; maxY: number }
+	} = {}
+): Array<{ x: number; y: number; z: number }> => {
+	// 基本位置の計算
+	const basePositions = imageConfigs.map((config, index) => ({
+		config,
+		position: calculateFinalPosition(config, config.id + index)
+	}))
+
+	// スクロール効果の適用
+	let finalPositions = basePositions.map(({ config, position }) => {
+		if (scrollProgress) {
+			return calculateScrollBasedPosition(position, config, scrollProgress)
+		}
+		return position
+	})
+
+	// 衝突解決
+	if (options.resolveCollisions) {
+		finalPositions = resolveCollisions(basePositions)
+	}
+
+	// 境界制限
+	if (options.constrainToBounds && options.bounds) {
+		finalPositions = finalPositions.map(position =>
+			constrainToBounds(position, options.bounds!)
+		)
+	}
+
+	return finalPositions
+}
+
+/**
+ * デバッグ用：位置情報の可視化データを生成
+ */
+export const generatePositionDebugData = (
+	imageConfigs: LayeredImageConfig[],
+	positions: Array<{ x: number; y: number; z: number }>
+) => {
+	return imageConfigs.map((config, index) => ({
+		id: config.id,
+		filename: config.filename,
+		size: config.size,
+		originalPosition: config.position,
+		finalPosition: positions[index],
+		scrollRange: config.scrollRange,
+		zoomRange: config.zoom,
+	}))
+}
+
+/**
+ * カメラからの距離を計算
+ */
+export const calculateDistanceFromCamera = (
+	position: { x: number; y: number; z: number },
+	cameraPosition: { x: number; y: number; z: number } = { x: 0, y: 0, z: 10 }
+): number => {
+	return Math.sqrt(
+		Math.pow(position.x - cameraPosition.x, 2) +
+		Math.pow(position.y - cameraPosition.y, 2) +
+		Math.pow(position.z - cameraPosition.z, 2)
+	)
+}
+
+/**
+ * 視野角内にあるかどうかを判定
+ */
+export const isInViewFrustum = (
+	position: { x: number; y: number; z: number },
+	cameraPosition: { x: number; y: number; z: number },
+	fov: number,
+	aspect: number,
+	near: number,
+	far: number
+): boolean => {
+	const distance = calculateDistanceFromCamera(position, cameraPosition)
+
+	// 距離チェック
+	if (distance < near || distance > far) return false
+
+	// 視野角チェック（簡略化）
+	const dx = Math.abs(position.x - cameraPosition.x)
+	const dy = Math.abs(position.y - cameraPosition.y)
+	const dz = Math.abs(position.z - cameraPosition.z)
+
+	const fovRad = (fov * Math.PI) / 180
+	const halfHeight = Math.tan(fovRad / 2) * dz
+	const halfWidth = halfHeight * aspect
+
+	return dx <= halfWidth && dy <= halfHeight
+}-e 
+### FILE: ./src/app/components/layered-gallery/LayeredGalleryCanvas.tsx
+
+'use client'
+
+import React, { Suspense, useRef, useEffect, useState } from 'react'
+import dynamic from 'next/dynamic'
+import { SECTION_CONFIG, LAYERED_IMAGES, DEBUG_CONFIG, getCurrentConfig } from './constants'
+
+export interface LayeredGalleryCanvasProps {
+  className?: string
+}
+
+/**
+ * Three.jsシーンコンポーネント（簡易版から開始）
+ */
+const ThreeScene: React.FC = () => {
+  const [Canvas, setCanvas] = useState<any>(null)
+  const [drei, setDrei] = useState<any>(null)
+  const [useScrollProgress, setUseScrollProgress] = useState<any>(null)
+  const [sceneReady, setSceneReady] = useState<boolean>(false)
+
+  // 動的インポートでThree.js関連を読み込み
+  useEffect(() => {
+    const loadThreeJS = async () => {
+      try {
+        console.log('[ThreeScene] Loading Three.js modules...')
+        const [fiberModule, dreiModule, scrollModule] = await Promise.all([
+          import('@react-three/fiber'),
+          import('@react-three/drei'),
+          import('./hooks/useScrollProgress'),
+        ])
+
+        setCanvas(() => fiberModule.Canvas)
+        setDrei({
+          OrbitControls: dreiModule.OrbitControls,
+          PerspectiveCamera: dreiModule.PerspectiveCamera
+        })
+        setUseScrollProgress(() => scrollModule.useScrollProgress)
+        
+        console.log('[ThreeScene] Three.js modules loaded successfully')
+        setSceneReady(true) // 即座にシーン準備完了にする
+        
+        // デバッグログ
+        setTimeout(() => {
+          console.log('[ThreeScene] Scene should be ready now')
+        }, 100)
+      } catch (error) {
+        console.error('[ThreeScene] Failed to load Three.js modules:', error)
+      }
+    }
+
+    loadThreeJS()
+  }, [])
+
+  // まだロード中の場合
+  if (!Canvas || !drei || !useScrollProgress) {
+    return (
+      <div
+        style={{
+          position: 'absolute',
+          top: '50%',
+          left: '50%',
+          transform: 'translate(-50%, -50%)',
+          color: '#333',
+          fontSize: '18px',
+          textAlign: 'center',
+          background: 'rgba(255, 255, 255, 0.9)',
+          padding: '20px',
+          borderRadius: '10px',
+        }}
+      >
+        <div>⏳ Loading Three.js modules...</div>
+        <div style={{ fontSize: '12px', marginTop: '5px', opacity: 0.7 }}>
+          Downloading React Three Fiber components
+        </div>
+      </div>
+    )
+  }
+
+  return <BasicThreeContent 
+    Canvas={Canvas} 
+    drei={drei} 
+    useScrollProgress={useScrollProgress}
+    sceneReady={sceneReady}
+  />
+}
+
+/**
+ * 基本的なThree.jsコンテンツ（画像なし版）
+ */
+interface BasicThreeContentProps {
+  Canvas: any
+  drei: any
+  useScrollProgress: any
+  sceneReady: boolean
+}
+
+const BasicThreeContent: React.FC<BasicThreeContentProps> = ({ 
+  Canvas, 
+  drei: { OrbitControls, PerspectiveCamera }, 
+  useScrollProgress,
+  sceneReady
+}) => {
+  const scrollProgress = useScrollProgress()
+
+  useEffect(() => {
+    if (DEBUG_CONFIG.logAnimationStates && scrollProgress) {
+      console.log('[BasicThreeContent] Scroll progress:', scrollProgress)
+    }
+  }, [scrollProgress])
+
+  const BasicScene: React.FC = () => (
+    <>
+      {/* カメラ設定 */}
+      <PerspectiveCamera
+        makeDefault
+        fov={SECTION_CONFIG.camera.fov}
+        near={SECTION_CONFIG.camera.near}
+        far={SECTION_CONFIG.camera.far}
+        position={[
+          SECTION_CONFIG.camera.position.x,
+          SECTION_CONFIG.camera.position.y,
+          SECTION_CONFIG.camera.position.z
+        ]}
+      />
+
+      {/* ライティング */}
+      {/* @ts-expect-error React Three Fiber JSX elements */}
+      <ambientLight intensity={0.6} />
+      {/* @ts-expect-error React Three Fiber JSX elements */}
+      <directionalLight position={[10, 10, 5]} intensity={1} />
+
+      {/* テスト用の基本オブジェクト */}
+      {sceneReady && (
+        <>
+          {/* テスト用の画像プレーン（簡易版） */}
+          {LAYERED_IMAGES.slice(0, 5).map((imageConfig, index) => (
+            <SimpleImagePlane
+              key={imageConfig.id}
+              imageConfig={imageConfig}
+              scrollProgress={scrollProgress}
+              index={index}
+            />
+          ))}
+
+          {/* テスト用の基本オブジェクト */}
+          {/* 中央のテストキューブ */}
+          {/* @ts-expect-error React Three Fiber JSX elements */}
+          <mesh position={[0, 0, 0]}>
+            {/* @ts-expect-error React Three Fiber JSX elements */}
+            <boxGeometry args={[1, 1, 1]} />
+            {/* @ts-expect-error React Three Fiber JSX elements */}
+            <meshStandardMaterial color="hotpink" opacity={0.5} transparent />
+          </mesh>
+
+          {/* スクロール進行度に応じて移動するキューブ */}
+          {scrollProgress && (
+            /* @ts-expect-error React Three Fiber JSX elements */
+            <mesh position={[scrollProgress.overall * 10 - 5, 2, 0]}>
+              {/* @ts-expect-error React Three Fiber JSX elements */}
+              <boxGeometry args={[1, 1, 1]} />
+              {/* @ts-expect-error React Three Fiber JSX elements */}
+              <meshStandardMaterial color="lime" />
+            </mesh>
+          )}
+
+          {/* 位置確認用のグリッド */}
+          {DEBUG_CONFIG.showBoundingBoxes && (
+            <>
+              {/* @ts-expect-error React Three Fiber JSX elements */}
+              <gridHelper args={[20, 20]} position={[0, -3, 0]} />
+              {/* @ts-expect-error React Three Fiber JSX elements */}
+              <axesHelper args={[5]} />
+            </>
+          )}
+        </>
+      )}
+
+      {/* OrbitControls（デバッグ時のみ） */}
+      {DEBUG_CONFIG.showBoundingBoxes && (
+        <OrbitControls 
+          enablePan={true}
+          enableZoom={true}
+          enableRotate={true}
+          maxDistance={50}
+          minDistance={5}
+        />
+      )}
+    </>
+  )
+
+  return (
+    <Canvas
+      style={{
+        width: '100%',
+        height: '100%',
+        background: 'transparent',
+      }}
+      dpr={[1, 2]}
+      frameloop="always"
+      linear={true}
+      flat={true}
+    >
+      <BasicScene />
+    </Canvas>
+  )
+}
+
+/**
+ * LayeredGalleryCanvas - メインコンポーネント（段階的復活版）
+ */
+export const LayeredGalleryCanvas: React.FC<LayeredGalleryCanvasProps> = ({
+  className = ''
+}) => {
+  const [isClient, setIsClient] = useState(false)
+  const [loadingStage, setLoadingStage] = useState<string>('initializing')
+  const [showThreeJS, setShowThreeJS] = useState(false)
+
+  // クライアントサイドでのみ表示
+  useEffect(() => {
+    setLoadingStage('setting-client')
+    setIsClient(true)
+    console.log('[LayeredGalleryCanvas] Component initialized')
+    
+    // 3秒後にThree.jsを有効化（段階的テスト）
+    setTimeout(() => {
+      setLoadingStage('enabling-threejs')
+      setShowThreeJS(true)
+      console.log('[LayeredGalleryCanvas] Three.js enabled')
+    }, 3000)
+  }, [])
+
+  if (!isClient) {
+    return (
+      <div
+        className={`layered-gallery-canvas ${className}`}
+        style={{
+          width: '100%',
+          height: '100%',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          background: 'rgba(0, 0, 255, 0.1)',
+          border: '2px solid blue',
+        }}
+      >
+        <div
+          style={{
+            color: '#333',
+            fontSize: '18px',
+            textAlign: 'center',
+            background: 'rgba(255, 255, 255, 0.9)',
+            padding: '20px',
+            borderRadius: '10px',
+          }}
+        >
+          <div>🔄 Server Side Rendering</div>
+          <div style={{ fontSize: '12px', marginTop: '5px', opacity: 0.7 }}>
+            Waiting for client hydration...
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  return (
+    <div 
+      className={`layered-gallery-canvas ${className}`}
+      style={{
+        width: '100%',
+        height: '100%',
+        minWidth: '100vw', // 最小幅を強制
+        minHeight: '100vh', // 最小高さを強制
+        background: showThreeJS ? 'rgba(0, 255, 255, 0.1)' : 'rgba(0, 255, 0, 0.1)',
+        border: showThreeJS ? '2px solid cyan' : '2px solid green',
+        position: 'absolute', // relativeからabsoluteに変更
+        top: 0,
+        left: 0,
+        boxSizing: 'border-box',
+      }}
+    >
+      {/* 段階的表示 */}
+      {!showThreeJS ? (
+        <div
+          style={{
+            position: 'absolute',
+            top: '50%',
+            left: '50%',
+            transform: 'translate(-50%, -50%)',
+            background: 'rgba(255, 255, 255, 0.9)',
+            padding: '20px',
+            borderRadius: '10px',
+            textAlign: 'center',
+            zIndex: 5,
+          }}
+        >
+          <div style={{ fontSize: '24px', marginBottom: '10px' }}>✅ Client Side Active</div>
+          <div style={{ fontSize: '14px', color: '#666' }}>
+            LayeredGalleryCanvas is working
+          </div>
+          <div style={{ fontSize: '12px', marginTop: '10px', opacity: 0.7 }}>
+            Loading Three.js in 3 seconds...
+          </div>
+        </div>
+      ) : null /* オーバーレイメッセージを削除 */}
+
+      {/* Three.jsコンポーネント（段階的有効化） */}
+      {showThreeJS && <ThreeScene />}
+
+      {/* デバッグ情報表示 */}
+      {DEBUG_CONFIG.showScrollRanges && (
+        <div
+          style={{
+            position: 'absolute',
+            bottom: '20px',
+            left: '20px',
+            background: 'rgba(0, 0, 0, 0.8)',
+            color: 'white',
+            padding: '10px',
+            borderRadius: '5px',
+            fontSize: '12px',
+            fontFamily: 'monospace',
+            maxWidth: '200px',
+          }}
+        >
+          <div>Canvas Debug Info:</div>
+          <div>Images: {LAYERED_IMAGES.length}</div>
+          <div>Stage: {loadingStage}</div>
+          <div>Client: {isClient ? 'Ready' : 'Loading'}</div>
+          <div>Three.js: {showThreeJS ? 'Active' : 'Waiting'}</div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+/**
+ * 簡易版画像プレーン（複雑なアニメーションなし）
+ */
+interface SimpleImagePlaneProps {
+  imageConfig: any
+  scrollProgress: any
+  index: number
+}
+
+const SimpleImagePlane: React.FC<SimpleImagePlaneProps> = ({
+  imageConfig,
+  scrollProgress,
+  index
+}) => {
+  const [texture, setTexture] = useState<any>(null)
+  const [textureError, setTextureError] = useState<boolean>(false)
+  const [loading, setLoading] = useState<boolean>(false)
+  const hasStartedLoading = useRef<boolean>(false) // refで読み込み状態を管理
+
+  // テクスチャの読み込み（一度だけ実行）
+  useEffect(() => {
+    // 既に開始している場合はスキップ
+    if (hasStartedLoading.current) return
+
+    hasStartedLoading.current = true // 即座にフラグを立てる
+    setLoading(true)
+
+    const loadTexture = async () => {
+      try {
+        const THREE = await import('three')
+        const loader = new THREE.TextureLoader()
+        
+        console.log(`[SimpleImagePlane] Loading: ${imageConfig.filename}`)
+        
+        loader.load(
+          imageConfig.path,
+          (loadedTexture) => {
+            console.log(`[SimpleImagePlane] Loaded successfully: ${imageConfig.filename}`)
+            setTexture(loadedTexture)
+            setTextureError(false)
+            setLoading(false)
+          },
+          undefined,
+          (error) => {
+            console.error(`[SimpleImagePlane] Failed to load: ${imageConfig.filename}`, error)
+            setTextureError(true)
+            setLoading(false)
+          }
+        )
+      } catch (error) {
+        console.error(`[SimpleImagePlane] Module load error:`, error)
+        setTextureError(true)
+        setLoading(false)
+      }
+    }
+
+    loadTexture()
+  }, []) // 空の依存配列で一度だけ実行
+
+  // 基本位置の計算
+  const baseX = (index - 2) * 3 // -6, -3, 0, 3, 6
+  const baseY = imageConfig.size === 'L' ? 2 : imageConfig.size === 'M' ? 0 : -2
+  const baseZ = imageConfig.size === 'L' ? 0 : imageConfig.size === 'M' ? -3 : -6
+
+  // スケール計算
+  const scale = imageConfig.size === 'L' ? 2 : imageConfig.size === 'M' ? 1.5 : 1
+
+  if (textureError) {
+    // エラー時は色付きプレーン表示
+    return (
+      /* @ts-expect-error React Three Fiber JSX elements */
+      <mesh position={[baseX, baseY, baseZ]}>
+        {/* @ts-expect-error React Three Fiber JSX elements */}
+        <planeGeometry args={[scale * 2, scale * 2]} />
+        {/* @ts-expect-error React Three Fiber JSX elements */}
+        <meshBasicMaterial 
+          color="red" 
+          opacity={0.7} 
+          transparent 
+          side={2} // DoubleSide
+        />
+      </mesh>
+    )
+  }
+
+  if (!texture || loading) {
+    // ローディング中はグレープレーン表示
+    return (
+      /* @ts-expect-error React Three Fiber JSX elements */
+      <mesh position={[baseX, baseY, baseZ]}>
+        {/* @ts-expect-error React Three Fiber JSX elements */}
+        <planeGeometry args={[scale * 2, scale * 2]} />
+        {/* @ts-expect-error React Three Fiber JSX elements */}
+        <meshBasicMaterial 
+          color="gray" 
+          opacity={0.5} 
+          transparent 
+          side={2} // DoubleSide
+        />
+      </mesh>
+    )
+  }
+
+  // 実際の画像テクスチャ表示
+  return (
+    /* @ts-expect-error React Three Fiber JSX elements */
+    <mesh position={[baseX, baseY, baseZ]}>
+      {/* @ts-expect-error React Three Fiber JSX elements */}
+      <planeGeometry args={[scale * 2, scale * 2]} />
+      {/* @ts-expect-error React Three Fiber JSX elements */}
+      <meshBasicMaterial 
+        map={texture}
+        transparent 
+        opacity={0.8}
+        side={2} // DoubleSide
+      />
+    </mesh>
+  )
+}
+
+export default LayeredGalleryCanvas-e 
+### FILE: ./src/app/components/layered-gallery/ImagePlane.tsx
+
+// src/app/components/layered-gallery/ImagePlane.tsx
+
+'use client'
+
+import React, { useRef, useMemo, useEffect, useState } from 'react'
+import { LayeredImageConfig, ScrollProgress } from './types'
+import { calculateFinalPosition } from './utils/positionCalculator'
+import { DEBUG_CONFIG, getCurrentConfig } from './constants'
+
+export interface ImagePlaneProps {
+	imageConfig: LayeredImageConfig
+	scrollProgress: ScrollProgress | null
+	index: number
+}
+
+/**
+ * 個別画像プレーンコンポーネント（クライアントサイドのみ）
+ */
+export const ImagePlane: React.FC<ImagePlaneProps> = ({
+	imageConfig,
+	scrollProgress,
+	index
+}) => {
+	const [modules, setModules] = useState<any>(null)
+	const meshRef = useRef<any>(null)
+	const materialRef = useRef<any>(null)
+
+	// Three.js関連モジュールの動的読み込み
+	useEffect(() => {
+		const loadModules = async () => {
+			try {
+				const [fiberModule, threeModule, animationModule] = await Promise.all([
+					import('@react-three/fiber'),
+					import('three'),
+					import('./hooks/useImageAnimation')
+				])
+
+				setModules({
+					useFrame: fiberModule.useFrame,
+					useLoader: fiberModule.useLoader,
+					TextureLoader: threeModule.TextureLoader,
+					THREE: threeModule.default,
+					useImageAnimation: animationModule.useImageAnimation
+				})
+			} catch (error) {
+				console.error('[ImagePlane] Failed to load modules:', error)
+			}
+		}
+
+		loadModules()
+	}, [])
+
+	// まだロード中の場合
+	if (!modules) {
+		return null // または簡単なプレースホルダー
+	}
+
+	return <ImagePlaneContent
+		imageConfig={imageConfig}
+		scrollProgress={scrollProgress}
+		index={index}
+		modules={modules}
+		meshRef={meshRef}
+		materialRef={materialRef}
+	/>
+}
+
+/**
+ * 実際の画像プレーンコンテンツ
+ */
+interface ImagePlaneContentProps {
+	imageConfig: LayeredImageConfig
+	scrollProgress: ScrollProgress | null
+	index: number
+	modules: any
+	meshRef: React.RefObject<any>
+	materialRef: React.RefObject<any>
+}
+
+const ImagePlaneContent: React.FC<ImagePlaneContentProps> = ({
+	imageConfig,
+	scrollProgress,
+	index,
+	modules,
+	meshRef,
+	materialRef
+}) => {
+	const { useFrame, useLoader, TextureLoader, THREE, useImageAnimation } = modules
+
+	// 画像アニメーション状態の管理
+	const animationState = useImageAnimation(imageConfig, scrollProgress)
+
+	// 設定の取得
+	const config = getCurrentConfig()
+
+	// テクスチャの読み込み
+	const texture = useLoader(TextureLoader, imageConfig.path)
+
+	// テクスチャ設定の最適化
+	useMemo(() => {
+		if (texture) {
+			texture.minFilter = THREE.LinearFilter
+			texture.magFilter = THREE.LinearFilter
+			texture.wrapS = THREE.ClampToEdgeWrapping
+			texture.wrapT = THREE.ClampToEdgeWrapping
+			texture.generateMipmaps = false
+
+			if (DEBUG_CONFIG.logAnimationStates) {
+				console.log(`[ImagePlane] Texture loaded for ${imageConfig.filename}:`, {
+					size: `${texture.image.width}x${texture.image.height}`,
+					format: texture.format,
+				})
+			}
+		}
+	}, [texture, imageConfig.filename, THREE])
+
+	// 基本位置の計算（一度だけ）
+	const basePosition = useMemo(() => {
+		return calculateFinalPosition(imageConfig, imageConfig.id + index)
+	}, [imageConfig, index])
+
+	// プレーンのサイズ計算
+	const planeSize = useMemo(() => {
+		if (!texture) return [2, 2]
+
+		const aspect = texture.image.width / texture.image.height
+		const baseScale = config.responsive.scaleMultiplier
+
+		// サイズに応じた基本スケール
+		let sizeMultiplier = 1
+		switch (imageConfig.size) {
+			case 'L':
+				sizeMultiplier = 1.2
+				break
+			case 'M':
+				sizeMultiplier = 1.0
+				break
+			case 'S':
+				sizeMultiplier = 0.8
+				break
+		}
+
+		const width = 3 * aspect * baseScale * sizeMultiplier
+		const height = 3 * baseScale * sizeMultiplier
+
+		return [width, height]
+	}, [texture, config.responsive.scaleMultiplier, imageConfig.size])
+
+	// フレーム更新でアニメーション適用
+	useFrame(() => {
+		if (!meshRef.current || !materialRef.current || !animationState) return
+
+		const mesh = meshRef.current
+		const material = materialRef.current
+
+		// 位置の更新
+		mesh.position.set(
+			animationState.position.x,
+			animationState.position.y,
+			animationState.position.z
+		)
+
+		// スケールの更新
+		mesh.scale.setScalar(animationState.scale)
+
+		// 透明度の更新
+		material.opacity = animationState.opacity
+
+		// 回転の更新
+		if (imageConfig.rotation) {
+			mesh.rotation.set(
+				animationState.rotation.x,
+				animationState.rotation.y,
+				animationState.rotation.z
+			)
+		}
+
+		// Z軸ソート用の更新
+		mesh.renderOrder = -animationState.position.z
+	})
+
+	// デバッグ情報の表示
+	useEffect(() => {
+		if (DEBUG_CONFIG.logAnimationStates && animationState?.isAnimating) {
+			console.log(`[ImagePlane] Animation state for ${imageConfig.filename}:`, {
+				position: animationState.position,
+				scale: animationState.scale,
+				opacity: animationState.opacity,
+				isVisible: animationState.isVisible,
+			})
+		}
+	}, [animationState, imageConfig.filename])
+
+	// エラーハンドリング
+	const handleTextureError = (error: Error) => {
+		console.error(`[ImagePlane] Failed to load texture for ${imageConfig.filename}:`, error)
+	}
+
+	// テクスチャがロードされていない場合のフォールバック
+	if (!texture) {
+		return (
+			/* @ts-expect-error React Three Fiber JSX elements */
+			<mesh
+				ref={meshRef}
+				position={[basePosition.x, basePosition.y, basePosition.z]}
+			>
+				{/* @ts-expect-error React Three Fiber JSX elements */}
+				<planeGeometry args={planeSize} />
+				{/* @ts-expect-error React Three Fiber JSX elements */}
+				<meshBasicMaterial
+					color={
+						imageConfig.size === 'L' ? '#ff6b6b' :
+							imageConfig.size === 'M' ? '#4ecdc4' : '#45b7d1'
+					}
+					opacity={0.3}
+					transparent
+				/>
+			</mesh>
+		)
+	}
+
+	return (
+		/* @ts-expect-error React Three Fiber JSX elements */
+		<group>
+			{/* メイン画像プレーン */}
+			{/* @ts-expect-error React Three Fiber JSX elements */}
+			<mesh
+				ref={meshRef}
+				position={[basePosition.x, basePosition.y, basePosition.z]}
+			>
+				{/* @ts-expect-error React Three Fiber JSX elements */}
+				<planeGeometry args={planeSize} />
+				{/* @ts-expect-error React Three Fiber JSX elements */}
+				<meshBasicMaterial
+					ref={materialRef}
+					map={texture}
+					transparent
+					opacity={0.7}
+					side={THREE.DoubleSide}
+					onError={handleTextureError}
+				/>
+			</mesh>
+
+			{/* デバッグ用境界ボックス */}
+			{DEBUG_CONFIG.showBoundingBoxes && (
+				/* @ts-expect-error React Three Fiber JSX elements */
+				<mesh position={[basePosition.x, basePosition.y, basePosition.z + 0.1]}>
+					{/* @ts-expect-error React Three Fiber JSX elements */}
+					<planeGeometry args={[planeSize[0] * 1.1, planeSize[1] * 1.1]} />
+					{/* @ts-expect-error React Three Fiber JSX elements */}
+					<meshBasicMaterial
+						color="yellow"
+						wireframe
+						opacity={0.5}
+						transparent
+					/>
+				</mesh>
+			)}
+
+			{/* デバッグ用ラベル */}
+			{DEBUG_CONFIG.showPositionLabels && (
+				/* @ts-expect-error React Three Fiber JSX elements */
+				<mesh position={[basePosition.x, basePosition.y + planeSize[1] * 0.6, basePosition.z + 0.1]}>
+					{/* @ts-expect-error React Three Fiber JSX elements */}
+					<planeGeometry args={[1.5, 0.3]} />
+					{/* @ts-expect-error React Three Fiber JSX elements */}
+					<meshBasicMaterial color="black" opacity={0.8} transparent />
+				</mesh>
+			)}
+
+			{/* スクロール範囲の可視化 */}
+			{DEBUG_CONFIG.showScrollRanges && animationState?.isVisible && (
+				/* @ts-expect-error React Three Fiber JSX elements */
+				<mesh position={[basePosition.x + planeSize[0] * 0.6, basePosition.y, basePosition.z + 0.1]}>
+					{/* @ts-expect-error React Three Fiber JSX elements */}
+					<planeGeometry args={[0.2, planeSize[1]]} />
+					{/* @ts-expect-error React Three Fiber JSX elements */}
+					<meshBasicMaterial
+						color={animationState.isAnimating ? "green" : "orange"}
+						opacity={0.6}
+						transparent
+					/>
+				</mesh>
+			)}
+		</group>
+	)
+}-e 
 ### FILE: ./src/app/components/layout/constants.ts
 
 // src/app/components/floating-images-fix/cyber-scroll-messages/constants.ts
@@ -5022,16 +9342,19 @@ const CyberScrollMessages: React.FC = () => {
 export default CyberScrollMessages;-e 
 ### FILE: ./src/app/components/floating-images-fix/FloatingImageFix.tsx
 
+// src/app/components/floating-images-fix/FloatingImageFix.tsx
+
 import { useRef, useState, useEffect } from 'react';
-import { useFrame,extend } from '@react-three/fiber';
+import { useFrame, extend } from '@react-three/fiber';
 import { useTexture } from '@react-three/drei';
 import type { ImageFile } from './constants';
-import * as THREE from 'three'; 
+import { VisibilityState } from '../../types/visibility';
+import * as THREE from 'three';
 
-extend({ 
-    Mesh: THREE.Mesh, 
-    PlaneGeometry: THREE.PlaneGeometry, 
-    MeshBasicMaterial: THREE.MeshBasicMaterial 
+extend({
+	Mesh: THREE.Mesh,
+	PlaneGeometry: THREE.PlaneGeometry,
+	MeshBasicMaterial: THREE.MeshBasicMaterial
 });
 
 interface FloatingImageFixProps {
@@ -5039,24 +9362,41 @@ interface FloatingImageFixProps {
 	position: [number, number, number];
 	scale: number;
 	rotationSpeed?: number;
+	isVisible: boolean;
+	visibilityState: VisibilityState;
+	globalIntersectionRatio: number;
 }
 
+/**
+ * 個別画像の可視性制御対応版
+ * 画面内の画像のみアニメーション実行
+ */
 const FloatingImageFix: React.FC<FloatingImageFixProps> = ({
 	image,
 	position,
 	scale,
 	rotationSpeed = 0.005,
+	isVisible,
+	visibilityState,
+	globalIntersectionRatio,
 }) => {
 	const meshRef = useRef<THREE.Mesh>(null);
 	const texture = useTexture(image.path);
 
+	// 個別画像の可視性状態
+	const [isInViewport, setIsInViewport] = useState(false);
+	const [shouldAnimate, setShouldAnimate] = useState(false);
+	const [opacity, setOpacity] = useState(1);
+
 	// 最新のrotationSpeedを参照するref
 	const speedRef = useRef(rotationSpeed);
+	const lastFrameTimeRef = useRef(0);
+
 	useEffect(() => {
 		speedRef.current = rotationSpeed;
 	}, [rotationSpeed]);
 
-	// アスペクト比（幅/高さ）
+	// アスペクト比の計算
 	const [aspect, setAspect] = useState(1);
 	useEffect(() => {
 		if (texture?.image) {
@@ -5064,14 +9404,137 @@ const FloatingImageFix: React.FC<FloatingImageFixProps> = ({
 		}
 	}, [texture]);
 
-	useFrame((_, delta) => {
-		if (meshRef.current) {
-			meshRef.current.rotation.z += (speedRef.current ?? 0.06) * delta;
+	// 画面内判定の計算
+	useEffect(() => {
+		if (!meshRef.current) return;
+
+		const mesh = meshRef.current;
+		const meshPosition = mesh.position;
+
+		// 簡易的な画面内判定（カメラ視野に基づく）
+		const frustumCheck = () => {
+			const camera = mesh.parent?.userData?.camera;
+			if (!camera) {
+				// フォールバック: Z位置に基づく簡易判定
+				const isInFrustum = Math.abs(meshPosition.x) < 10 &&
+					Math.abs(meshPosition.y) < 6 &&
+					meshPosition.z > -5 && meshPosition.z < 5;
+				return isInFrustum;
+			}
+
+			// より正確な視錐台判定（パフォーマンスを考慮して簡略化）
+			const distance = meshPosition.distanceTo(camera.position);
+			return distance < 15; // 15単位以内なら可視と判定
+		};
+
+		const inViewport = frustumCheck();
+		setIsInViewport(inViewport);
+	}, [position, globalIntersectionRatio]);
+
+	// アニメーション状態の決定
+	useEffect(() => {
+		let shouldStart = false;
+
+		switch (visibilityState) {
+			case 'hidden':
+				shouldStart = false;
+				setOpacity(0);
+				break;
+
+			case 'approaching':
+				shouldStart = isInViewport && globalIntersectionRatio > 0.05;
+				setOpacity(0.3);
+				break;
+
+			case 'partial':
+				shouldStart = isInViewport;
+				setOpacity(0.6 + (globalIntersectionRatio * 0.4));
+				break;
+
+			case 'visible':
+				shouldStart = true; // visible時は全画像をアニメーション
+				setOpacity(1);
+				break;
+		}
+
+		setShouldAnimate(shouldStart && isVisible);
+	}, [visibilityState, isInViewport, globalIntersectionRatio, isVisible]);
+
+	// パフォーマンス最適化されたuseFrame
+	useFrame((state, delta) => {
+		if (!meshRef.current || !shouldAnimate) return;
+
+		const now = state.clock.elapsedTime;
+
+		// フレームレート制限（60FPS以下に制限）
+		if (now - lastFrameTimeRef.current < 1 / 60) return;
+
+		lastFrameTimeRef.current = now;
+
+		// 回転アニメーション
+		meshRef.current.rotation.z += (speedRef.current ?? 0.06) * delta;
+
+		// 可視性状態に応じた追加エフェクト
+		if (visibilityState === 'visible' && globalIntersectionRatio > 0.8) {
+			// 完全可視時の微細な浮遊効果
+			const floatEffect = Math.sin(now * 0.5 + position[0]) * 0.02;
+			meshRef.current.position.y = position[1] + floatEffect;
 		}
 	});
 
+	// テクスチャの最適化
+	useEffect(() => {
+		if (texture) {
+			// テクスチャ設定の最適化
+			texture.generateMipmaps = false; // ミップマップ無効化でメモリ節約
+			texture.minFilter = THREE.LinearFilter;
+			texture.magFilter = THREE.LinearFilter;
+			texture.flipY = false; // 不要な反転処理を無効化
+
+			// 非可視時はテクスチャを一時的に解放
+			if (visibilityState === 'hidden') {
+				texture.needsUpdate = false;
+			} else {
+				texture.needsUpdate = true;
+			}
+		}
+	}, [texture, visibilityState]);
+
+	// メモリ管理: 長時間非表示の場合にテクスチャを解放
+	useEffect(() => {
+		if (visibilityState === 'hidden') {
+			const timeout = setTimeout(() => {
+				if (texture && meshRef.current) {
+					// テクスチャの一時的な解放
+					texture.dispose();
+				}
+			}, 5000); // 5秒後に解放
+
+			return () => clearTimeout(timeout);
+		}
+	}, [visibilityState, texture]);
+
+	// デバッグ情報（開発環境のみ）
+	useEffect(() => {
+		if (process.env.NODE_ENV === 'development' && image.id === 1) { // 最初の画像のみログ出力
+			console.debug('[FloatingImageFix] State update:', {
+				imageId: image.id,
+				visibilityState,
+				isInViewport,
+				shouldAnimate,
+				opacity,
+				globalIntersectionRatio: globalIntersectionRatio.toFixed(3),
+			});
+		}
+	}, [image.id, visibilityState, isInViewport, shouldAnimate, opacity, globalIntersectionRatio]);
+
 	const width = scale;
 	const height = scale / aspect;
+
+	// 非表示時は何もレンダリングしない - デバッグのため一時的に無効化
+	// if (visibilityState === 'hidden' || opacity === 0) {
+	//   return null;
+	// }
 
 	return (
 		// @ts-expect-error React Three Fiber JSX elements
@@ -5080,6 +9543,12 @@ const FloatingImageFix: React.FC<FloatingImageFixProps> = ({
 			position={position}
 			castShadow={false}
 			receiveShadow={false}
+			userData={{
+				imageId: image.id,
+				visibilityState,
+				shouldAnimate,
+				isInViewport
+			}}
 		>
 			{/* @ts-expect-error React Three Fiber JSX elements */}
 			<planeGeometry args={[width, height]} />
@@ -5087,21 +9556,22 @@ const FloatingImageFix: React.FC<FloatingImageFixProps> = ({
 			<meshBasicMaterial
 				map={texture}
 				transparent
-				opacity={0.6}
+				opacity={0.6} // 半透明に設定（60%の透明度）
 				toneMapped={false}
+				alphaTest={0.01} // 完全透明部分の描画スキップ
+				depthWrite={false} // 半透明なのでデプス書き込み無効
 			/>
 			{/* @ts-expect-error React Three Fiber JSX elements */}
 		</mesh>
 	);
 };
 
-export default FloatingImageFix;
--e 
+export default FloatingImageFix;-e 
 ### FILE: ./src/app/components/floating-images-fix/useResponsiveImages.ts
 
 // src/app/components/floating-images-fix/useResponsiveImages.ts
 
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
 import { ImageFile, ImageSize } from './constants';
 
 const CDN_URL = process.env.NEXT_PUBLIC_CLOUDFRONT_URL || "";
@@ -5151,35 +9621,49 @@ const baseImageData = [
 	{ id: 35, filename: '35L.webp', size: 'L' as ImageSize },
 ];
 
-// サイズに応じたスケール
+// サイズに応じたスケール（最適化済み）
 const DESKTOP_SCALE_MAP: Record<ImageSize, number> = {
-	L: 0.9,
-	M: 0.9,
-	S: 0.9,
+	L: 0.8, // 0.9 → 0.8に削減
+	M: 0.7, // 0.9 → 0.7に削減
+	S: 0.6, // 0.9 → 0.6に削減
 };
 
 const MOBILE_SCALE_MAP: Record<ImageSize, number> = {
-	L: 0.5,
-	M: 0.5,
-	S: 0.5,
+	L: 0.4, // 0.5 → 0.4に削減
+	M: 0.35, // 0.5 → 0.35に削減
+	S: 0.3, // 0.5 → 0.3に削減
 };
 
+/**
+ * パフォーマンス最適化された画像管理フック
+ */
 export const useResponsiveImages = () => {
 	const [isMobileView, setIsMobileView] = useState(false);
+	const [imageLoadingState, setImageLoadingState] = useState<'loading' | 'ready' | 'error'>('loading');
+	const [loadedImageCount, setLoadedImageCount] = useState(0);
 
-	// 初期化とリサイズイベントの監視
+	// 画面サイズの監視（デバウンス付き）
+	const checkScreenSize = useCallback(() => {
+		setIsMobileView(isMobile());
+	}, []);
+
 	useEffect(() => {
-		const checkScreenSize = () => {
-			setIsMobileView(isMobile());
-		};
-
 		// 初期チェック
 		checkScreenSize();
 
-		// リサイズイベントを監視
-		window.addEventListener('resize', checkScreenSize);
-		return () => window.removeEventListener('resize', checkScreenSize);
-	}, []);
+		// デバウンスされたリサイズハンドラー
+		let timeoutId: NodeJS.Timeout;
+		const debouncedResize = () => {
+			clearTimeout(timeoutId);
+			timeoutId = setTimeout(checkScreenSize, 250);
+		};
+
+		window.addEventListener('resize', debouncedResize);
+		return () => {
+			window.removeEventListener('resize', debouncedResize);
+			clearTimeout(timeoutId);
+		};
+	}, [checkScreenSize]);
 
 	// 画像データを生成（画面サイズに応じてパスを切り替え）
 	const imageFiles: ImageFile[] = useMemo(() => {
@@ -5191,15 +9675,114 @@ export const useResponsiveImages = () => {
 		}));
 	}, [isMobileView]);
 
-	// スケールマップを取得
+	// スケールマップを取得（最適化済み）
 	const scaleMap = useMemo(() => {
 		return isMobileView ? MOBILE_SCALE_MAP : DESKTOP_SCALE_MAP;
 	}, [isMobileView]);
 
+	// 画像の事前読み込み状態管理
+	useEffect(() => {
+		let loadCount = 0;
+		const totalImages = imageFiles.length;
+
+		setImageLoadingState('loading');
+		setLoadedImageCount(0);
+
+		// 画像の事前読み込み（パフォーマンス最適化のため段階的に実行）
+		const preloadImages = async () => {
+			const promises = imageFiles.map((imageFile, index) => {
+				return new Promise<void>((resolve) => {
+					const img = new Image();
+
+					img.onload = () => {
+						loadCount++;
+						setLoadedImageCount(loadCount);
+
+						if (process.env.NODE_ENV === 'development') {
+							console.debug(`[useResponsiveImages] Image loaded: ${imageFile.filename} (${loadCount}/${totalImages})`);
+						}
+
+						resolve();
+					};
+
+					img.onerror = () => {
+						console.warn(`[useResponsiveImages] Failed to load image: ${imageFile.filename}`);
+						loadCount++;
+						setLoadedImageCount(loadCount);
+						resolve();
+					};
+
+					// 段階的読み込み（最初の10枚を優先）
+					setTimeout(() => {
+						img.src = imageFile.path;
+					}, index < 10 ? 0 : index * 50);
+				});
+			});
+
+			try {
+				await Promise.all(promises);
+				setImageLoadingState('ready');
+
+				if (process.env.NODE_ENV === 'development') {
+					console.info('[useResponsiveImages] All images preloaded successfully');
+				}
+			} catch (error) {
+				console.error('[useResponsiveImages] Image preloading failed:', error);
+				setImageLoadingState('error');
+			}
+		};
+
+		preloadImages();
+	}, [imageFiles]);
+
+	// 優先度付き画像リスト（重要な画像を先頭に配置）
+	const prioritizedImageFiles = useMemo(() => {
+		const sorted = [...imageFiles];
+
+		// Lサイズを優先、次にM、最後にS
+		sorted.sort((a, b) => {
+			const sizeOrder = { L: 3, M: 2, S: 1 };
+			return sizeOrder[b.size] - sizeOrder[a.size];
+		});
+
+		return sorted;
+	}, [imageFiles]);
+
+	// パフォーマンス統計
+	const performanceStats = useMemo(() => ({
+		totalImages: imageFiles.length,
+		loadedImages: loadedImageCount,
+		loadingProgress: (loadedImageCount / imageFiles.length) * 100,
+		isReady: imageLoadingState === 'ready',
+		isMobile: isMobileView,
+		averageScale: Object.values(scaleMap).reduce((a, b) => a + b, 0) / Object.values(scaleMap).length,
+	}), [imageFiles.length, loadedImageCount, imageLoadingState, isMobileView, scaleMap]);
+
+	// メモリ使用量の推定
+	const estimatedMemoryUsage = useMemo(() => {
+		const averageImageSize = isMobileView ? 0.5 : 1.2; // MB per image (推定)
+		return loadedImageCount * averageImageSize;
+	}, [loadedImageCount, isMobileView]);
+
+	// デバッグ情報の出力
+	useEffect(() => {
+		if (process.env.NODE_ENV === 'development' && imageLoadingState === 'ready') {
+			console.info('[useResponsiveImages] Performance stats:', {
+				...performanceStats,
+				estimatedMemoryUsage: `${estimatedMemoryUsage.toFixed(1)}MB`,
+				scaleReduction: `${((1 - performanceStats.averageScale) * 100).toFixed(1)}%`,
+			});
+		}
+	}, [performanceStats, estimatedMemoryUsage, imageLoadingState]);
+
 	return {
-		imageFiles,
+		imageFiles: prioritizedImageFiles,
 		scaleMap,
-		isMobileView
+		isMobileView,
+		imageLoadingState,
+		loadedImageCount,
+		performanceStats,
+		estimatedMemoryUsage,
 	};
 };-e 
 ### FILE: ./src/app/components/floating-images-fix/FloatingImagesFixSection.tsx
@@ -5209,73 +9792,183 @@ export const useResponsiveImages = () => {
 'use client';
 
 import React from 'react';
+import { useVisibilityControl } from '../../hooks/useVisibilityControl';
+import { useCanvasControl } from '../../hooks/useCanvasControl';
 import FloatingImagesFixCanvas from './FloatingImagesFixCanvas';
 import CyberScrollMessages from './cyber-scroll-messages';
 
-// コンポーネント定義
+/**
+ * 可視性制御が統合されたFloatingImagesFixSection
+ * 35枚の画像による最も重い3D処理を最適化
+ */
 const FloatingImagesFixSection: React.FC = () => {
-	return (<>
-		<div className='w-full relative h-[50vh] bg-black' />
-		<section
-			className="w-screen h-[800vh] relative overflow-hidden bg-black floating-images-fix-section"
-			id="floating-images-fix-section"
-		>
-			<div className="w-screen h-full sticky top-0 left-0 pointer-events-none z-10">
-				<div className="absolute top-0 left-0 w-full h-[100vh] z-20
-						bg-gradient-to-b from-black via-black/40 to-black/0
-						pointer-events-none"
-				/>
-				<div
-					className="absolute inset-0 z-10 block sm:hidden bg-center bg-cover"
-					style={{
-						backgroundImage: `url(${process.env.NEXT_PUBLIC_CLOUDFRONT_URL}/pepe/garally_small2.webp)`
-					}}
-				/>
+  // 可視性制御を一時的に無効化してデバッグ
+  const elementRef = React.useRef<HTMLDivElement>(null);
+  
+  // 簡単なステート管理に変更
+  const [debugInfo, setDebugInfo] = React.useState({
+    state: 'visible',
+    ratio: 1.0,
+    frameloop: 'always'
+  });
 
-				<FloatingImagesFixCanvas />
+  // 可視性制御フックを一時的にコメントアウト
+  // const {
+  //   visibilityInfo,
+  //   canvasState,
+  //   elementRef,
+  //   controls
+  // } = useVisibilityControl('floating-images-section', 'floating-images', {
+  //   // FloatingImages専用の最適化設定
+  //   rootMargin: '400px', // 最も早い事前準備
+  //   threshold: [0, 0.1, 0.25, 0.5, 0.75, 1.0],
+  //   debounceMs: 25, // 細かい制御
+  //   memoryReleaseDelay: 3 * 60 * 1000, // 3分でメモリ解放
+  // });
 
-				<CyberScrollMessages />
-				<div className="absolute bottom-0 left-0 w-full h-[100vh] z-20
-						bg-gradient-to-b from-black/0 via-black/40 to-black
-						pointer-events-none"
-				/>
-			</div>
-		</section>
-		<div className='w-full relative h-[150vh] bg-black' />
-	</>);
+  // Canvas制御フックも一時的にコメントアウト
+  // const {
+  //   canvasState: canvasControlState,
+  //   setFrameloop,
+  //   startAnimation,
+  //   stopAnimation,
+  //   performanceStats
+  // } = useCanvasControl('floating-images-canvas', {
+  //   initialFrameloop: 'never',
+  //   enableFPSLimit: true,
+  //   targetFPS: 60,
+  //   enableMemoryMonitoring: true,
+  // });
+
+  // 状態に応じたレンダリング最適化 - デバッグのため一時的に常時表示
+  const shouldRenderCanvas = true;
+  const shouldRenderMessages = true; // メッセージを再有効化
+
+  return (
+    <>
+      <div className='w-full relative h-[50vh] bg-black' />
+      
+      <section
+        ref={elementRef}
+        className="w-screen h-[800vh] relative overflow-hidden bg-black floating-images-fix-section"
+        id="floating-images-fix-section"
+        data-visibility-state={debugInfo.state}
+        data-canvas-priority="5"
+      >
+        <div className="w-screen h-full sticky top-0 left-0 pointer-events-none z-10">
+          {/* グラデーションオーバーレイ - 常時表示 */}
+          <div className="absolute top-0 left-0 w-full h-[100vh] z-20
+                  bg-gradient-to-b from-black via-black/40 to-black/0
+                  pointer-events-none"
+          />
+          
+          {/* モバイル用背景画像 - 常時表示 */}
+          <div
+            className="absolute inset-0 z-10 block sm:hidden bg-center bg-cover"
+            style={{
+              backgroundImage: `url(${process.env.NEXT_PUBLIC_CLOUDFRONT_URL}/pepe/garally_small2.webp)`
+            }}
+          />
+
+          {/* 3D Canvas - Suspense で包む */}
+          {shouldRenderCanvas && (
+            <React.Suspense fallback={
+              <div className="absolute inset-0 flex items-center justify-center text-white">
+                <div className="text-center">
+                  <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-neonGreen mx-auto mb-4"></div>
+                  <div>Loading 3D Gallery...</div>
+                </div>
+              </div>
+            }>
+              <FloatingImagesFixCanvas
+                visibilityState="visible"
+                intersectionRatio={1.0}
+                canvasFrameloop="always"
+                isAnimating={true}
+                priority={5}
+              />
+            </React.Suspense>
+          )}
+
+          {/* サイバーメッセージ - 再有効化 */}
+          {shouldRenderMessages && <CyberScrollMessages />}
+          
+          {/* 下部グラデーション - 常時表示 */}
+          <div className="absolute bottom-0 left-0 w-full h-[100vh] z-20
+                  bg-gradient-to-b from-black/0 via-black/40 to-black
+                  pointer-events-none"
+          />
+        </div>
+
+        {/* デバッグ情報表示（開発環境のみ） - 一時的に簡略化 */}
+        {process.env.NODE_ENV === 'development' && (
+          <div className="fixed top-4 right-4 bg-black/80 text-green-400 p-4 rounded-lg font-mono text-xs z-50 max-w-xs">
+            <div className="text-white font-bold mb-2">FloatingImages Debug (Simplified)</div>
+            <div>State: <span className="text-yellow-400">{debugInfo.state}</span></div>
+            <div>Ratio: <span className="text-blue-400">{debugInfo.ratio}</span></div>
+            <div>Frameloop: <span className="text-green-400">{debugInfo.frameloop}</span></div>
+            <div className="mt-2 text-xs text-gray-400">
+              Canvas: {shouldRenderCanvas ? 'Active' : 'Hidden'}<br/>
+              Messages: {shouldRenderMessages ? 'Active' : 'Hidden'}
+            </div>
+          </div>
+        )}
+      </section>
+      
+      <div className='w-full relative h-[150vh] bg-black' />
+    </>
+  );
 };
 
-// 明示的にdefaultエクスポート
 export default FloatingImagesFixSection;-e 
 ### FILE: ./src/app/components/floating-images-fix/FloatingImagesFixCanvas.tsx
 
+// src/app/components/floating-images-fix/FloatingImagesFixCanvas.tsx
+
 'use client';
 
-import React, { useMemo } from 'react';
+import React, { useMemo, useRef, useEffect } from 'react';
 import { Canvas, useThree } from '@react-three/fiber';
 import FloatingImageFix from './FloatingImageFix';
-import { ImageSize,ImageFile } from './constants';
+import { ImageSize, ImageFile } from './constants';
 import { useResponsiveImages } from './useResponsiveImages';
+import { VisibilityState } from '../../types/visibility';
 
-const CANVAS_DEPTH = 3; // 奥行き全体の幅
-const PADDING_X = 0.2;  // 横方向パディング
-const PADDING_Y = 1.5;    // 縦方向パディング
+const CANVAS_DEPTH = 3;
+const PADDING_X = 0.2;
+const PADDING_Y = 1.5;
 
+// Z位置計算（サイズ別）
 const getZBySize = (size: ImageSize) => {
 	if (size === 'L') return CANVAS_DEPTH * 0.42 + Math.random();
 	if (size === 'M') return Math.random() * 2 - 1;
 	return -CANVAS_DEPTH * 0.42 + Math.random();
 };
 
+interface FloatingImagesFixCanvasProps {
+	visibilityState: VisibilityState;
+	intersectionRatio: number;
+	canvasFrameloop: 'always' | 'never' | 'demand';
+	isAnimating: boolean;
+	priority: number;
+}
+
+/**
+ * 可視性制御が統合された内部Canvas制御コンポーネント
+ */
 const FloatingImagesFixInner: React.FC<{
-	imageFiles: ImageFile[];  // any[] から ImageFile[] に変更
+	imageFiles: ImageFile[];
 	scaleMap: Record<ImageSize, number>;
-}> = ({ imageFiles, scaleMap }) => {
+	visibilityState: VisibilityState;
+	intersectionRatio: number;
+	isAnimating: boolean;
+}> = ({ imageFiles, scaleMap, visibilityState, intersectionRatio, isAnimating }) => {
 	const { viewport } = useThree();
 	const count = imageFiles.length;
 	const cols = Math.ceil(Math.sqrt(count));
 	const rows = Math.ceil(count / cols);
 
+	// 画像位置の計算（メモ化）
 	const positions = useMemo(() => {
 		const arr: [number, number, number][] = [];
 		const images = imageFiles.slice().reverse();
@@ -5285,7 +9978,6 @@ const FloatingImagesFixInner: React.FC<{
 			const row = Math.floor(i / cols);
 			const image = images[i];
 
-			// パディングX/Yをそれぞれ使用
 			const x =
 				((col + 0.5) / cols) * (viewport.width - PADDING_X * 2) +
 				PADDING_X -
@@ -5299,67 +9991,193 @@ const FloatingImagesFixInner: React.FC<{
 			arr.push([x, y, z]);
 		}
 		return arr;
-	}, [count, cols, rows, viewport.width, viewport.height]);
+	}, [count, cols, rows, viewport.width, viewport.height, imageFiles]);
 
-	const speeds = useMemo(
-		() => imageFiles.map(() => 0.03 + Math.random() * 0.05),
-		[]
-	);
+	// 回転速度（メモ化） - 可視性状態に応じて調整
+	const speeds = useMemo(() => {
+		const baseSpeed = 0.03;
+		let speedMultiplier = 1;
 
-	const images = useMemo(() => imageFiles.slice().reverse(), []);
+		switch (visibilityState) {
+			case 'hidden':
+				speedMultiplier = 0;
+				break;
+			case 'approaching':
+				speedMultiplier = 0.3;
+				break;
+			case 'partial':
+				speedMultiplier = 0.7;
+				break;
+			case 'visible':
+				speedMultiplier = 1.0;
+				break;
+		}
+
+		return imageFiles.map(() =>
+			(baseSpeed + Math.random() * 0.05) * speedMultiplier
+		);
+	}, [imageFiles.length, visibilityState]);
+
+	// 画像リスト（メモ化）
+	const images = useMemo(() => imageFiles.slice().reverse(), [imageFiles]);
+
+	// 可視範囲の計算（パフォーマンス最適化） - デバッグのため全画像表示
+	const visibleIndices = useMemo(() => {
+		// デバッグ用に全画像を表示
+		return Array.from({ length: images.length }, (_, i) => i);
+
+		// 本来の可視性制御（コメントアウト）
+		// switch (visibilityState) {
+		//   case 'hidden':
+		//     return [];
+		//   case 'approaching':
+		//     return Array.from({ length: Math.min(10, images.length) }, (_, i) => i);
+		//   case 'partial':
+		//     return Array.from({ length: Math.min(20, images.length) }, (_, i) => i);
+		//   case 'visible':
+		//     return Array.from({ length: images.length }, (_, i) => i);
+		//   default:
+		//     return [];
+		// }
+	}, [images.length]); // visibilityStateの依存関係を一時的に削除
+
+	// 開発環境でのパフォーマンス監視
+	useEffect(() => {
+		if (process.env.NODE_ENV === 'development') {
+			console.debug('[FloatingImagesFixInner] Render optimization:', {
+				totalImages: images.length,
+				visibleImages: visibleIndices.length,
+				visibilityState,
+				intersectionRatio: intersectionRatio.toFixed(3),
+				isAnimating,
+			});
+		}
+	}, [images.length, visibleIndices.length, visibilityState, intersectionRatio, isAnimating]);
 
 	return (
 		<>
-			{images.map((image, i) => (
-				<FloatingImageFix
-					key={image.id}
-					image={image}
-					position={positions[i]}
-					scale={scaleMap[image.size]}
-					rotationSpeed={speeds[i]}
-				/>
-			))}
+			{visibleIndices.map((i) => {
+				const image = images[i];
+				if (!image) return null;
+
+				return (
+					<FloatingImageFix
+						key={image.id}
+						image={image}
+						position={positions[i]}
+						scale={scaleMap[image.size]}
+						rotationSpeed={speeds[i]}
+						isVisible={true} // デバッグ用に強制的にtrue
+						visibilityState={visibilityState}
+						globalIntersectionRatio={intersectionRatio}
+					/>
+				);
+			})}
 		</>
 	);
 };
 
-const FloatingImagesFixCanvas: React.FC = () => {
+/**
+ * 可視性制御対応のFloatingImagesFixCanvas
+ */
+const FloatingImagesFixCanvas: React.FC<FloatingImagesFixCanvasProps> = ({
+	visibilityState,
+	intersectionRatio,
+	canvasFrameloop,
+	isAnimating,
+	priority
+}) => {
 	const { imageFiles, scaleMap } = useResponsiveImages();
+	const canvasRef = useRef<HTMLCanvasElement>(null);
+
+	// Canvas要素への参照設定とパフォーマンス監視
+	useEffect(() => {
+		if (canvasRef.current && process.env.NODE_ENV === 'development') {
+			const canvas = canvasRef.current;
+			console.debug('[FloatingImagesFixCanvas] Canvas initialized:', {
+				width: canvas.width,
+				height: canvas.height,
+				frameloop: canvasFrameloop,
+				visibilityState,
+				priority,
+			});
+		}
+	}, [canvasFrameloop, visibilityState, priority]);
+
+	// WebGLコンテキストの監視
+	useEffect(() => {
+		if (!canvasRef.current) return;
+
+		const canvas = canvasRef.current;
+
+		const handleContextLost = (event: Event) => {
+			event.preventDefault();
+			console.warn('[FloatingImagesFixCanvas] WebGL context lost');
+		};
+
+		const handleContextRestored = () => {
+			console.info('[FloatingImagesFixCanvas] WebGL context restored');
+		};
+
+		canvas.addEventListener('webglcontextlost', handleContextLost);
+		canvas.addEventListener('webglcontextrestored', handleContextRestored);
+
+		return () => {
+			canvas.removeEventListener('webglcontextlost', handleContextLost);
+			canvas.removeEventListener('webglcontextrestored', handleContextRestored);
+		};
+	}, []);
+
+	// パフォーマンス最適化: 非表示時は完全に非レンダリング
+	if (visibilityState === 'hidden') {
+		return null;
+	}
 
 	return (
 		<Canvas
+			ref={canvasRef}
 			className="w-full h-full hidden sm:block"
-			gl={{ antialias: false }}
-			dpr={1}
+			gl={{
+				antialias: false,
+				powerPreference: 'high-performance', // パフォーマンス優先
+				alpha: true,
+				premultipliedAlpha: true,
+				preserveDrawingBuffer: false, // メモリ節約
+			}}
+			dpr={Math.min(window.devicePixelRatio, 2)} // DPR制限でパフォーマンス向上
 			shadows={false}
-			frameloop="always"
+			frameloop={canvasFrameloop}
+			performance={{
+				min: 0.5, // 最小パフォーマンス閾値
+				max: 1.0,
+				debounce: 200, // デバウンス時間
+			}}
+			onCreated={(state) => {
+				// Canvas作成時の最適化設定
+				const { gl } = state;
+				gl.setClearColor(0x000000, 0); // 透明背景
+
+				if (process.env.NODE_ENV === 'development') {
+					console.info('[FloatingImagesFixCanvas] Canvas created with optimization:', {
+						renderer: gl.info.render,
+						memory: gl.info.memory,
+						maxTextures: gl.capabilities.maxTextures,
+					});
+				}
+			}}
 		>
-			<FloatingImagesFixInner imageFiles={imageFiles} scaleMap={scaleMap} />
+			<FloatingImagesFixInner
+				imageFiles={imageFiles}
+				scaleMap={scaleMap}
+				visibilityState={visibilityState}
+				intersectionRatio={intersectionRatio}
+				isAnimating={isAnimating}
+			/>
 		</Canvas>
 	);
 };
 
 export default FloatingImagesFixCanvas;-e 
-### FILE: ./src/app/components/floating-images-fix/TestThree.tsx
-
-import { Canvas } from '@react-three/fiber'
-
-export default function TestThree() {
-	return (
-		<div style={{ width: '100px', height: '100px' }}>
-			<Canvas>
-				{/* @ts-expect-error React Three Fiber JSX elements */}
-				<mesh>
-					{/* @ts-expect-error React Three Fiber JSX elements */}
-					<boxGeometry args={[1, 1, 1]} />
-					{/* @ts-expect-error React Three Fiber JSX elements */}
-					<meshBasicMaterial color="red" />
-					{/* @ts-expect-error React Three Fiber JSX elements */}
-				</mesh>
-			</Canvas>
-		</div>
-	)
-}-e 
 ### FILE: ./src/app/layout.tsx
 
 import { Montserrat, Space_Grotesk } from 'next/font/google';
@@ -5409,23 +10227,27 @@ import Header from './components/ui/Header';
 import Footer from './components/ui/Footer';
 import CyberInterface from './components/layout/CyberInterface';
 import PepePush from './components/pepePush/PepePush';
-
+import LayeredGallerySection from './components/layered-gallery/LayeredGallerySection'
 export default function Home() {
 	return (
-		<main className="relative flex flex-col items-center">
+		<main className="relative flex flex-col items-center w-full">
+			<LayeredGallerySection />
+		</main>
+	);
+}
+
+/*
 			<Header />
 			<HeroSection />
 			<CyberInterface />
 			<GlowingTextSection />
 			<PulsatingComponent />
 			<PepeTop />
-			<FloatingImagesFixSection />
 			<SphereTop />
 			<PepePush />
 			<Footer />
-		</main>
-	);
-}-e 
+
+*/-e 
 ### FILE: ./types/react-three-fiber.d.ts
 
 // types/react-three-fiber.d.ts
@@ -5550,7 +10372,7 @@ module.exports = {
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
-  transpilePackages: ['three', '@react-three/fiber', '@react-three/drei'], // この行を追
+  transpilePackages: ['three', '@react-three/fiber', '@react-three/drei'], // この行を追加
   images: {
     domains: [],
     formats: ["image/avif", "image/webp"],

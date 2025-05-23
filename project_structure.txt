@@ -28,7 +28,6 @@
 │       │   │   ├── FloatingImageFix.tsx
 │       │   │   ├── FloatingImagesFixCanvas.tsx
 │       │   │   ├── FloatingImagesFixSection.tsx
-│       │   │   ├── TestThree.tsx
 │       │   │   ├── constants.ts
 │       │   │   ├── cyber-scroll-messages
 │       │   │   │   ├── CyberScrollMessages.tsx
@@ -51,6 +50,19 @@
 │       │   │   ├── HeroSection.module.css
 │       │   │   ├── HeroSection.tsx
 │       │   │   └── HeroTitle.tsx
+│       │   ├── layered-gallery
+│       │   │   ├── ImagePlane.tsx
+│       │   │   ├── LayeredGalleryCanvas.tsx
+│       │   │   ├── LayeredGallerySection.tsx
+│       │   │   ├── constants.ts
+│       │   │   ├── hooks
+│       │   │   │   ├── useImageAnimation.ts
+│       │   │   │   └── useScrollProgress.ts
+│       │   │   ├── types
+│       │   │   │   └── index.ts
+│       │   │   └── utils
+│       │   │       ├── positionCalculator.ts
+│       │   │       └── zoomCalculator.ts
 │       │   ├── layout
 │       │   │   ├── CyberInterface.tsx
 │       │   │   ├── PulsatingComponent.tsx
@@ -104,13 +116,23 @@
 │       │       ├── GlitchText.tsx
 │       │       ├── Header.tsx
 │       │       └── ScanlineEffect.module.css
+│       ├── config
+│       │   └── visibilityConfig.ts
 │       ├── favicon.ico
 │       ├── globals.css
+│       ├── hooks
+│       │   ├── useCanvasControl.ts
+│       │   ├── useIntersectionObserver.ts
+│       │   └── useVisibilityControl.ts
 │       ├── layout.tsx
-│       └── page.tsx
+│       ├── page.tsx
+│       ├── types
+│       │   └── visibility.ts
+│       └── utils
+│           └── visibilityManager.ts
 ├── tailwind.config.js
 ├── tsconfig.json
 └── types
     └── react-three-fiber.d.ts
 
-25 directories, 88 files
+33 directories, 102 files

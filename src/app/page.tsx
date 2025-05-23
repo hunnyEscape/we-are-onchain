@@ -8,20 +8,24 @@ import Header from './components/ui/Header';
 import Footer from './components/ui/Footer';
 import CyberInterface from './components/layout/CyberInterface';
 import PepePush from './components/pepePush/PepePush';
-
+import LayeredGallerySection from './components/layered-gallery/LayeredGallerySection'
 export default function Home() {
 	return (
-		<main className="relative flex flex-col items-center">
+		<main className="relative flex flex-col items-center w-full">
+			<LayeredGallerySection />
+		</main>
+	);
+}
+
+/*
 			<Header />
 			<HeroSection />
 			<CyberInterface />
 			<GlowingTextSection />
 			<PulsatingComponent />
 			<PepeTop />
-			<FloatingImagesFixSection />
 			<SphereTop />
 			<PepePush />
 			<Footer />
-		</main>
-	);
-}
+
+*/

@@ -15,7 +15,7 @@ export default function StickyCanvas({ children, className = '' }: StickyCanvasP
 					alpha: true,
 					powerPreference: "high-performance"
 				}}
-				dpr={Math.min(window.devicePixelRatio, 2)} // パフォーマンス最適化
+				dpr={typeof window !== 'undefined' ? Math.min(window.devicePixelRatio, 2) : 1} // SSR対応
 				shadows={false}
 				frameloop="always"
 				camera={{

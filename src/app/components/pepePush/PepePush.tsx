@@ -9,23 +9,7 @@ import { PepePushProps } from './types';
 export default function PepePush({ className = '' }: PepePushProps) {
 	return (
 		<section className={`relative w-full ${className}`}>
-			{/* メインのスクロール制御セクション */}
 			<ScrollController className="bg-black" />
-
-			{/* セクションの最後に追加コンテンツがある場合はここに配置 */}
-			<div className="relative w-full h-screen bg-gradient-to-b from-black to-gray-900 z-20">
-				<div className="absolute inset-0 flex items-center justify-center">
-					<div className="text-center text-white">
-						<h2 className="text-4xl font-bold mb-4">
-							Pepe Push Section Complete
-						</h2>
-						<p className="text-gray-300 max-w-md mx-auto">
-							The scroll-controlled 3D animation sequence has ended.
-							Continue scrolling to explore more content.
-						</p>
-					</div>
-				</div>
-			</div>
 		</section>
 	);
 }

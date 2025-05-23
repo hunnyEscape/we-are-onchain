@@ -4,8 +4,8 @@ import { ControlPoint } from '../types';
 export const controlPoints: ControlPoint[] = [
   {
     scrollProgress: 0,
-    position: [-3, -1, 0],
-    rotation: [0, -Math.PI / 4, 0],
+    position: [0, -1, 0],
+    rotation: [Math.PI / 4, -Math.PI / 12, 0],
     scale: [1, 1, 1]
   },
   {
@@ -22,13 +22,13 @@ export const controlPoints: ControlPoint[] = [
   },
   {
     scrollProgress: 0.75,
-    position: [0, -0.5, 2],
+    position: [0, -1, 2],
     rotation: [0, Math.PI, 0],
     scale: [0.8, 0.8, 0.8]
   },
   {
     scrollProgress: 1,
-    position: [-2, 0.5, 0],
+    position: [0,-1,0],
     rotation: [0, -Math.PI / 2, 0],
     scale: [1, 1, 1]
   }

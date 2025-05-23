@@ -25,8 +25,9 @@ export default function StickyCanvas({ children, className = '' }: StickyCanvasP
 					far: 1000
 				}}
 			>
-				{/* 基本的なライティング */}
+				{/* @ts-expect-error React Three Fiber JSX elements */}
 				<ambientLight intensity={0.3} />
+				{/* @ts-expect-error React Three Fiber JSX elements */}
 				<directionalLight
 					position={[5, 10, 7]}
 					intensity={1}

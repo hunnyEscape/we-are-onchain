@@ -28,8 +28,50 @@ export default function PepeModel3D({
 		scale: [1, 1, 1]
 	});
 
-	// アニメーション初期化
+	// マテリアルとアニメーション初期化
 	useEffect(() => {
+		// 色管理を有効化
+		THREE.ColorManagement.enabled = true;
+
+		// 重ねられた2つのテキストオブジェクトの発光マテリアル設定
+		scene.traverse((child) => {
+			if (child instanceof THREE.Mesh && child.material) {
+				const materials = Array.isArray(child.material) ? child.material : [child.material];
+
+				materials.forEach((material) => {
+					if (material instanceof THREE.MeshStandardMaterial) {
+						// Text.001 (緑色発光)
+						if (child.name === 'Text.001') {
+							material.emissive = new THREE.Color(0x00ff00); // 緑色
+							material.emissiveIntensity = 3.0;
+							material.toneMapped = false; // 重要：色変換を防止
+							// 少し前に配置
+							child.position.z += 0.01;
+							console.log('Applied green emissive to Text.001');
+						}
+
+						// Text.004 (オレンジ色発光)
+						else if (child.name === 'Text.004') {
+							material.emissive = new THREE.Color(0xff4500); // オレンジ色
+							material.emissiveIntensity = 3.0;
+							material.toneMapped = false; // 重要：色変換を防止
+							// 少し後ろに配置
+							child.position.z -= 0.01;
+							console.log('Applied orange emissive to Text.004');
+						}
+
+						// その他のオブジェクトは既存のマテリアル設定を保持
+						else if (material.emissive && !material.emissive.equals(new THREE.Color(0x000000))) {
+							material.toneMapped = false; // 他の発光オブジェクトも色変換を防止
+							if (material.emissiveIntensity === undefined || material.emissiveIntensity === 0) {
+								material.emissiveIntensity = 1;
+							}
+						}
+					}
+				});
+			}
+		});
+
 		// 既存のアニメーションを停止
 		Object.values(actions).forEach((action) => action?.stop());
 
@@ -45,7 +87,7 @@ export default function PepeModel3D({
 		if (bodyKey && actions[bodyKey]) {
 			actions[bodyKey].reset().fadeIn(0.3).play();
 		}
-	}, [actions]);
+	}, [actions, scene]);
 
 	// フレームごとの更新
 	useFrame((_, delta) => {
@@ -82,9 +124,13 @@ export default function PepeModel3D({
 		}
 	});
 
+	// glTFファイルのマテリアルをそのまま適用
 	return (
+		// @ts-expect-error React Three Fiber JSX elements
 		<group ref={groupRef}>
+			{/* @ts-expect-error React Three Fiber JSX elements */}
 			<primitive object={scene} />
+			{/* @ts-expect-error React Three Fiber JSX elements */}
 		</group>
 	);
 }

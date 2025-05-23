@@ -1,4 +1,5 @@
 // src/app/components/hero-section/HeroBackground.tsx
+
 import React from 'react';
 import styles from './HeroSection.module.css';
 import { GlitchState } from './GlitchEffects';
@@ -20,7 +21,8 @@ export const HeroBackground: React.FC<HeroBackgroundProps> = ({
 		<>
 			{/* 背景画像 - グリッチ効果に対応 */}
 			<div
-				className={`${styles.backgroundImage} ${glitchState.active ? styles.glitchActive : ''}`}
+				className={`${styles.backgroundImage} ${glitchState.active ? styles.glitchActive : ''
+					}`}
 				style={{
 					backgroundImage: `url('${process.env.NEXT_PUBLIC_CLOUDFRONT_URL}/pepe/pepe-cyberpunk.webp')`,
 					...(!glitchState.active
@@ -29,10 +31,11 @@ export const HeroBackground: React.FC<HeroBackgroundProps> = ({
 							transform: backgroundTransform,
 							transition: 'transform 2s ease-out',
 						}
-						: getGlitchStyle(backgroundTransform)
-					)
+						: getGlitchStyle(backgroundTransform))
 				}}
 			/>
+
+			{/* ライトとオーバーレイは常時レンダリング */}
 			<div
 				className={styles.darkOverlay}
 				style={{
@@ -41,7 +44,6 @@ export const HeroBackground: React.FC<HeroBackgroundProps> = ({
 				}}
 			/>
 
-			{/* 中心部に光の効果 - マウスとは逆方向に少し動く */}
 			<div
 				className={styles.centerLight}
 				style={{
@@ -50,55 +52,60 @@ export const HeroBackground: React.FC<HeroBackgroundProps> = ({
 				}}
 			/>
 
-			{/* グリッチに対応するノイズレイヤー */}
-			<div className={`${styles.mainNoise} ${glitchState.active ? styles.noiseIntense : ''}`} />
+			{/* 重いエフェクト: モバイルでは非表示 */}
+			<div className="hidden sm:block">
+				{/* メインノイズ */}
+				<div className={`${styles.mainNoise} ${glitchState.active ? styles.noiseIntense : ''
+					}`} />
 
-			{/* 格子状ノイズ - 少し動く */}
-			<div
-				className={styles.gridNoise}
-				style={{
-					backgroundImage: `url('${process.env.NEXT_PUBLIC_CLOUDFRONT_URL}/noisy_grid.webp')`,
-					transform: midLayerTransform,
-					transition: 'transform 1.5s ease-out',
-				}}
-			/>
-
-			{/* 動くノイズ */}
-			<div className={styles.movingNoise} />
-
-			{/* RGB分離効果 - グリッチ状態に対応 */}
-			<div className={`${styles.rgbSplit} ${glitchState.active && glitchState.type.includes('rgb') ? styles.rgbActive : ''}`} />
-
-			{/* グリッチブロックエフェクト */}
-			{glitchState.active && glitchState.intensity > 2 && (
+				{/* 格子状ノイズ */}
 				<div
-					className={styles.glitchBlocks}
+					className={styles.gridNoise}
 					style={{
-						backgroundImage: `url(''${process.env.NEXT_PUBLIC_CLOUDFRONT_URL}/pepe/pepe-cyberpunk.webp')`,
-						opacity: 0.4 + (glitchState.intensity * 0.05),
+						backgroundImage: `url('${process.env.NEXT_PUBLIC_CLOUDFRONT_URL}/noisy_grid.webp')`,
+						transform: midLayerTransform,
+						transition: 'transform 1.5s ease-out',
 					}}
 				/>
-			)}
 
-			{/* RGBスライス効果 - 強いグリッチ時のみ */}
-			{glitchState.active && glitchState.type.includes('rgb') && glitchState.intensity > 2 && (
-				<>
+				{/* 動くノイズ */}
+				<div className={styles.movingNoise} />
+
+				{/* RGB分離効果 */}
+				<div className={`${styles.rgbSplit} ${glitchState.active && glitchState.type.includes('rgb') ? styles.rgbActive : ''
+					}`} />
+
+				{/* グリッチブロックエフェクト */}
+				{glitchState.active && glitchState.intensity > 2 && (
 					<div
-						className={styles.rgbSliceRed}
+						className={styles.glitchBlocks}
 						style={{
 							backgroundImage: `url('${process.env.NEXT_PUBLIC_CLOUDFRONT_URL}/pepe/pepe-cyberpunk.webp')`,
-							transform: `translateX(${glitchState.intensity * 1.5}px)`,
+							opacity: 0.4 + glitchState.intensity * 0.05,
 						}}
 					/>
-					<div
-						className={styles.rgbSliceBlue}
-						style={{
-							backgroundImage: `url('${process.env.NEXT_PUBLIC_CLOUDFRONT_URL}/pepe/pepe-cyberpunk.webp')`,
-							transform: `translateX(-${glitchState.intensity * 1.5}px)`,
-						}}
-					/>
-				</>
-			)}
+				)}
+
+				{/* RGBスライス効果 */}
+				{glitchState.active && glitchState.type.includes('rgb') && glitchState.intensity > 2 && (
+					<>
+						<div
+							className={styles.rgbSliceRed}
+							style={{
+								backgroundImage: `url('${process.env.NEXT_PUBLIC_CLOUDFRONT_URL}/pepe/pepe-cyberpunk.webp')`,
+								transform: `translateX(${glitchState.intensity * 1.5}px)`,
+							}}
+						/>
+						<div
+							className={styles.rgbSliceBlue}
+							style={{
+								backgroundImage: `url('${process.env.NEXT_PUBLIC_CLOUDFRONT_URL}/pepe/pepe-cyberpunk.webp')`,
+								transform: `translateX(-${glitchState.intensity * 1.5}px)`,
+							}}
+						/>
+					</>
+				)}
+			</div>
 		</>
 	);
 };

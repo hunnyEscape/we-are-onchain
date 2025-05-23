@@ -7,16 +7,8 @@ import FloatingImagesFixSection from './components/floating-images-fix/FloatingI
 import Header from './components/ui/Header';
 import Footer from './components/ui/Footer';
 import CyberInterface from './components/layout/CyberInterface';
-import ScanlineEffect from './components/layout/ScanlineEffect';
 import PepePush from './components/pepePush/PepePush';
-/*
-		
-			<Header/>
-			<HeroSection/>
 
-
-
-*/
 export default function Home() {
 	return (
 		<main className="relative flex flex-col items-center">
@@ -28,9 +20,7 @@ export default function Home() {
 			<PepeTop />
 			<FloatingImagesFixSection />
 			<SphereTop />
-			<div className='w-full relative h-[100vh] bg-black z-10'>
-				<PepePush />
-			</div>
+			<PepePush />
 			<Footer />
 		</main>
 	);

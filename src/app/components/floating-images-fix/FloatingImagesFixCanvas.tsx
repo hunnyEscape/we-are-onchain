@@ -72,10 +72,11 @@ const FloatingImagesFixInner: React.FC = () => {
 const FloatingImagesFixCanvas: React.FC = () => {
 	return (
 		<Canvas
-			camera={{ position: [0, 0, 32], fov: 40 }}
-			style={{ width: '100%', height: '100%' }}
-			gl={{ antialias: true, alpha: false }}
-			dpr={[1, 2]}
+			className="w-full h-full"
+			gl={{ antialias: false }}
+			dpr={1}
+			shadows={false}
+			frameloop="always"
 		>
 
 			<FloatingImagesFixInner />

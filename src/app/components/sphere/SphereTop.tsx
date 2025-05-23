@@ -12,7 +12,7 @@ const SphereTop: React.FC = () => {
 	};
 
 	return (
-		<div className="w-full relative h-[300vh] md:h-[500vh]">
+		<div className="w-full relative h-[300vh] md:h-[500vh] hidden sm:block">
 			{/* グラデーションオーバーレイ */}
 			<div
 				className="absolute inset-0 z-10 pointer-events-none"

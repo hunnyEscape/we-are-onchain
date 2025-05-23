@@ -15,7 +15,7 @@ interface PepeModel3DProps {
 
 export default function PepeModel3D({
 	transform,
-	url = '/models/push-up-pepe.glb'
+	url = `${process.env.NEXT_PUBLIC_CLOUDFRONT_URL}/pepe/push-up-pepe.glb`
 }: PepeModel3DProps) {
 	const { scene, animations } = useGLTF(url);
 	const { actions, mixer } = useAnimations(animations, scene);
@@ -136,4 +136,4 @@ export default function PepeModel3D({
 }
 
 // モデルのプリロード
-useGLTF.preload('/models/push-up-pepe.glb');
+useGLTF.preload(`${process.env.NEXT_PUBLIC_CLOUDFRONT_URL}/pepe/push-up-pepe.glb`);

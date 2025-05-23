@@ -14,18 +14,17 @@ import ScanlineEffect from './components/layout/ScanlineEffect';
 			<HeroSection/>
 
 
-<FloatingImagesFixSection/>
 
 */
 export default function Home() {
 	return (
 		<main className="relative flex flex-col items-center">
-			<Header/>
+			<Header />
 			<CyberInterface />
 			<GlowingTextSection />
 			<PulsatingComponent />
 			<PepeTop />
-
+			<FloatingImagesFixSection />
 			<SphereTop />
 			<div className='w-full relative h-[100vh] bg-black z-10' />
 			<Footer />

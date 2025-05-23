@@ -77,7 +77,7 @@ const FloatingImagesFixCanvas: React.FC = () => {
 
 	return (
 		<Canvas
-			className="w-full h-full"
+			className="w-full h-full hidden sm:block"
 			gl={{ antialias: false }}
 			dpr={1}
 			shadows={false}

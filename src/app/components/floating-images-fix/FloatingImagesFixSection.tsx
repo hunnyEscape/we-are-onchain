@@ -9,8 +9,8 @@ import CyberScrollMessages from './cyber-scroll-messages';
 // コンポーネント定義
 const FloatingImagesFixSection: React.FC = () => {
 	return (<>
-		<div className='w-full relative h-[150vh] bg-black'/>
-		<section 
+		<div className='w-full relative h-[150vh] bg-black' />
+		<section
 			className="w-screen h-[800vh] relative overflow-hidden bg-black floating-images-fix-section"
 			id="floating-images-fix-section"
 		>
@@ -19,7 +19,13 @@ const FloatingImagesFixSection: React.FC = () => {
 						bg-gradient-to-b from-black via-black/40 to-black/0
 						pointer-events-none"
 				/>
+				<div
+					className="absolute inset-0 z-10 block sm:hidden bg-center bg-cover"
+					style={{ backgroundImage: "url('/images/garally_small.png')" }}
+				/>
+
 				<FloatingImagesFixCanvas />
+
 				<CyberScrollMessages />
 				<div className="absolute bottom-0 left-0 w-full h-[100vh] z-20
 						bg-gradient-to-b from-black/0 via-black/40 to-black

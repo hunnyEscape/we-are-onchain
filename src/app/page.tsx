@@ -14,9 +14,8 @@ import ScanlineEffect from './components/layout/ScanlineEffect';
 			<HeroSection/>
 
 
+<FloatingImagesFixSection/>
 
-
-			<SphereTop />
 			<div className='w-full relative h-[100vh] bg-black z-10' />
 			<Footer />
 */
@@ -26,7 +25,7 @@ export default function Home() {
 			<GlowingTextSection/>
 			<PulsatingComponent/>
 			<PepeTop/>
-			<FloatingImagesFixSection/>
+			
 			<SphereTop />
 		</main>
 	);

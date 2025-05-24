@@ -4,7 +4,6 @@ import React, { useRef, useEffect, useState, useMemo, useCallback } from 'react'
 import { LAYERED_IMAGES } from './constants'
 import { calculateAllPositions, getViewportInfo, getResponsiveGridConfig } from './utils/positionCalculator'
 import { useFrame, useThree } from '@react-three/fiber'
-
 export interface LayeredGalleryCanvasProps {
 	className?: string
 }
@@ -142,12 +141,13 @@ const GalleryContent: React.FC<GalleryContentProps> = ({
 			// 視差効果の適用
 			const parallaxMultiplier = 1 - (imageConfig.parallax?.speed || 0.5)
 			const parallaxOffsetY = scrollOffsetY * parallaxMultiplier
-
+			const verticalSpreadFactor = viewport.isMobile ? 1.2 : viewport.isTablet ? 1.5 : 2
+			
 			return {
 				id: imageConfig.id,
 				position: [
 					basePosition.x,
-					basePosition.y + parallaxOffsetY,
+					basePosition.y * verticalSpreadFactor + parallaxOffsetY,
 					basePosition.z
 				] as [number, number, number],
 				config: imageConfig,
@@ -168,8 +168,8 @@ const GalleryContent: React.FC<GalleryContentProps> = ({
 
 	// カメラ設定（レスポンシブ対応）
 	const cameraConfig = useMemo(() => {
-		const fov = viewport.isMobile ? 70 : viewport.isTablet ? 65 : 100
-		const position: [number, number, number] = [0, 30, viewport.isMobile ? 12 : viewport.isTablet ? 14 : 15]
+		const fov = 1000
+		const position: [number, number, number] = [0, 50, 0]
 
 		return { fov, position }
 	}, [viewport])
@@ -188,8 +188,6 @@ const GalleryContent: React.FC<GalleryContentProps> = ({
 				baseY={cameraConfig.position[1]}
 				offsetDown={viewport.isMobile ? 8 : 100}
 			/>
-
-			{/* 35枚の画像（レスポンシブ配置） */}
 			{sceneReady && imagePositions.map((item) => (
 				<ImagePlane
 					key={`gallery-image-${item.id}`}
@@ -200,18 +198,6 @@ const GalleryContent: React.FC<GalleryContentProps> = ({
 					viewport={viewport}
 				/>
 			))}
-
-			{/* スクロール進行度表示キューブ（レスポンシブサイズ） */}
-			{scrollProgress && (
-				<mesh position={[0, 8, 0]}>
-					<boxGeometry args={[
-						scrollProgress.overall * (viewport.isMobile ? 6 : 10),
-						0.3,
-						0.3
-					]} />
-					<meshBasicMaterial color="yellow" />
-				</mesh>
-			)}
 		</Canvas>
 	)
 }
@@ -247,28 +233,6 @@ const ImagePlane: React.FC<ImagePlaneProps> = ({
 		}
 	}, [])
 
-	// 画像サイズに応じたスケール（レスポンシブ対応）
-	const scale = useMemo(() => {
-		// ベーススケール（ビューポート対応）
-		let baseScale = imageConfig.size === 'L' ? 4.0 :
-			imageConfig.size === 'M' ? 3 : 2
-
-		// ビューポートに応じた調整
-		if (viewport.isMobile) {
-			baseScale *= 0.7
-		} else if (viewport.isTablet) {
-			baseScale *= 0.85
-		}
-
-		// スクロールに応じた微細な変化
-		let scrollScale = 1
-		if (scrollProgress) {
-			const phase = (index * 0.1 + scrollProgress.overall) * Math.PI * 2
-			scrollScale = 1 + Math.sin(phase) * (viewport.isMobile ? 0.03 : 0.05)
-		}
-
-		return baseScale * scrollScale
-	}, [imageConfig.size, scrollProgress, index, viewport])
 
 	// テクスチャ読み込み（段階的読み込み・エラーハンドリング強化）
 	useEffect(() => {
@@ -324,52 +288,23 @@ const ImagePlane: React.FC<ImagePlaneProps> = ({
 		loadTexture()
 	}, [imageConfig.path, imageConfig.filename, index, viewport.isMobile])
 
+	const scale = 4;
 	// エラー時の表示
-	if (error) {
-		return (
-			<mesh position={position} scale={[scale, scale, scale]}>
-				<planeGeometry args={[2, 3]} />
-				<meshBasicMaterial
-					color="#ff4757"
-					opacity={0.7}
-					transparent
-					side={2}
-				/>
-			</mesh>
-		)
-	}
-
-	// ローディング中の表示（ビューポート対応色）
-	if (loading || !texture) {
-		const colors = {
-			L: viewport.isMobile ? '#5352ed' : '#3742fa', // モバイルで少し明るく
-			M: viewport.isMobile ? '#26de81' : '#2ed573', // 緑
-			S: viewport.isMobile ? '#fd9644' : '#ffa502'  // オレンジ
-		}
-
-		return (
-			<mesh position={position} scale={[scale, scale, scale]}>
-				<planeGeometry args={[2, 3]} />
-				<meshBasicMaterial
-					color={colors[imageConfig.size]}
-					opacity={0.7}
-					transparent
-					side={2}
-				/>
-			</mesh>
-		)
-	}
 
 	// 実際の画像表示（レスポンシブ透明度対応）
 	return (
+		//@ts-expect-error React Three Fiber JSX elements
 		<mesh position={position} scale={[scale, scale, scale]}>
+			{/* @ts-expect-error React Three Fiber JSX elements */}
 			<planeGeometry args={[2, 3]} />
+			{/* @ts-expect-error React Three Fiber JSX elements */}
 			<meshBasicMaterial
 				map={texture}
 				transparent
-				opacity={0.7}
+				opacity={0.4}
 				side={2}
 			/>
+			{/* @ts-expect-error React Three Fiber JSX elements */}
 		</mesh>
 	)
 }

@@ -129,7 +129,6 @@ export const LayeredGallerySection: React.FC<LayeredGallerySectionProps> = ({
 	const sectionRef = useRef<HTMLElement>(null)
 	const [isClient, setIsClient] = useState(false)
 	const viewport = useResponsiveViewport()
-	const sectionScrollProgress = useSectionScrollProgress(sectionRef)
 
 	// クライアントサイドでのみ実行
 	useEffect(() => {
@@ -147,17 +146,6 @@ export const LayeredGallerySection: React.FC<LayeredGallerySectionProps> = ({
 	// レスポンシブ設定の取得
 	const config = getCurrentConfig()
 
-	// デバッグログ（開発環境のみ）
-	useEffect(() => {
-		if (DEBUG_CONFIG.logAnimationStates && process.env.NODE_ENV === 'development') {
-			console.log('[LayeredGallerySection] Scroll progress:', {
-				overall: sectionScrollProgress.overall.toFixed(3),
-				visible: sectionScrollProgress.visible.toFixed(3),
-				isInView: sectionScrollProgress.isInView,
-				direction: sectionScrollProgress.direction,
-			})
-		}
-	}, [sectionScrollProgress])
 
 	if (!isClient) {
 		// SSR時は基本的なプレースホルダーを返す
@@ -184,7 +172,7 @@ export const LayeredGallerySection: React.FC<LayeredGallerySectionProps> = ({
 	}
 
 	return (
-		<section ref={sectionRef} id={id} className={`h-[800vh] w-full`}>
+		<section ref={sectionRef} id={id} className={`h-[700vh] w-full`}>
 			<div className="sticky top-0 left-0 h-screen w-full z-10">
 				<LayeredGalleryCanvas />
 			</div>

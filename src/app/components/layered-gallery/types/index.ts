@@ -1,30 +1,18 @@
 // src/app/components/layered-gallery/types/index.ts
 
-import { ImageFile, ImageSize } from '../../../floating-images-fix/constants'
+import { ImageFile, ImageSize } from '../../floating-images-fix/constants'
 
-// React Three Fiber の型拡張
-declare global {
-	namespace JSX {
-		interface IntrinsicElements {
-			group: any
-			mesh: any
-			planeGeometry: any
-			meshBasicMaterial: any
-			boxGeometry: any
-			axesHelper: any
-			gridHelper: any
-			ringGeometry: any
-			ambientLight: any
-			directionalLight: any
-		}
-	}
-}
+
 
 /**
  * レイヤードギャラリー用の拡張画像設定
  */
 export interface LayeredImageConfig extends ImageFile {
 	// 3D配置設定
+	id: number
+	filename: string
+	size: ImageSize
+	path: string
 	position: {
 		x: number
 		y: number

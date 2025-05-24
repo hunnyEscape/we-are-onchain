@@ -14,7 +14,6 @@ export default function Home() {
 		<main className="relative flex flex-col items-center w-full">
 
 			<LayeredGallerySection />
-			<HeroSection />
 
 		</main>
 	);

@@ -27,7 +27,7 @@ export const getViewportInfo = (): ViewportInfo => {
 		return {
 			width: 1920,
 			height: 1080,
-			aspectRatio: 16/9,
+			aspectRatio: 16 / 9,
 			isMobile: false,
 			isTablet: false,
 			isDesktop: true
@@ -78,7 +78,7 @@ export const getResponsiveGridConfig = (viewport: ViewportInfo): GridConfig => {
 			bounds: { minX: -4, maxX: 4, minY: -15, maxY: 15 }
 		}
 	}
-	
+
 	if (viewport.isTablet) {
 		return {
 			columns: 5,
@@ -119,15 +119,20 @@ export const calculateRelativePosition = (
 	const centerOffset = (columns - 1) / 2
 
 	// 基本X位置（相対値で計算）
-	const relativeX = (col - centerOffset) / centerOffset // -1 to 1
-	const baseX = relativeX * gridConfig.bounds.maxX * gridConfig.maxWidth
+	//const relativeX = (col - centerOffset) / centerOffset // -1 to 1
+	const rawRelX = (col - centerOffset) / centerOffset // -1 to 1
+	// pow < 1 で端が内側に寄る（0.8～1.0 の間を試してみてください）
+	const easedRelX = Math.sign(rawRelX) * Math.pow(Math.abs(rawRelX), 0.8)
+	const horizontalSpreadFactor = viewport.isMobile ? 0.8 : viewport.isTablet ? 0.9 : 0.7
+	const relativeX = easedRelX
+
+	const baseX = relativeX * gridConfig.bounds.maxX * gridConfig.maxWidth * horizontalSpreadFactor
 
 	// 基本Y位置（縦方向の分散）
 	const baseY = -row * gridConfig.spacing.y + (totalImages / columns) * gridConfig.spacing.y * 0.5
 
 	// Z位置（サイズに応じた奥行き）
-	const baseZ = imageConfig.size === 'L' ? 0 :
-		imageConfig.size === 'M' ? -3 : -6
+	const baseZ = imageConfig.size === 'L'? 0 : imageConfig.size === 'M' ? -5 : -10
 
 	// 擬似ランダムオフセット（一貫性のため）
 	const pseudoRandom = (index: number): number => {
@@ -240,7 +245,7 @@ export const checkCollision = (
 	threshold: number = 0.5
 ): boolean => {
 	const viewport = getViewportInfo()
-	
+
 	// ビューポートに応じた衝突判定の調整
 	const adjustedThreshold = viewport.isMobile ? threshold * 0.8 : threshold
 
@@ -266,11 +271,11 @@ export const constrainToResponsiveBounds = (
 
 	return {
 		x: Math.max(
-			gridConfig.bounds.minX + margin, 
+			gridConfig.bounds.minX + margin,
 			Math.min(gridConfig.bounds.maxX - margin, position.x)
 		),
 		y: Math.max(
-			gridConfig.bounds.minY + margin, 
+			gridConfig.bounds.minY + margin,
 			Math.min(gridConfig.bounds.maxY - margin, position.y)
 		),
 		z: position.z,
@@ -294,7 +299,7 @@ export const calculateAllPositions = (
 	// 基本位置の計算
 	const basePositions = imageConfigs.map((config, index) => ({
 		config,
-		position: useRelativePositioning 
+		position: useRelativePositioning
 			? calculateRelativePosition(config, index, imageConfigs.length, config.id)
 			: calculateFinalPosition(config, config.id + index)
 	}))

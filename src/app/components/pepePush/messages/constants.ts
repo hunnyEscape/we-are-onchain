@@ -20,15 +20,15 @@ export const SCROLL_CONFIG: ScrollMessageConfig = {
 export const getEffectClass = (effect?: GlitchEffectType): string => {
   if (!effect || effect === 'none') return '';
   
-  // 命名規則: effect-{エフェクト名}
-  return `effect-${effect}`;
+  // 命名規則: effect{エフェクト名} (最初の文字を大文字に)
+  return `effect${effect.charAt(0).toUpperCase() + effect.slice(1)}`;
 };
 
 // メッセージ定義
 export const cyberMessages: MessageConfig[] = [
   {
     id: 'message-1',
-    text: 'The Deep Green Source — a spring hidden within an ancient forest.',
+    text: 'Pepe knows what a real man is.',
     scrollProgress: 0.15,
     style: 'horizontal',
     size: isMobile() ? '1.5rem' : '2rem',
@@ -38,7 +38,7 @@ export const cyberMessages: MessageConfig[] = [
   },
   {
     id: 'message-2',
-    text: 'The Green Source — rich, deep and sweet.',
+    text: 'Pepe pursues the goals others don’t dare to approach.',
     scrollProgress: 0.35,
     style: 'horizontal',
     size: isMobile() ? '1.5rem' : '2rem',
@@ -48,7 +48,7 @@ export const cyberMessages: MessageConfig[] = [
   },
   {
     id: 'message-3',
-    text: 'It fuels your drive for what\'s next.',
+    text: 'Pepe always outworks himself. Every. Single. Day.',
     scrollProgress: 0.55,
     style: 'horizontal',
     size: isMobile() ? '1.5rem' : '2rem',
@@ -58,7 +58,7 @@ export const cyberMessages: MessageConfig[] = [
   },
   {
     id: 'message-4',
-    text: 'Feel the green power — right in your hands.',
+    text: 'Pepe never stops; stopping is death.',
     scrollProgress: 0.7,
     style: 'horizontal',
     size: isMobile() ? '2rem' : '3rem',
@@ -68,7 +68,7 @@ export const cyberMessages: MessageConfig[] = [
   },
   {
     id: 'message-5',
-    text: 'Pepe ascends.',
+    text: 'Pepe bets bold, never loses. Smart. Diligent. Unstoppable.',
     scrollProgress: 0.8,
     style: 'horizontal',
     size: isMobile() ? '2.5rem' : '4rem',
@@ -76,26 +76,6 @@ export const cyberMessages: MessageConfig[] = [
     glitchEffect: 'rgb',
     keywords: ['Pepe', 'ascends'],
   },
-  {
-    id: 'message-6',
-    text: 'Pepe summons us here.',
-    scrollProgress: 0.9,
-    style: 'horizontal',
-    size: isMobile() ? '2rem' : '3rem',
-    align: 'right',
-    glitchEffect: 'jitter',
-    keywords: ['Pepe', 'summons'],
-  },
-  {
-    id: 'message-7',
-    text: 'Pepe\nMakes us\nFree.',
-    scrollProgress: 1.0,
-    style: 'horizontal',
-    size: isMobile() ? '3rem' : '5rem',
-    align: 'center',
-    glitchEffect: 'rainbow',
-    keywords: ['Pepe', 'Free'],
-  }
 ];
 
 // メッセージ表示範囲の計算
@@ -103,10 +83,10 @@ export const calculateMessageVisibility = (
   messageScrollProgress: number,
   currentScrollProgress: number
 ): { isVisible: boolean; opacity: number; isActive: boolean } => {
-  // メッセージの表示範囲
-  const showStart = messageScrollProgress - 0.15; // 表示開始
-  const showPeak = messageScrollProgress;        // 最大表示
-  const showEnd = messageScrollProgress + 0.15;  // 表示終了
+  // メッセージの表示範囲を広げる
+  const showStart = messageScrollProgress - 0.2; // 表示開始位置を早める
+  const showPeak = messageScrollProgress;       // 最大表示
+  const showEnd = messageScrollProgress + 0.2;  // 表示終了位置を延長
 
   // デフォルト値
   let isVisible = false;
@@ -117,20 +97,24 @@ export const calculateMessageVisibility = (
   if (currentScrollProgress >= showStart && currentScrollProgress <= showEnd) {
     isVisible = true;
     
-    // フェードイン
+    // フェードイン（より滑らかに）
     if (currentScrollProgress <= showPeak) {
       opacity = (currentScrollProgress - showStart) / (showPeak - showStart);
+      // イージング関数で滑らかに
+      opacity = Math.sin(opacity * Math.PI / 2);
     } 
     // フェードアウト
     else {
       opacity = 1 - (currentScrollProgress - showPeak) / (showEnd - showPeak);
+      // イージング関数で滑らかに
+      opacity = Math.sin(opacity * Math.PI / 2);
     }
     
     // 0-1の範囲に制限
     opacity = Math.max(0, Math.min(1, opacity));
     
-    // ピーク付近でアクティブ状態
-    isActive = Math.abs(currentScrollProgress - showPeak) < 0.05;
+    // ピーク付近でアクティブ状態の範囲を広げる
+    isActive = Math.abs(currentScrollProgress - showPeak) < 0.08;
   }
 
   return { isVisible, opacity, isActive };

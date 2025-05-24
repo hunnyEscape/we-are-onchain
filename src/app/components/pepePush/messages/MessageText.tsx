@@ -105,6 +105,10 @@ const MessageText: React.FC<MessageTextProps> = ({
                     <span
                       className={effectClass}
                       data-text={word}
+                      style={{ 
+                        display: 'inline-block',
+                        whiteSpace: 'nowrap'
+                      }}
                     >
                       {word}
                     </span>
@@ -125,32 +129,29 @@ const MessageText: React.FC<MessageTextProps> = ({
       return isKeyword ? styles.keywordEffect : '';
     }
 
+    const effectCapitalized = effect.charAt(0).toUpperCase() + effect.slice(1);
+    
     // キーワードの場合は強調エフェクト
     if (isKeyword) {
-      switch (effect) {
-        case 'rgb':
-          return styles.keywordRgb;
-        case 'rainbow':
-          return styles.keywordRainbow;
-        case 'pulse':
-          return styles.keywordPulse;
-        case 'slice':
-          return styles.keywordSlice;
-        case 'neon':
-          return styles.keywordNeon;
-        default:
-          return `${styles.keywordEffect} ${styles[`effect${effect.charAt(0).toUpperCase() + effect.slice(1)}`]}`;
-      }
+      // キーワード特化クラス (keywordRgb, keywordRainbow など)
+      const keywordClass = `keyword${effectCapitalized}`;
+      return styles[keywordClass] || styles.keywordEffect;
     }
 
-    // 通常のエフェクト
-    return styles[`effect${effect.charAt(0).toUpperCase() + effect.slice(1)}`];
+    // 通常のエフェクト (effectRgb, effectRainbow など)
+    const effectClass = `effect${effectCapitalized}`;
+    return styles[effectClass] || '';
   };
 
   return (
     <div 
-      className={`${styles.messageContainer} font-bold ${isActive ? 'z-50' : 'z-40'}`} 
-      style={messageStyle}
+      className={`${styles.messageContainer} ${isActive ? 'z-50' : 'z-40'}`} 
+      style={{
+        ...messageStyle,
+        fontFamily: "'Roboto Mono', monospace",
+        letterSpacing: '0.5px',
+        lineHeight: 1.3
+      }}
     >
       {renderText()}
     </div>

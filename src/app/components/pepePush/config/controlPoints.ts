@@ -81,7 +81,7 @@ export const getResponsiveControlPoints = (): ControlPoint[] => {
 // 設定値の調整用ヘルパー
 export const CONFIG = {
 	// セッションの高さ（vh）
-	SECTION_HEIGHT_VH: 600,
+	SECTION_HEIGHT_VH: 400,
 
 	// アニメーション補間の滑らかさ
 	LERP_FACTOR: 0.1,

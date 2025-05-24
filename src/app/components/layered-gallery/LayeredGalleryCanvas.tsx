@@ -74,9 +74,9 @@ const FullGalleryScene: React.FC<{ viewport: ReturnType<typeof useViewportSize> 
 	}
 
 	return (
-		<GalleryContent 
-			Canvas={Canvas} 
-			useScrollProgress={useScrollProgress} 
+		<GalleryContent
+			Canvas={Canvas}
+			useScrollProgress={useScrollProgress}
 			sceneReady={sceneReady}
 			viewport={viewport}
 		/>
@@ -93,11 +93,11 @@ interface GalleryContentProps {
 	viewport: ReturnType<typeof useViewportSize>
 }
 
-const GalleryContent: React.FC<GalleryContentProps> = ({ 
-	Canvas, 
-	useScrollProgress, 
-	sceneReady, 
-	viewport 
+const GalleryContent: React.FC<GalleryContentProps> = ({
+	Canvas,
+	useScrollProgress,
+	sceneReady,
+	viewport
 }) => {
 	const scrollProgress = useScrollProgress()
 	const gridConfig = useMemo(() => getResponsiveGridConfig(viewport), [viewport])
@@ -156,7 +156,7 @@ const GalleryContent: React.FC<GalleryContentProps> = ({
 	const cameraConfig = useMemo(() => {
 		const fov = viewport.isMobile ? 70 : viewport.isTablet ? 65 : 60
 		const position: [number, number, number] = [0, 0, viewport.isMobile ? 12 : viewport.isTablet ? 14 : 15]
-		
+
 		return { fov, position }
 	}, [viewport])
 
@@ -172,23 +172,12 @@ const GalleryContent: React.FC<GalleryContentProps> = ({
 			}}
 			camera={{ position: cameraConfig.position, fov: cameraConfig.fov }}
 			// Three.js の内部コントロールも無効化
-			gl={{ 
+			gl={{
 				antialias: viewport.isDesktop, // モバイルではアンチエイリアスオフ
 				alpha: true,
 				powerPreference: viewport.isMobile ? 'low-power' : 'high-performance'
 			}}
 		>
-			{/* ライティング（レスポンシブ対応） */}
-			<ambientLight intensity={viewport.isMobile ? 0.9 : 0.8} />
-			<directionalLight 
-				position={[10, 10, 5]} 
-				intensity={viewport.isMobile ? 0.8 : 1} 
-			/>
-			<directionalLight 
-				position={[-10, -10, -5]} 
-				intensity={0.3} 
-			/>
-
 			{/* 35枚の画像（レスポンシブ配置） */}
 			{sceneReady && imagePositions.map((item) => (
 				<ImagePlane
@@ -205,8 +194,8 @@ const GalleryContent: React.FC<GalleryContentProps> = ({
 			{scrollProgress && (
 				<mesh position={[0, 8, 0]}>
 					<boxGeometry args={[
-						scrollProgress.overall * (viewport.isMobile ? 6 : 10), 
-						0.3, 
+						scrollProgress.overall * (viewport.isMobile ? 6 : 10),
+						0.3,
 						0.3
 					]} />
 					<meshBasicMaterial color="yellow" />
@@ -250,8 +239,8 @@ const ImagePlane: React.FC<ImagePlaneProps> = ({
 	// 画像サイズに応じたスケール（レスポンシブ対応）
 	const scale = useMemo(() => {
 		// ベーススケール（ビューポート対応）
-		let baseScale = imageConfig.size === 'L' ? 2.0 :
-			imageConfig.size === 'M' ? 1.5 : 1.2
+		let baseScale = imageConfig.size === 'L' ? 4.0 :
+			imageConfig.size === 'M' ? 3 : 2
 
 		// ビューポートに応じた調整
 		if (viewport.isMobile) {
@@ -352,7 +341,7 @@ const ImagePlane: React.FC<ImagePlaneProps> = ({
 				<planeGeometry args={[2, 3]} />
 				<meshBasicMaterial
 					color={colors[imageConfig.size]}
-					opacity={viewport.isMobile ? 0.6 : 0.7}
+					opacity={0.7}
 					transparent
 					side={2}
 				/>
@@ -367,7 +356,7 @@ const ImagePlane: React.FC<ImagePlaneProps> = ({
 			<meshBasicMaterial
 				map={texture}
 				transparent
-				opacity={viewport.isMobile ? 0.6 : 0.7}
+				opacity={0.7}
 				side={2}
 			/>
 		</mesh>
@@ -437,164 +426,9 @@ export const LayeredGalleryCanvas: React.FC<LayeredGalleryCanvasProps> = ({
 	}
 
 	return (
-		<div
-			className={`layered-gallery-canvas ${className}`}
-			style={{
-				width: '100%',
-				height: '100%',
-				minWidth: '100vw',
-				minHeight: '100vh',
-				background: 'linear-gradient(180deg, #0f0f23 0%, #1a1a2e 50%, #16213e 100%)',
-				position: 'absolute',
-				top: 0,
-				left: 0,
-				boxSizing: 'border-box',
-				// スクロール操作性の確保
-				pointerEvents: 'none', // Canvas自体はインタラクションを受け付けない
-				touchAction: 'pan-y', // 縦スクロールのみ許可
-			}}
-		>
-			{/* フルギャラリーシーン */}
+		<>
 			{showGallery && <FullGalleryScene viewport={viewport} />}
-
-			{/* ギャラリー情報（レスポンシブ対応） */}
-			<div style={{
-				position: 'absolute',
-				top: '20px',
-				left: '20px',
-				background: 'rgba(0, 0, 0, 0.85)',
-				color: 'white',
-				padding: viewport.isMobile ? '15px' : '20px',
-				borderRadius: '12px',
-				fontSize: viewport.isMobile ? '12px' : '14px',
-				fontFamily: 'monospace',
-				backdropFilter: 'blur(10px)',
-				border: '1px solid rgba(255, 255, 255, 0.1)',
-				maxWidth: viewport.isMobile ? '280px' : '350px',
-				pointerEvents: 'auto', // 情報パネルはインタラクティブ
-			}}>
-				<div style={{ 
-					color: '#64ffda', 
-					marginBottom: '12px', 
-					fontSize: viewport.isMobile ? '14px' : '16px' 
-				}}>
-					🖼️ PEPE GALLERY
-				</div>
-				<div>Total Images: {LAYERED_IMAGES.length}</div>
-				<div>Layout: {responsiveInfo.columns} columns</div>
-				<div>Device: {responsiveInfo.device}</div>
-				<div>Grid Width: {responsiveInfo.maxWidth}</div>
-				<div>Status: {showGallery ? '✅ Active' : '⏳ Loading'}</div>
-				<div style={{ 
-					marginTop: '12px', 
-					fontSize: viewport.isMobile ? '10px' : '12px', 
-					opacity: 0.8 
-				}}>
-					📜 Scroll to see images flow upward
-				</div>
-				<div style={{ 
-					fontSize: viewport.isMobile ? '10px' : '12px', 
-					opacity: 0.8 
-				}}>
-					🎨 Images load progressively for performance
-				</div>
-			</div>
-
-			{/* スクロール操作説明（レスポンシブ位置調整） */}
-			<div style={{
-				position: 'absolute',
-				top: viewport.isMobile ? '20px' : '20px',
-				right: '20px',
-				background: 'rgba(0, 0, 0, 0.85)',
-				color: 'white',
-				padding: viewport.isMobile ? '12px' : '15px',
-				borderRadius: '10px',
-				fontSize: viewport.isMobile ? '10px' : '12px',
-				maxWidth: viewport.isMobile ? '180px' : '220px',
-				backdropFilter: 'blur(10px)',
-				border: '1px solid rgba(255, 255, 255, 0.1)',
-				pointerEvents: 'auto', // 操作説明もインタラクティブ
-			}}>
-				<div style={{ 
-					color: '#ff6b6b', 
-					marginBottom: '8px',
-					fontSize: viewport.isMobile ? '11px' : '12px'
-				}}>
-					🎮 Controls:
-				</div>
-				<div>• Scroll: Move gallery up/down</div>
-				<div>• Images fade based on distance</div>
-				<div>• L/M/S sizes in different depths</div>
-				<div style={{ marginTop: '8px', opacity: 0.7 }}>
-					Blue=Large, Green=Medium, Orange=Small
-				</div>
-				{viewport.isMobile && (
-					<div style={{ marginTop: '8px', opacity: 0.7, color: '#64ffda' }}>
-						📱 Optimized for mobile
-					</div>
-				)}
-			</div>
-
-			{/* 読み込み進行状況（レスポンシブサイズ） */}
-			<div style={{
-				position: 'absolute',
-				bottom: '20px',
-				left: '20px',
-				background: 'rgba(0, 0, 0, 0.85)',
-				color: 'white',
-				padding: viewport.isMobile ? '12px' : '15px',
-				borderRadius: '10px',
-				fontSize: viewport.isMobile ? '12px' : '14px',
-				fontFamily: 'monospace',
-				backdropFilter: 'blur(10px)',
-				border: '1px solid rgba(255, 255, 255, 0.1)',
-				pointerEvents: 'auto', // 進行状況もインタラクティブ
-			}}>
-				<div style={{ marginBottom: '8px' }}>Loading Progress:</div>
-				<div style={{
-					width: viewport.isMobile ? '150px' : '200px',
-					height: '4px',
-					background: 'rgba(255, 255, 255, 0.2)',
-					borderRadius: '2px',
-					overflow: 'hidden'
-				}}>
-					<div style={{
-						width: `${(loadedCount / LAYERED_IMAGES.length) * 100}%`,
-						height: '100%',
-						background: 'linear-gradient(90deg, #64ffda, #ff6b6b)',
-						transition: 'width 0.3s ease'
-					}} />
-				</div>
-				<div style={{ 
-					marginTop: '5px', 
-					fontSize: viewport.isMobile ? '10px' : '12px' 
-				}}>
-					{loadedCount} / {LAYERED_IMAGES.length} images
-				</div>
-			</div>
-
-			{/* レスポンシブデバッグ情報（開発用） */}
-			{process.env.NODE_ENV === 'development' && (
-				<div style={{
-					position: 'absolute',
-					bottom: '20px',
-					right: '20px',
-					background: 'rgba(0, 0, 0, 0.9)',
-					color: '#64ffda',
-					padding: '10px',
-					borderRadius: '8px',
-					fontSize: '10px',
-					fontFamily: 'monospace',
-					pointerEvents: 'auto',
-				}}>
-					<div>🔧 Debug Info:</div>
-					<div>Viewport: {viewport.width}×{viewport.height}</div>
-					<div>Device: {responsiveInfo.device}</div>
-					<div>Columns: {responsiveInfo.columns}</div>
-					<div>Grid Spacing: {responsiveInfo.spacing}</div>
-				</div>
-			)}
-		</div>
+		</>
 	)
 }
 

@@ -6,13 +6,13 @@ import DashboardGrid from './components/DashboardGrid';
 import SlideInPanel from './components/SlideInPanel';
 import { SectionType } from '../../../types/dashboard';
 
-// Section Components (仮実装 - Phase 3で詳細実装)
-const ShopSection = () => <div className="text-white">Shop Section - Coming Soon</div>;
-const PurchaseScanSection = () => <div className="text-white">Purchase Scan Section - Coming Soon</div>;
-const WhitepaperSection = () => <div className="text-white">Whitepaper Section - Coming Soon</div>;
-const ProfileSection = () => <div className="text-white">Profile Section - Coming Soon</div>;
-const SettingsSection = () => <div className="text-white">Settings Section - Coming Soon</div>;
-const CartSection = () => <div className="text-white">Cart Section - Coming Soon</div>;
+// Import actual section components
+import ShopSection from './components/sections/ShopSection';
+import HowToBuySection from './components/sections/HowToBuySection';
+import PurchaseScanSection from './components/sections/PurchaseScanSection';
+import WhitepaperSection from './components/sections/WhitepaperSection';
+import ProfileSection from './components/sections/ProfileSection';
+import CartSection from './components/sections/CartSection';
 
 export default function DashboardPage() {
 	const [activeSection, setActiveSection] = useState<SectionType | null>(null);
@@ -25,7 +25,7 @@ export default function DashboardPage() {
 
 	const handleCloseSlide = () => {
 		setIsSlideOpen(false);
-		// アニメーション完了後にactiveSection をクリア
+		// アニメーション完了後にactiveSectionをクリア
 		setTimeout(() => setActiveSection(null), 300);
 	};
 
@@ -33,28 +33,28 @@ export default function DashboardPage() {
 		switch (activeSection) {
 			case 'shop':
 				return <ShopSection />;
+			case 'how-to-buy':
+				return <HowToBuySection />;
 			case 'purchase-scan':
 				return <PurchaseScanSection />;
 			case 'whitepaper':
 				return <WhitepaperSection />;
 			case 'profile':
 				return <ProfileSection />;
-			case 'settings':
-				return <SettingsSection />;
 			case 'cart':
 				return <CartSection />;
 			default:
-				return null;
+				return <div className="text-white">Loading...</div>;
 		}
 	};
 
 	const getSectionTitle = (section: SectionType | null): string => {
 		const titles = {
 			'shop': 'Shop',
+			'how-to-buy': 'How to Buy',
 			'purchase-scan': 'Purchase Scan',
 			'whitepaper': 'Whitepaper',
 			'profile': 'Profile',
-			'settings': 'Settings',
 			'cart': 'Cart'
 		};
 		return section ? titles[section] : '';

@@ -1,5 +1,2602 @@
 -e 
-### FILE: ./src/app/components/layout/constants.ts
+### FILE: ./src/app/dashboard/components/sections/ProfileSection.tsx
+
+// src/app/dashboard/components/sections/ProfileSection.tsx
+'use client';
+
+import React, { useState } from 'react';
+import CyberCard from '../../../components/common/CyberCard';
+import CyberButton from '../../../components/common/CyberButton';
+import { UserProfile } from '../../../../../types/dashboard';
+import { 
+  User, 
+  Wallet, 
+  Trophy, 
+  Calendar, 
+  ShoppingBag,
+  TrendingUp,
+  Award,
+  ExternalLink,
+  Copy,
+  Check
+} from 'lucide-react';
+
+const ProfileSection: React.FC = () => {
+  const [copiedAddress, setCopiedAddress] = useState(false);
+
+  // モックユーザーデータ
+  const userProfile: UserProfile = {
+    walletAddress: '0x1234567890123456789012345678901234567890',
+    displayName: 'CryptoLifter42',
+    totalSpent: 0.125,
+    totalOrders: 3,
+    rank: 42,
+    badges: ['New Member', 'Early Adopter', 'Community Supporter'],
+    joinDate: new Date('2024-03-15')
+  };
+
+  const orderHistory = [
+    {
+      id: 'order-001',
+      date: new Date('2024-05-15'),
+      product: 'Pepe Flavor Protein',
+      quantity: 1,
+      amount: 0.025,
+      amountUSD: 89.99,
+      status: 'Delivered',
+      txHash: '0x789xyz...def456'
+    },
+    {
+      id: 'order-002', 
+      date: new Date('2024-04-28'),
+      product: 'Pepe Flavor Protein',
+      quantity: 2,
+      amount: 0.05,
+      amountUSD: 179.98,
+      status: 'Delivered',
+      txHash: '0xabc123...789def'
+    },
+    {
+      id: 'order-003',
+      date: new Date('2024-04-10'),
+      product: 'Pepe Flavor Protein',
+      quantity: 1,
+      amount: 0.05,
+      amountUSD: 189.99,
+      status: 'Delivered',
+      txHash: '0x456def...123abc'
+    }
+  ];
+
+  const achievements = [
+    { name: 'First Purchase', description: 'Made your first crypto purchase', earned: true },
+    { name: 'Loyal Customer', description: 'Made 5+ purchases', earned: false, progress: 3 },
+    { name: 'Community Champion', description: 'Active in Discord for 30 days', earned: true },
+    { name: 'Whale Status', description: 'Spent over 1 ETH total', earned: false, progress: 0.125 }
+  ];
+
+  const handleCopyAddress = () => {
+    navigator.clipboard.writeText(userProfile.walletAddress);
+    setCopiedAddress(true);
+    setTimeout(() => setCopiedAddress(false), 2000);
+  };
+
+  const formatDate = (date: Date) => {
+    return date.toLocaleDateString('en-US', { 
+      year: 'numeric',
+      month: 'short', 
+      day: 'numeric' 
+    });
+  };
+
+  const getStatusColor = (status: string) => {
+    switch (status) {
+      case 'Delivered': return 'text-neonGreen';
+      case 'Shipped': return 'text-neonOrange';
+      case 'Processing': return 'text-yellow-400';
+      default: return 'text-gray-400';
+    }
+  };
+
+  return (
+    <div className="space-y-8">
+      {/* Header */}
+      <div className="text-center">
+        <h2 className="text-3xl font-heading font-bold text-white mb-2">
+          Profile
+        </h2>
+        <p className="text-gray-400">
+          Your Web3 protein journey and achievements
+        </p>
+      </div>
+
+      {/* Profile Overview */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        {/* Main Profile Card */}
+        <CyberCard showEffects={false} className="lg:col-span-2">
+          <div className="flex items-start space-x-6">
+            {/* Avatar */}
+            <div className="flex-shrink-0">
+              <div className="w-20 h-20 bg-gradient-to-br from-neonGreen to-neonOrange rounded-full flex items-center justify-center">
+                <User className="w-10 h-10 text-black" />
+              </div>
+            </div>
+
+            {/* Profile Info */}
+            <div className="flex-1">
+              <h3 className="text-xl font-bold text-white mb-2">{userProfile.displayName}</h3>
+              
+              <div className="flex items-center space-x-2 mb-4">
+                <Wallet className="w-4 h-4 text-gray-400" />
+                <span className="font-mono text-sm text-gray-300">
+                  {userProfile.walletAddress.slice(0, 6)}...{userProfile.walletAddress.slice(-4)}
+                </span>
+                <button
+                  onClick={handleCopyAddress}
+                  className="text-gray-400 hover:text-neonGreen transition-colors"
+                >
+                  {copiedAddress ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
+                </button>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <div className="text-sm text-gray-400">Member Since</div>
+                  <div className="text-white font-semibold">{formatDate(userProfile.joinDate)}</div>
+                </div>
+                <div>
+                  <div className="text-sm text-gray-400">Community Rank</div>
+                  <div className="text-neonGreen font-semibold">#{userProfile.rank}</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </CyberCard>
+
+        {/* Stats Card */}
+        <CyberCard title="Stats" showEffects={false}>
+          <div className="space-y-4">
+            <div className="flex justify-between items-center">
+              <span className="text-gray-400">Total Spent</span>
+              <div className="text-right">
+                <div className="text-neonGreen font-bold">Ξ {userProfile.totalSpent}</div>
+                <div className="text-xs text-gray-500">$420.25</div>
+              </div>
+            </div>
+            
+            <div className="flex justify-between items-center">
+              <span className="text-gray-400">Total Orders</span>
+              <span className="text-white font-semibold">{userProfile.totalOrders}</span>
+            </div>
+            
+            <div className="flex justify-between items-center">
+              <span className="text-gray-400">Badges Earned</span>
+              <span className="text-neonOrange font-semibold">{userProfile.badges.length}</span>
+            </div>
+          </div>
+        </CyberCard>
+      </div>
+
+      {/* Badges */}
+      <CyberCard title="Badges & Achievements" showEffects={false}>
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          {userProfile.badges.map((badge, index) => (
+            <div key={index} className="flex items-center space-x-3 p-3 border border-neonOrange/30 rounded-sm bg-neonOrange/5">
+              <Award className="w-5 h-5 text-neonOrange" />
+              <span className="text-white font-medium">{badge}</span>
+            </div>
+          ))}
+        </div>
+      </CyberCard>
+
+      {/* Achievement Progress */}
+      <CyberCard title="Achievement Progress" showEffects={false}>
+        <div className="space-y-4">
+          {achievements.map((achievement, index) => (
+            <div key={index} className="flex items-center justify-between p-4 border border-dark-300 rounded-sm">
+              <div className="flex items-center space-x-3">
+                <Trophy className={`w-5 h-5 ${achievement.earned ? 'text-neonGreen' : 'text-gray-400'}`} />
+                <div>
+                  <div className="text-white font-medium">{achievement.name}</div>
+                  <div className="text-sm text-gray-400">{achievement.description}</div>
+                </div>
+              </div>
+              
+              <div className="text-right">
+                {achievement.earned ? (
+                  <span className="text-neonGreen font-semibold">Earned</span>
+                ) : (
+                  <div>
+                    <div className="text-sm text-gray-400">
+                      Progress: {achievement.progress}/{achievement.name === 'Loyal Customer' ? '5' : '1'}
+                    </div>
+                    <div className="w-24 h-2 bg-dark-300 rounded-full overflow-hidden">
+                      <div 
+                        className="h-full bg-neonOrange transition-all duration-300"
+                        style={{ 
+                          width: `${achievement.name === 'Loyal Customer' 
+                            ? (achievement.progress! / 5) * 100 
+                            : (achievement.progress! / 1) * 100}%` 
+                        }}
+                      />
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
+      </CyberCard>
+
+      {/* Order History */}
+      <CyberCard title="Recent Orders" showEffects={false}>
+        <div className="overflow-x-auto">
+          <table className="w-full">
+            <thead>
+              <tr className="border-b border-dark-300">
+                <th className="text-left py-3 px-4 text-sm font-medium text-gray-400">Date</th>
+                <th className="text-left py-3 px-4 text-sm font-medium text-gray-400">Product</th>
+                <th className="text-left py-3 px-4 text-sm font-medium text-gray-400">Amount</th>
+                <th className="text-left py-3 px-4 text-sm font-medium text-gray-400">Status</th>
+                <th className="text-left py-3 px-4 text-sm font-medium text-gray-400">Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {orderHistory.map((order) => (
+                <tr key={order.id} className="border-b border-dark-300/50 hover:bg-dark-200/30 transition-colors">
+                  <td className="py-4 px-4 text-sm text-gray-300">{formatDate(order.date)}</td>
+                  <td className="py-4 px-4">
+                    <div>
+                      <div className="text-white font-medium">{order.product}</div>
+                      <div className="text-xs text-gray-400">Qty: {order.quantity}</div>
+                    </div>
+                  </td>
+                  <td className="py-4 px-4">
+                    <div>
+                      <div className="text-neonGreen font-bold">Ξ {order.amount}</div>
+                      <div className="text-xs text-gray-400">${order.amountUSD}</div>
+                    </div>
+                  </td>
+                  <td className="py-4 px-4">
+                    <span className={`font-medium ${getStatusColor(order.status)}`}>
+                      {order.status}
+                    </span>
+                  </td>
+                  <td className="py-4 px-4">
+                    <CyberButton variant="outline" size="sm" className="flex items-center space-x-1">
+                      <ExternalLink className="w-3 h-3" />
+                      <span>View</span>
+                    </CyberButton>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </CyberCard>
+    </div>
+  );
+};
+
+export default ProfileSection;-e 
+### FILE: ./src/app/dashboard/components/sections/HowToBuySection.tsx
+
+// src/app/dashboard/components/sections/HowToBuySection.tsx
+'use client';
+
+import React, { useState } from 'react';
+import CyberCard from '../../../components/common/CyberCard';
+import CyberButton from '../../../components/common/CyberButton';
+import { 
+  Wallet, 
+  CreditCard, 
+  Shield, 
+  CheckCircle,
+  AlertTriangle,
+  ExternalLink,
+  Copy,
+  Clock,
+  Zap,
+  DollarSign
+} from 'lucide-react';
+
+interface PaymentMethod {
+  id: string;
+  name: string;
+  symbol: string;
+  icon: React.ReactNode;
+  fees: string;
+  speed: string;
+  description: string;
+}
+
+interface WalletOption {
+  name: string;
+  description: string;
+  icon: React.ReactNode;
+  supported: boolean;
+}
+
+const HowToBuySection: React.FC = () => {
+  const [activeStep, setActiveStep] = useState(1);
+  
+  const paymentMethods: PaymentMethod[] = [
+    {
+      id: 'eth',
+      name: 'Ethereum',
+      symbol: 'ETH',
+      icon: <div className="w-6 h-6 bg-blue-500 rounded-full" />,
+      fees: '~$5-15',
+      speed: '2-5 min',
+      description: 'Most popular option with wide acceptance'
+    },
+    {
+      id: 'usdc',
+      name: 'USD Coin',
+      symbol: 'USDC',
+      icon: <div className="w-6 h-6 bg-blue-600 rounded-full" />,
+      fees: '~$3-8',
+      speed: '1-3 min',
+      description: 'Stable value pegged to USD'
+    },
+    {
+      id: 'usdt',
+      name: 'Tether',
+      symbol: 'USDT',
+      icon: <div className="w-6 h-6 bg-green-500 rounded-full" />,
+      fees: '~$3-8',
+      speed: '1-3 min',
+      description: 'Popular stablecoin option'
+    }
+  ];
+
+  const walletOptions: WalletOption[] = [
+    {
+      name: 'MetaMask',
+      description: 'Most popular browser wallet',
+      icon: <div className="w-8 h-8 bg-orange-500 rounded-sm" />,
+      supported: true
+    },
+    {
+      name: 'WalletConnect',
+      description: 'Connect various mobile wallets',
+      icon: <div className="w-8 h-8 bg-blue-500 rounded-sm" />,
+      supported: true
+    },
+    {
+      name: 'Coinbase Wallet',
+      description: 'Official Coinbase wallet',
+      icon: <div className="w-8 h-8 bg-blue-600 rounded-sm" />,
+      supported: true
+    },
+    {
+      name: 'Trust Wallet',
+      description: 'Mobile-first crypto wallet',
+      icon: <div className="w-8 h-8 bg-blue-400 rounded-sm" />,
+      supported: true
+    }
+  ];
+
+  const steps = [
+    {
+      id: 1,
+      title: 'Connect Your Wallet',
+      description: 'Link your Web3 wallet to our platform',
+      details: 'Choose from supported wallets and authorize the connection. This creates your secure account on our platform.'
+    },
+    {
+      id: 2,
+      title: 'Select Payment Method',
+      description: 'Choose your preferred cryptocurrency',
+      details: 'Pick from ETH, USDC, or USDT. Each has different fees and transaction speeds.'
+    },
+    {
+      id: 3,
+      title: 'Add to Cart & Checkout',
+      description: 'Review your order and confirm',
+      details: 'Select quantity, apply any promo codes, and review the total including gas fees.'
+    },
+    {
+      id: 4,
+      title: 'Confirm Transaction',
+      description: 'Approve the smart contract transaction',
+      details: 'Your wallet will show the transaction details. Confirm to complete your purchase.'
+    },
+    {
+      id: 5,
+      title: 'Receive Your Order',
+      description: 'Fast shipping with blockchain tracking',
+      details: 'Get email confirmation and track your shipment. Your purchase will appear in your profile.'
+    }
+  ];
+
+  const handleCopyAddress = (address: string) => {
+    navigator.clipboard.writeText(address);
+  };
+
+  return (
+    <div className="space-y-8">
+      {/* Header */}
+      <div className="text-center">
+        <h2 className="text-3xl font-heading font-bold text-white mb-2">
+          How to Buy
+        </h2>
+        <p className="text-gray-400">
+          Your complete guide to purchasing with cryptocurrency
+        </p>
+      </div>
+
+      {/* Quick Stats */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <CyberCard showEffects={false} className="text-center">
+          <Zap className="w-8 h-8 text-neonGreen mx-auto mb-2" />
+          <div className="text-xl font-bold text-white">1-5 min</div>
+          <div className="text-xs text-gray-400">Average Transaction Time</div>
+        </CyberCard>
+
+        <CyberCard showEffects={false} className="text-center">
+          <Shield className="w-8 h-8 text-neonOrange mx-auto mb-2" />
+          <div className="text-xl font-bold text-white">100%</div>
+          <div className="text-xs text-gray-400">Secure Smart Contracts</div>
+        </CyberCard>
+
+        <CyberCard showEffects={false} className="text-center">
+          <DollarSign className="w-8 h-8 text-neonGreen mx-auto mb-2" />
+          <div className="text-xl font-bold text-white">$3-15</div>
+          <div className="text-xs text-gray-400">Typical Gas Fees</div>
+        </CyberCard>
+      </div>
+
+      {/* Step-by-Step Guide */}
+      <CyberCard title="Step-by-Step Purchase Guide" showEffects={false}>
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+          {/* Step Navigation */}
+          <div className="lg:col-span-1">
+            <div className="space-y-2">
+              {steps.map((step) => (
+                <button
+                  key={step.id}
+                  onClick={() => setActiveStep(step.id)}
+                  className={`
+                    w-full text-left p-4 rounded-sm border transition-all duration-200
+                    ${activeStep === step.id 
+                      ? 'bg-neonGreen/10 border-neonGreen text-neonGreen' 
+                      : 'border-dark-300 text-gray-300 hover:border-gray-500 hover:text-white'
+                    }
+                  `}
+                >
+                  <div className="flex items-center space-x-3">
+                    <div className={`
+                      w-8 h-8 rounded-full flex items-center justify-center font-bold text-sm
+                      ${activeStep === step.id ? 'bg-neonGreen text-black' : 'bg-dark-300 text-gray-400'}
+                    `}>
+                      {step.id}
+                    </div>
+                    <div>
+                      <div className="font-medium">{step.title}</div>
+                      <div className="text-xs opacity-70">{step.description}</div>
+                    </div>
+                  </div>
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Step Content */}
+          <div className="lg:col-span-2">
+            {steps.map((step) => (
+              activeStep === step.id && (
+                <div key={step.id} className="space-y-6">
+                  <div>
+                    <h3 className="text-xl font-bold text-white mb-2">
+                      Step {step.id}: {step.title}
+                    </h3>
+                    <p className="text-gray-300 leading-relaxed">
+                      {step.details}
+                    </p>
+                  </div>
+
+                  {/* Step-specific content */}
+                  {step.id === 1 && (
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      {walletOptions.map((wallet, index) => (
+                        <div key={index} className="p-4 border border-dark-300 rounded-sm flex items-center space-x-3">
+                          {wallet.icon}
+                          <div>
+                            <div className="text-white font-medium">{wallet.name}</div>
+                            <div className="text-xs text-gray-400">{wallet.description}</div>
+                          </div>
+                          {wallet.supported && (
+                            <CheckCircle className="w-5 h-5 text-neonGreen ml-auto" />
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  {step.id === 2 && (
+                    <div className="space-y-4">
+                      {paymentMethods.map((method) => (
+                        <div key={method.id} className="p-4 border border-dark-300 rounded-sm">
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center space-x-3">
+                              {method.icon}
+                              <div>
+                                <div className="text-white font-medium">{method.name} ({method.symbol})</div>
+                                <div className="text-xs text-gray-400">{method.description}</div>
+                              </div>
+                            </div>
+                            <div className="text-right">
+                              <div className="text-sm text-gray-300">Fees: {method.fees}</div>
+                              <div className="text-xs text-gray-400">Speed: {method.speed}</div>
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  {step.id === 3 && (
+                    <div className="space-y-4">
+                      <div className="p-4 border border-yellow-600/30 rounded-sm bg-yellow-600/5">
+                        <div className="flex items-start space-x-3">
+                          <AlertTriangle className="w-5 h-5 text-yellow-400 flex-shrink-0 mt-0.5" />
+                          <div>
+                            <div className="text-yellow-400 font-medium mb-1">Gas Fee Estimation</div>
+                            <div className="text-sm text-gray-300">
+                              Gas fees vary based on network congestion. We provide real-time estimates before you confirm.
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {step.id === 4 && (
+                    <div className="space-y-4">
+                      <div className="p-4 border border-neonGreen/30 rounded-sm bg-neonGreen/5">
+                        <div className="flex items-start space-x-3">
+                          <Shield className="w-5 h-5 text-neonGreen flex-shrink-0 mt-0.5" />
+                          <div>
+                            <div className="text-neonGreen font-medium mb-1">Smart Contract Security</div>
+                            <div className="text-sm text-gray-300 mb-2">
+                              All transactions are processed through audited smart contracts for maximum security.
+                            </div>
+                            <div className="text-xs text-gray-400 font-mono">
+                              Contract: 0x742d35CC6634C0532925a3b8D404e22d65be3b32
+                              <button 
+                                onClick={() => handleCopyAddress('0x742d35CC6634C0532925a3b8D404e22d65be3b32')}
+                                className="ml-2 text-neonGreen hover:text-neonGreen/80"
+                              >
+                                <Copy className="w-3 h-3 inline" />
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {step.id === 5 && (
+                    <div className="space-y-4">
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div className="p-4 border border-dark-300 rounded-sm">
+                          <Clock className="w-6 h-6 text-neonOrange mb-2" />
+                          <div className="text-white font-medium mb-1">Shipping Time</div>
+                          <div className="text-sm text-gray-400">3-7 business days worldwide</div>
+                        </div>
+                        <div className="p-4 border border-dark-300 rounded-sm">
+                          <Shield className="w-6 h-6 text-neonGreen mb-2" />
+                          <div className="text-white font-medium mb-1">Tracking</div>
+                          <div className="text-sm text-gray-400">Blockchain-verified delivery</div>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )
+            ))}
+          </div>
+        </div>
+      </CyberCard>
+
+      {/* FAQ Section */}
+      <CyberCard title="Frequently Asked Questions" showEffects={false}>
+        <div className="space-y-4">
+          <div className="border-b border-dark-300 pb-4">
+            <h4 className="text-white font-medium mb-2">What if I don't have a crypto wallet?</h4>
+            <p className="text-sm text-gray-400">
+              You can easily create one with MetaMask or Coinbase Wallet. Both offer simple setup processes and are free to use.
+            </p>
+          </div>
+
+          <div className="border-b border-dark-300 pb-4">
+            <h4 className="text-white font-medium mb-2">Are gas fees included in the price?</h4>
+            <p className="text-sm text-gray-400">
+              No, gas fees are separate and depend on network congestion. We show real-time estimates before you confirm.
+            </p>
+          </div>
+
+          <div className="border-b border-dark-300 pb-4">
+            <h4 className="text-white font-medium mb-2">Can I cancel my order?</h4>
+            <p className="text-sm text-gray-400">
+              Once confirmed on the blockchain, transactions are irreversible. Please review your order carefully before confirming.
+            </p>
+          </div>
+
+          <div>
+            <h4 className="text-white font-medium mb-2">What happens if my transaction fails?</h4>
+            <p className="text-sm text-gray-400">
+              Failed transactions will refund automatically. You may still pay gas fees, but no product charges will apply.
+            </p>
+          </div>
+        </div>
+      </CyberCard>
+
+      {/* CTA */}
+      <div className="text-center">
+        <CyberButton variant="primary" className="px-8 py-4 text-lg">
+          Start Shopping Now
+        </CyberButton>
+      </div>
+    </div>
+  );
+};
+
+export default HowToBuySection;-e 
+### FILE: ./src/app/dashboard/components/sections/CartSection.tsx
+
+// src/app/dashboard/components/sections/CartSection.tsx
+'use client';
+
+import React, { useState } from 'react';
+import CyberCard from '../../../components/common/CyberCard';
+import CyberButton from '../../../components/common/CyberButton';
+import { CartItem } from '../../../../../types/dashboard';
+import { 
+  ShoppingCart, 
+  Trash2, 
+  Plus, 
+  Minus, 
+  Zap, 
+  AlertCircle,
+  Gift,
+} from 'lucide-react';
+
+const Info = ({ className = "w-4 h-4" }: { className?: string }) => (
+  <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+  </svg>
+);
+
+const CartSection: React.FC = () => {
+  const [cartItems, setCartItems] = useState<CartItem[]>([
+    {
+      id: 'pepe-protein-1',
+      name: 'Pepe Flavor Protein',
+      price: 0.025,
+      quantity: 2,
+      currency: 'ETH',
+      image: '/images/pepe-protein.webp'
+    }
+  ]);
+
+  const [promoCode, setPromoCode] = useState('');
+  const [appliedPromo, setAppliedPromo] = useState<string | null>(null);
+  const [gasFeeEstimate] = useState(0.003); // ETH
+  const [selectedPaymentMethod, setSelectedPaymentMethod] = useState<'ETH' | 'USDC' | 'USDT'>('ETH');
+
+  const updateQuantity = (id: string, newQuantity: number) => {
+    if (newQuantity <= 0) {
+      removeItem(id);
+      return;
+    }
+    setCartItems(prev => 
+      prev.map(item => 
+        item.id === id ? { ...item, quantity: Math.min(newQuantity, 10) } : item
+      )
+    );
+  };
+
+  const removeItem = (id: string) => {
+    setCartItems(prev => prev.filter(item => item.id !== id));
+  };
+
+  const applyPromoCode = () => {
+    if (promoCode.toLowerCase() === 'pepe10') {
+      setAppliedPromo('PEPE10');
+      setPromoCode('');
+    } else {
+      // Handle invalid promo code
+      console.log('Invalid promo code');
+    }
+  };
+
+  const removePromoCode = () => {
+    setAppliedPromo(null);
+  };
+
+  const calculateSubtotal = () => {
+    return cartItems.reduce((total, item) => total + (item.price * item.quantity), 0);
+  };
+
+  const calculateDiscount = () => {
+    if (appliedPromo === 'PEPE10') {
+      return calculateSubtotal() * 0.1; // 10% discount
+    }
+    return 0;
+  };
+
+  const calculateTotal = () => {
+    return calculateSubtotal() - calculateDiscount() + gasFeeEstimate;
+  };
+
+  const formatPrice = (price: number, currency: string = 'ETH') => {
+    if (currency === 'ETH') {
+      return `Ξ ${price.toFixed(4)}`;
+    }
+    return `${price.toFixed(2)} ${currency}`;
+  };
+
+  const convertToUSD = (ethAmount: number) => {
+    const ethToUSD = 3359.50; // Mock exchange rate
+    return (ethAmount * ethToUSD).toFixed(2);
+  };
+
+  const handleCheckout = () => {
+    // Checkout logic (Phase 4で実装)
+    console.log('Checkout initiated', { cartItems, total: calculateTotal(), paymentMethod: selectedPaymentMethod });
+  };
+
+  const handleContinueShopping = () => {
+    // Navigate back to shop (Phase 4で実装)
+    console.log('Continue shopping');
+  };
+
+  if (cartItems.length === 0) {
+    return (
+      <div className="space-y-8">
+        <div className="text-center">
+          <h2 className="text-3xl font-heading font-bold text-white mb-2">Shopping Cart</h2>
+          <p className="text-gray-400">Your cart is currently empty</p>
+        </div>
+
+        <CyberCard showEffects={false} className="text-center py-12">
+          <ShoppingCart className="w-16 h-16 text-gray-400 mx-auto mb-4" />
+          <h3 className="text-xl font-semibold text-white mb-2">Your cart is empty</h3>
+          <p className="text-gray-400 mb-6">Add some premium protein to get started</p>
+          <CyberButton variant="primary" onClick={handleContinueShopping}>
+            Start Shopping
+          </CyberButton>
+        </CyberCard>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-8">
+      {/* Header */}
+      <div className="text-center">
+        <h2 className="text-3xl font-heading font-bold text-white mb-2">
+          Shopping Cart
+        </h2>
+        <p className="text-gray-400">
+          Review your items and proceed to checkout
+        </p>
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+        {/* Cart Items */}
+        <div className="lg:col-span-2 space-y-4">
+          <CyberCard title={`Cart Items (${cartItems.length})`} showEffects={false}>
+            <div className="space-y-4">
+              {cartItems.map((item) => (
+                <div key={item.id} className="flex items-center space-x-4 p-4 border border-dark-300 rounded-sm">
+                  {/* Product Image */}
+                  <div className="w-16 h-16 bg-gradient-to-br from-neonGreen to-neonOrange rounded-sm flex items-center justify-center">
+                    <ShoppingCart className="w-8 h-8 text-black" />
+                  </div>
+
+                  {/* Product Info */}
+                  <div className="flex-1">
+                    <h3 className="text-white font-semibold">{item.name}</h3>
+                    <p className="text-sm text-gray-400">Premium whey protein blend</p>
+                    <div className="text-neonGreen font-bold">
+                      {formatPrice(item.price, item.currency)}
+                      <span className="text-xs text-gray-400 ml-2">
+                        (≈ ${convertToUSD(item.price)})
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Quantity Controls */}
+                  <div className="flex items-center space-x-2">
+                    <button
+                      onClick={() => updateQuantity(item.id, item.quantity - 1)}
+                      className="w-8 h-8 border border-dark-300 rounded-sm flex items-center justify-center text-white hover:bg-dark-200 transition-colors"
+                    >
+                      <Minus className="w-4 h-4" />
+                    </button>
+                    <span className="w-12 text-center text-white font-medium">{item.quantity}</span>
+                    <button
+                      onClick={() => updateQuantity(item.id, item.quantity + 1)}
+                      className="w-8 h-8 border border-dark-300 rounded-sm flex items-center justify-center text-white hover:bg-dark-200 transition-colors"
+                    >
+                      <Plus className="w-4 h-4" />
+                    </button>
+                  </div>
+
+                  {/* Item Total */}
+                  <div className="text-right">
+                    <div className="text-white font-bold">
+                      {formatPrice(item.price * item.quantity, item.currency)}
+                    </div>
+                    <div className="text-xs text-gray-400">
+                      ≈ ${convertToUSD(item.price * item.quantity)}
+                    </div>
+                  </div>
+
+                  {/* Remove Button */}
+                  <button
+                    onClick={() => removeItem(item.id)}
+                    className="p-2 text-red-400 hover:text-red-300 hover:bg-red-900/20 rounded-sm transition-colors"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </button>
+                </div>
+              ))}
+            </div>
+          </CyberCard>
+
+          {/* Promo Code */}
+          <CyberCard title="Promo Code" showEffects={false}>
+            <div className="space-y-4">
+              {appliedPromo ? (
+                <div className="flex items-center justify-between p-3 border border-neonGreen/30 rounded-sm bg-neonGreen/5">
+                  <div className="flex items-center space-x-2">
+                    <Gift className="w-5 h-5 text-neonGreen" />
+                    <span className="text-white font-medium">{appliedPromo} Applied</span>
+                    <span className="text-sm text-neonGreen">10% off</span>
+                  </div>
+                  <button
+                    onClick={removePromoCode}
+                    className="text-red-400 hover:text-red-300 transition-colors"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </button>
+                </div>
+              ) : (
+                <div className="flex space-x-2">
+                  <input
+                    type="text"
+                    value={promoCode}
+                    onChange={(e) => setPromoCode(e.target.value)}
+                    placeholder="Enter promo code"
+                    className="flex-1 px-3 py-2 bg-dark-200 border border-dark-300 rounded-sm text-white placeholder-gray-400 focus:border-neonGreen focus:outline-none"
+                  />
+                  <CyberButton variant="outline" onClick={applyPromoCode}>
+                    Apply
+                  </CyberButton>
+                </div>
+              )}
+            </div>
+          </CyberCard>
+        </div>
+
+        {/* Order Summary */}
+        <div className="lg:col-span-1">
+          <CyberCard title="Order Summary" showEffects={false}>
+            <div className="space-y-4">
+              {/* Payment Method Selection */}
+              <div>
+                <label className="block text-sm font-medium text-white mb-2">Payment Method</label>
+                <div className="space-y-2">
+                  {(['ETH', 'USDC', 'USDT'] as const).map((method) => (
+                    <label key={method} className="flex items-center space-x-2 cursor-pointer">
+                      <input
+                        type="radio"
+                        name="paymentMethod"
+                        value={method}
+                        checked={selectedPaymentMethod === method}
+                        onChange={(e) => setSelectedPaymentMethod(e.target.value as any)}
+                        className="text-neonGreen"
+                      />
+                      <span className="text-white">{method}</span>
+                    </label>
+                  ))}
+                </div>
+              </div>
+
+              {/* Price Breakdown */}
+              <div className="space-y-3 pt-4 border-t border-dark-300">
+                <div className="flex justify-between">
+                  <span className="text-gray-400">Subtotal</span>
+                  <span className="text-white">{formatPrice(calculateSubtotal())}</span>
+                </div>
+
+                {appliedPromo && (
+                  <div className="flex justify-between">
+                    <span className="text-gray-400">Discount ({appliedPromo})</span>
+                    <span className="text-neonGreen">-{formatPrice(calculateDiscount())}</span>
+                  </div>
+                )}
+
+                <div className="flex justify-between">
+                  <div className="flex items-center space-x-1">
+                    <span className="text-gray-400">Gas Fee</span>
+                    <Info className="w-3 h-3 text-gray-400" />
+                  </div>
+                  <span className="text-gray-400">{formatPrice(gasFeeEstimate)}</span>
+                </div>
+
+                <div className="flex justify-between pt-3 border-t border-dark-300">
+                  <span className="text-white font-semibold">Total</span>
+                  <div className="text-right">
+                    <div className="text-neonGreen font-bold text-lg">
+                      {formatPrice(calculateTotal())}
+                    </div>
+                    <div className="text-xs text-gray-400">
+                      ≈ ${convertToUSD(calculateTotal())}
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Action Buttons */}
+              <div className="space-y-3 pt-4">
+                <CyberButton
+                  variant="primary"
+                  className="w-full flex items-center justify-center space-x-2"
+                  onClick={handleCheckout}
+                >
+                  <Zap className="w-4 h-4" />
+                  <span>Checkout with {selectedPaymentMethod}</span>
+                </CyberButton>
+
+                <CyberButton
+                  variant="outline"
+                  className="w-full"
+                  onClick={handleContinueShopping}
+                >
+                  Continue Shopping
+                </CyberButton>
+              </div>
+
+              {/* Security Notice */}
+              <div className="flex items-start space-x-2 p-3 border border-yellow-600/30 rounded-sm bg-yellow-600/5">
+                <AlertCircle className="w-4 h-4 text-yellow-400 flex-shrink-0 mt-0.5" />
+                <div className="text-xs text-gray-300">
+                  All transactions are secured by smart contracts. Always verify the recipient address before confirming.
+                </div>
+              </div>
+            </div>
+          </CyberCard>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+export default CartSection;-e 
+### FILE: ./src/app/dashboard/components/sections/PurchaseScanSection.tsx
+
+// src/app/dashboard/components/sections/PurchaseScanSection.tsx
+'use client';
+
+import React, { useState } from 'react';
+import CyberCard from '../../../components/common/CyberCard';
+import CyberButton from '../../../components/common/CyberButton';
+import { PurchaseRecord, FilterOptions } from '../../../../../types/dashboard';
+import { TrendingUp, Users, DollarSign, Activity, Trophy, ExternalLink } from 'lucide-react';
+
+const PurchaseScanSection: React.FC = () => {
+	const [filterOptions, setFilterOptions] = useState<FilterOptions>({
+		period: 'all',
+		sortBy: 'amount',
+		sortOrder: 'desc'
+	});
+
+	// モックデータ
+	const mockPurchases: PurchaseRecord[] = [
+		{
+			rank: 1,
+			walletAddress: '0x742d35CC6634C0532925a3b8D404e22d65be3b32',
+			displayAddress: '0x742d...3b32',
+			totalSpent: 2.45,
+			totalSpentUSD: 8234.50,
+			purchaseCount: 47,
+			lastPurchase: new Date('2024-05-20'),
+			txHashes: ['0xabc123...', '0xdef456...'],
+			badges: ['Whale', 'Early Adopter'],
+			isCurrentUser: false
+		},
+		{
+			rank: 2,
+			walletAddress: '0x8ba1f109551bD432803012645Hac136c0E46c33e',
+			displayAddress: '0x8ba1...c33e',
+			totalSpent: 1.89,
+			totalSpentUSD: 6345.75,
+			purchaseCount: 32,
+			lastPurchase: new Date('2024-05-19'),
+			txHashes: ['0x123abc...'],
+			badges: ['Power User'],
+			isCurrentUser: false
+		},
+		{
+			rank: 42,
+			walletAddress: '0x1234567890123456789012345678901234567890',
+			displayAddress: '0x1234...7890',
+			totalSpent: 0.125,
+			totalSpentUSD: 420.25,
+			purchaseCount: 3,
+			lastPurchase: new Date('2024-05-15'),
+			txHashes: ['0x789xyz...'],
+			badges: ['New Member'],
+			isCurrentUser: true
+		}
+	];
+
+	const stats = {
+		totalPurchases: 247,
+		totalVolume: 89.7,
+		totalVolumeUSD: 301456.78,
+		activeUsers: 156
+	};
+
+	const handleFilterChange = (key: keyof FilterOptions, value: any) => {
+		setFilterOptions(prev => ({ ...prev, [key]: value }));
+	};
+
+	const formatDate = (date: Date) => {
+		return date.toLocaleDateString('en-US', {
+			month: 'short',
+			day: 'numeric',
+			hour: '2-digit',
+			minute: '2-digit'
+		});
+	};
+
+	return (
+		<div className="space-y-8">
+			{/* Header */}
+			<div className="text-center">
+				<h2 className="text-3xl font-heading font-bold text-white mb-2">
+					Purchase Scan
+				</h2>
+				<p className="text-gray-400">
+					Community purchase rankings and transaction transparency
+				</p>
+			</div>
+
+			{/* Stats Cards */}
+			<div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+				<CyberCard showEffects={false} className="text-center">
+					<TrendingUp className="w-8 h-8 text-neonGreen mx-auto mb-2" />
+					<div className="text-2xl font-bold text-white">{stats.totalPurchases}</div>
+					<div className="text-xs text-gray-400">Total Purchases</div>
+				</CyberCard>
+
+				<CyberCard showEffects={false} className="text-center">
+					<DollarSign className="w-8 h-8 text-neonOrange mx-auto mb-2" />
+					<div className="text-2xl font-bold text-white">Ξ {stats.totalVolume}</div>
+					<div className="text-xs text-gray-400">Total Volume</div>
+				</CyberCard>
+
+				<CyberCard showEffects={false} className="text-center">
+					<Activity className="w-8 h-8 text-neonGreen mx-auto mb-2" />
+					<div className="text-2xl font-bold text-white">${stats.totalVolumeUSD.toLocaleString()}</div>
+					<div className="text-xs text-gray-400">USD Volume</div>
+				</CyberCard>
+
+				<CyberCard showEffects={false} className="text-center">
+					<Users className="w-8 h-8 text-neonOrange mx-auto mb-2" />
+					<div className="text-2xl font-bold text-white">{stats.activeUsers}</div>
+					<div className="text-xs text-gray-400">Active Users</div>
+				</CyberCard>
+			</div>
+
+			{/* Filters */}
+			<CyberCard title="Filters" showEffects={false}>
+				<div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+					<div>
+						<label className="block text-sm font-medium text-white mb-2">Period</label>
+						<select
+							value={filterOptions.period}
+							onChange={(e) => handleFilterChange('period', e.target.value)}
+							className="w-full px-3 py-2 bg-dark-200 border border-dark-300 rounded-sm text-white focus:border-neonGreen focus:outline-none"
+						>
+							<option value="today">Today</option>
+							<option value="week">This Week</option>
+							<option value="month">This Month</option>
+							<option value="all">All Time</option>
+						</select>
+					</div>
+
+					<div>
+						<label className="block text-sm font-medium text-white mb-2">Sort By</label>
+						<select
+							value={filterOptions.sortBy}
+							onChange={(e) => handleFilterChange('sortBy', e.target.value)}
+							className="w-full px-3 py-2 bg-dark-200 border border-dark-300 rounded-sm text-white focus:border-neonGreen focus:outline-none"
+						>
+							<option value="amount">Total Amount</option>
+							<option value="count">Purchase Count</option>
+							<option value="date">Last Purchase</option>
+						</select>
+					</div>
+
+					<div>
+						<label className="block text-sm font-medium text-white mb-2">Order</label>
+						<select
+							value={filterOptions.sortOrder}
+							onChange={(e) => handleFilterChange('sortOrder', e.target.value)}
+							className="w-full px-3 py-2 bg-dark-200 border border-dark-300 rounded-sm text-white focus:border-neonGreen focus:outline-none"
+						>
+							<option value="desc">Highest First</option>
+							<option value="asc">Lowest First</option>
+						</select>
+					</div>
+				</div>
+			</CyberCard>
+
+			{/* Rankings Table */}
+			<CyberCard title="Top Purchasers" showEffects={false}>
+				<div className="overflow-x-auto">
+					<table className="w-full">
+						<thead>
+							<tr className="border-b border-dark-300">
+								<th className="text-left py-3 px-4 text-sm font-medium text-gray-400">Rank</th>
+								<th className="text-left py-3 px-4 text-sm font-medium text-gray-400">Address</th>
+								<th className="text-left py-3 px-4 text-sm font-medium text-gray-400">Total Spent</th>
+								<th className="text-left py-3 px-4 text-sm font-medium text-gray-400">Purchases</th>
+								<th className="text-left py-3 px-4 text-sm font-medium text-gray-400">Last Activity</th>
+								<th className="text-left py-3 px-4 text-sm font-medium text-gray-400">Badges</th>
+								<th className="text-left py-3 px-4 text-sm font-medium text-gray-400">Actions</th>
+							</tr>
+						</thead>
+						<tbody>
+							{mockPurchases.map((record) => (
+								<tr
+									key={record.walletAddress}
+									className={`border-b border-dark-300/50 hover:bg-dark-200/30 transition-colors ${record.isCurrentUser ? 'bg-neonGreen/5 border-neonGreen/20' : ''
+										}`}
+								>
+									<td className="py-4 px-4">
+										<div className="flex items-center space-x-2">
+											{record.rank <= 3 && (
+												<Trophy className={`w-4 h-4 ${record.rank === 1 ? 'text-yellow-400' :
+														record.rank === 2 ? 'text-gray-300' :
+															'text-orange-400'
+													}`} />
+											)}
+											<span className={`font-bold ${record.isCurrentUser ? 'text-neonGreen' : 'text-white'}`}>
+												#{record.rank}
+											</span>
+										</div>
+									</td>
+									<td className="py-4 px-4">
+										<div className="font-mono text-sm">
+											{record.displayAddress}
+											{record.isCurrentUser && (
+												<span className="ml-2 text-xs bg-neonGreen/20 text-neonGreen px-2 py-1 rounded-sm">
+													You
+												</span>
+											)}
+										</div>
+									</td>
+									<td className="py-4 px-4">
+										<div>
+											<div className="font-bold text-neonGreen">Ξ {record.totalSpent}</div>
+											<div className="text-xs text-gray-400">${record.totalSpentUSD.toLocaleString()}</div>
+										</div>
+									</td>
+									<td className="py-4 px-4 text-white">{record.purchaseCount}</td>
+									<td className="py-4 px-4 text-sm text-gray-400">
+										{formatDate(record.lastPurchase)}
+									</td>
+									<td className="py-4 px-4">
+										<div className="flex flex-wrap gap-1">
+											{record.badges?.map((badge, index) => (
+												<span
+													key={index}
+													className="text-xs bg-neonOrange/20 text-neonOrange px-2 py-1 rounded-sm"
+												>
+													{badge}
+												</span>
+											))}
+										</div>
+									</td>
+									<td className="py-4 px-4">
+										<CyberButton
+											variant="outline"
+											size="sm"
+											className="flex items-center space-x-1"
+										>
+											<ExternalLink className="w-3 h-3" />
+											<span>View</span>
+										</CyberButton>
+									</td>
+								</tr>
+							))}
+						</tbody>
+					</table>
+				</div>
+			</CyberCard>
+		</div>
+	);
+};
+
+export default PurchaseScanSection;-e 
+### FILE: ./src/app/dashboard/components/sections/WhitepaperSection.tsx
+
+// src/app/dashboard/components/sections/WhitepaperSection.tsx
+'use client';
+
+import React, { useState } from 'react';
+import CyberCard from '../../../components/common/CyberCard';
+import CyberButton from '../../../components/common/CyberButton';
+import {
+	FileText,
+	ShoppingCart,
+	Shield,
+	Zap,
+	Users,
+	BarChart3,
+	Download,
+	ExternalLink
+} from 'lucide-react';
+
+interface WhitepaperSection {
+	id: string;
+	title: string;
+	icon: React.ReactNode;
+	content: React.ReactNode;
+	subsections?: string[];
+}
+
+const WhitepaperSection: React.FC = () => {
+	const [activeSection, setActiveSection] = useState<string>('overview');
+
+	const sections: WhitepaperSection[] = [
+		{
+			id: 'overview',
+			title: 'Overview',
+			icon: <FileText className="w-5 h-5" />,
+			content: (
+				<div className="space-y-6">
+					<div>
+						<h3 className="text-xl font-bold text-white mb-4">Executive Summary</h3>
+						<p className="text-gray-300 leading-relaxed mb-4">
+							We are on-chain represents the first Web3-native protein brand, combining premium nutrition
+							with blockchain technology to create a transparent, community-driven supplement ecosystem.
+						</p>
+						<p className="text-gray-300 leading-relaxed">
+							Our flagship product, Pepe Flavor Protein, leverages smart contracts for quality assurance,
+							decentralized governance for product development, and cryptocurrency payments for seamless
+							global distribution.
+						</p>
+					</div>
+
+					<div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+						<div className="text-center">
+							<div className="text-2xl font-bold text-neonGreen">100%</div>
+							<div className="text-sm text-gray-400">Blockchain Verified</div>
+						</div>
+						<div className="text-center">
+							<div className="text-2xl font-bold text-neonOrange">247</div>
+							<div className="text-sm text-gray-400">Community Members</div>
+						</div>
+						<div className="text-center">
+							<div className="text-2xl font-bold text-neonGreen">25g</div>
+							<div className="text-sm text-gray-400">Protein per Serving</div>
+						</div>
+					</div>
+				</div>
+			)
+		},
+		{
+			id: 'how-to-buy',
+			title: 'How to Buy',
+			icon: <ShoppingCart className="w-5 h-5" />,
+			content: (
+				<div className="space-y-6">
+					<div>
+						<h3 className="text-xl font-bold text-white mb-4">Purchase Process</h3>
+						<div className="space-y-4">
+							<div className="flex items-start space-x-4">
+								<div className="flex-shrink-0 w-8 h-8 bg-neonGreen rounded-full flex items-center justify-center text-black font-bold">1</div>
+								<div>
+									<h4 className="font-semibold text-white">Connect Your Wallet</h4>
+									<p className="text-gray-400 text-sm">Support for MetaMask, WalletConnect, and major Web3 wallets</p>
+								</div>
+							</div>
+
+							<div className="flex items-start space-x-4">
+								<div className="flex-shrink-0 w-8 h-8 bg-neonOrange rounded-full flex items-center justify-center text-black font-bold">2</div>
+								<div>
+									<h4 className="font-semibold text-white">Select Payment Method</h4>
+									<p className="text-gray-400 text-sm">Pay with ETH, USDC, USDT, or other supported cryptocurrencies</p>
+								</div>
+							</div>
+
+							<div className="flex items-start space-x-4">
+								<div className="flex-shrink-0 w-8 h-8 bg-neonGreen rounded-full flex items-center justify-center text-black font-bold">3</div>
+								<div>
+									<h4 className="font-semibold text-white">Confirm Transaction</h4>
+									<p className="text-gray-400 text-sm">Review order details and approve the smart contract transaction</p>
+								</div>
+							</div>
+
+							<div className="flex items-start space-x-4">
+								<div className="flex-shrink-0 w-8 h-8 bg-neonOrange rounded-full flex items-center justify-center text-black font-bold">4</div>
+								<div>
+									<h4 className="font-semibold text-white">Receive Your Order</h4>
+									<p className="text-gray-400 text-sm">Fast global shipping with blockchain-verified tracking</p>
+								</div>
+							</div>
+						</div>
+					</div>
+
+					<CyberCard title="Supported Wallets" showEffects={false}>
+						<div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-center">
+							<div className="p-4 border border-dark-300 rounded-sm">
+								<div className="font-semibold text-white">MetaMask</div>
+							</div>
+							<div className="p-4 border border-dark-300 rounded-sm">
+								<div className="font-semibold text-white">WalletConnect</div>
+							</div>
+							<div className="p-4 border border-dark-300 rounded-sm">
+								<div className="font-semibold text-white">Coinbase Wallet</div>
+							</div>
+							<div className="p-4 border border-dark-300 rounded-sm">
+								<div className="font-semibold text-white">Trust Wallet</div>
+							</div>
+						</div>
+					</CyberCard>
+				</div>
+			)
+		},
+		{
+			id: 'technology',
+			title: 'Technology & Security',
+			icon: <Shield className="w-5 h-5" />,
+			content: (
+				<div className="space-y-6">
+					<div>
+						<h3 className="text-xl font-bold text-white mb-4">Blockchain Infrastructure</h3>
+						<p className="text-gray-300 leading-relaxed mb-4">
+							Our platform leverages Ethereum smart contracts to ensure transparent transactions,
+							immutable quality records, and decentralized governance.
+						</p>
+					</div>
+
+					<div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+						<CyberCard title="Smart Contracts" showEffects={false}>
+							<ul className="space-y-2 text-sm">
+								<li className="flex items-center space-x-2">
+									<div className="w-2 h-2 bg-neonGreen rounded-full"></div>
+									<span>Automated payment processing</span>
+								</li>
+								<li className="flex items-center space-x-2">
+									<div className="w-2 h-2 bg-neonGreen rounded-full"></div>
+									<span>Quality assurance verification</span>
+								</li>
+								<li className="flex items-center space-x-2">
+									<div className="w-2 h-2 bg-neonGreen rounded-full"></div>
+									<span>Supply chain tracking</span>
+								</li>
+							</ul>
+						</CyberCard>
+
+						<CyberCard title="Security Features" showEffects={false}>
+							<ul className="space-y-2 text-sm">
+								<li className="flex items-center space-x-2">
+									<div className="w-2 h-2 bg-neonOrange rounded-full"></div>
+									<span>Multi-signature wallets</span>
+								</li>
+								<li className="flex items-center space-x-2">
+									<div className="w-2 h-2 bg-neonOrange rounded-full"></div>
+									<span>Audited smart contracts</span>
+								</li>
+								<li className="flex items-center space-x-2">
+									<div className="w-2 h-2 bg-neonOrange rounded-full"></div>
+									<span>Decentralized storage</span>
+								</li>
+							</ul>
+						</CyberCard>
+					</div>
+				</div>
+			)
+		},
+		{
+			id: 'tokenomics',
+			title: 'Tokenomics',
+			icon: <BarChart3 className="w-5 h-5" />,
+			content: (
+				<div className="space-y-6">
+					<div>
+						<h3 className="text-xl font-bold text-white mb-4">Future Token Economy</h3>
+						<p className="text-gray-300 leading-relaxed mb-4">
+							Our roadmap includes launching a native governance token that will enable community-driven
+							decision making, reward loyal customers, and facilitate decentralized product development.
+						</p>
+					</div>
+
+					<div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+						<CyberCard title="Governance (40%)" showEffects={false}>
+							<div className="text-sm text-gray-300">
+								Community voting on product development, flavor innovations, and platform upgrades.
+							</div>
+						</CyberCard>
+
+						<CyberCard title="Rewards (30%)" showEffects={false}>
+							<div className="text-sm text-gray-300">
+								Loyalty rewards, purchase bonuses, and staking incentives for active community members.
+							</div>
+						</CyberCard>
+
+						<CyberCard title="Development (30%)" showEffects={false}>
+							<div className="text-sm text-gray-300">
+								Platform development, security audits, and ecosystem expansion funding.
+							</div>
+						</CyberCard>
+					</div>
+				</div>
+			)
+		},
+		{
+			id: 'community',
+			title: 'Community & Governance',
+			icon: <Users className="w-5 h-5" />,
+			content: (
+				<div className="space-y-6">
+					<div>
+						<h3 className="text-xl font-bold text-white mb-4">Decentralized Community</h3>
+						<p className="text-gray-300 leading-relaxed mb-4">
+							We believe in community-driven innovation. Our governance model empowers token holders
+							to participate in key decisions about product development, flavors, and platform features.
+						</p>
+					</div>
+
+					<div className="space-y-4">
+						<CyberCard title="Community Proposals" showEffects={false}>
+							<p className="text-sm text-gray-300 mb-3">
+								Submit and vote on new flavor ideas, packaging designs, and platform improvements.
+							</p>
+							<CyberButton variant="outline" size="sm">
+								<span>View Active Proposals</span>
+								<ExternalLink className="w-3 h-3 ml-1" />
+							</CyberButton>
+						</CyberCard>
+
+						<CyberCard title="Discord Community" showEffects={false}>
+							<p className="text-sm text-gray-300 mb-3">
+								Join our active Discord server for real-time discussions, AMAs, and exclusive updates.
+							</p>
+							<CyberButton variant="outline" size="sm">
+								<span>Join Discord</span>
+								<ExternalLink className="w-3 h-3 ml-1" />
+							</CyberButton>
+						</CyberCard>
+					</div>
+				</div>
+			)
+		},
+		{
+			id: 'roadmap',
+			title: 'Roadmap',
+			icon: <Zap className="w-5 h-5" />,
+			content: (
+				<div className="space-y-6">
+					<div>
+						<h3 className="text-xl font-bold text-white mb-4">Development Timeline</h3>
+					</div>
+
+					<div className="space-y-6">
+						<div className="flex items-start space-x-4">
+							<div className="flex-shrink-0 w-12 h-12 bg-neonGreen rounded-full flex items-center justify-center text-black font-bold">Q1</div>
+							<div>
+								<h4 className="font-semibold text-white mb-2">Platform Launch</h4>
+								<ul className="text-sm text-gray-300 space-y-1">
+									<li>• Web3 e-commerce platform</li>
+									<li>• Pepe Flavor Protein release</li>
+									<li>• Community building</li>
+								</ul>
+							</div>
+						</div>
+
+						<div className="flex items-start space-x-4">
+							<div className="flex-shrink-0 w-12 h-12 bg-neonOrange rounded-full flex items-center justify-center text-black font-bold">Q2</div>
+							<div>
+								<h4 className="font-semibold text-white mb-2">Product Expansion</h4>
+								<ul className="text-sm text-gray-300 space-y-1">
+									<li>• Additional protein flavors</li>
+									<li>• Pre-workout supplements</li>
+									<li>• Mobile app development</li>
+								</ul>
+							</div>
+						</div>
+
+						<div className="flex items-start space-x-4">
+							<div className="flex-shrink-0 w-12 h-12 bg-neonGreen rounded-full flex items-center justify-center text-black font-bold">Q3</div>
+							<div>
+								<h4 className="font-semibold text-white mb-2">Token Launch</h4>
+								<ul className="text-sm text-gray-300 space-y-1">
+									<li>• Governance token distribution</li>
+									<li>• DAO implementation</li>
+									<li>• Staking rewards program</li>
+								</ul>
+							</div>
+						</div>
+
+						<div className="flex items-start space-x-4">
+							<div className="flex-shrink-0 w-12 h-12 bg-neonOrange rounded-full flex items-center justify-center text-black font-bold">Q4</div>
+							<div>
+								<h4 className="font-semibold text-white mb-2">Global Expansion</h4>
+								<ul className="text-sm text-gray-300 space-y-1">
+									<li>• International shipping</li>
+									<li>• Multi-chain support</li>
+									<li>• Partnership integrations</li>
+								</ul>
+							</div>
+						</div>
+					</div>
+				</div>
+			)
+		}
+	];
+
+	const activeContent = sections.find(section => section.id === activeSection);
+
+	return (
+		<div className="space-y-8">
+			{/* Header */}
+			<div className="text-center">
+				<h2 className="text-3xl font-heading font-bold text-white mb-2">
+					Whitepaper
+				</h2>
+				<p className="text-gray-400">
+					Technical documentation and project overview
+				</p>
+			</div>
+
+			<div className="grid grid-cols-1 lg:grid-cols-4 gap-8">
+				{/* Navigation Sidebar */}
+				<div className="lg:col-span-1">
+					<CyberCard title="Contents" showEffects={false}>
+						<nav className="space-y-2">
+							{sections.map((section) => (
+								<button
+									key={section.id}
+									onClick={() => setActiveSection(section.id)}
+									className={`
+                    w-full flex items-center space-x-3 px-3 py-2 rounded-sm text-left transition-colors
+                    ${activeSection === section.id
+											? 'bg-neonGreen/10 text-neonGreen border border-neonGreen/30'
+											: 'text-gray-300 hover:bg-dark-200 hover:text-white'
+										}
+                  `}
+								>
+									{section.icon}
+									<span className="text-sm font-medium">{section.title}</span>
+								</button>
+							))}
+						</nav>
+
+						<div className="mt-6 pt-4 border-t border-dark-300">
+							<CyberButton variant="outline" size="sm" className="w-full flex items-center justify-center space-x-2">
+								<Download className="w-4 h-4" />
+								<span>Download PDF</span>
+							</CyberButton>
+						</div>
+					</CyberCard>
+				</div>
+
+				{/* Main Content */}
+				<div className="lg:col-span-3">
+					<CyberCard
+						title={activeContent?.title}
+						showEffects={false}
+						className="min-h-[600px]"
+					>
+						{activeContent?.content}
+					</CyberCard>
+				</div>
+			</div>
+		</div>
+	);
+};
+
+export default WhitepaperSection;-e 
+### FILE: ./src/app/dashboard/components/sections/ShopSection.tsx
+
+// src/app/dashboard/components/sections/ShopSection.tsx
+'use client';
+
+import React, { useState } from 'react';
+import CyberCard from '../../../components/common/CyberCard';
+import CyberButton from '../../../components/common/CyberButton';
+import ProteinModel from '../../../components/home/glowing-3d-text/ProteinModel';
+import { useCart } from '../../context/DashboardContext';
+import { ShoppingCart, Star, Shield, Zap, Check } from 'lucide-react';
+
+interface Product {
+  id: string;
+  name: string;
+  description: string;
+  price: {
+    eth: number;
+    usd: number;
+  };
+  inStock: number;
+  rating: number;
+  features: string[];
+  nutritionFacts: {
+    protein: string;
+    fat: string;
+    carbs: string;
+    minerals: string;
+    allergen: string;
+  };
+}
+
+const ShopSection: React.FC = () => {
+  const [quantity, setQuantity] = useState(1);
+  const [selectedCurrency, setSelectedCurrency] = useState<'ETH' | 'USDC' | 'USDT'>('ETH');
+  const [showSuccessMessage, setShowSuccessMessage] = useState(false);
+  
+  const { addToCart, cartItems } = useCart();
+
+  // 商品データ
+  const product: Product = {
+    id: 'pepe-protein-1',
+    name: 'Pepe Flavor Protein',
+    description: 'Premium whey protein with the legendary Pepe flavor. Built for the blockchain generation.',
+    price: {
+      eth: 0.025,
+      usd: 89.99
+    },
+    inStock: 247,
+    rating: 4.9,
+    features: [
+      'Blockchain Verified Quality',
+      'Community Approved Formula',
+      'Meme-Powered Gains',
+      'Web3 Native Nutrition'
+    ],
+    nutritionFacts: {
+      protein: '25g',
+      fat: '1.5g', 
+      carbs: '2g',
+      minerals: '1g',
+      allergen: 'Milk'
+    }
+  };
+
+  // カート内の商品数量を取得
+  const getCartQuantity = () => {
+    const cartItem = cartItems.find(item => item.id === product.id);
+    return cartItem ? cartItem.quantity : 0;
+  };
+
+  // 価格を通貨別に取得
+  const getPrice = () => {
+    if (selectedCurrency === 'ETH') {
+      return { value: product.price.eth, symbol: 'Ξ' };
+    } else {
+      return { value: product.price.usd, symbol: '$' };
+    }
+  };
+
+  const handleAddToCart = () => {
+    const cartItem = {
+      id: product.id,
+      name: product.name,
+      price: selectedCurrency === 'ETH' ? product.price.eth : product.price.usd,
+      quantity: quantity,
+      currency: selectedCurrency,
+    };
+
+    addToCart(cartItem);
+    setShowSuccessMessage(true);
+    
+    setTimeout(() => {
+      setShowSuccessMessage(false);
+    }, 3000);
+  };
+
+  const handleBuyNow = () => {
+    handleAddToCart();
+    console.log(`Generate invoice for: ${quantity}x ${product.name}`);
+  };
+
+  const currentCartQuantity = getCartQuantity();
+  const price = getPrice();
+
+  return (
+    <div className="space-y-8">
+      {/* Header */}
+      <div className="text-center">
+        <h2 className="text-3xl font-heading font-bold text-white mb-2">
+          Premium Protein Store
+        </h2>
+        <p className="text-gray-400">
+          Pay with cryptocurrency - No wallet connection required
+        </p>
+      </div>
+
+      {/* Success Message */}
+      {showSuccessMessage && (
+        <div className="fixed top-24 right-4 z-50 p-4 bg-neonGreen/10 border border-neonGreen rounded-sm backdrop-blur-sm animate-pulse">
+          <div className="flex items-center space-x-2">
+            <Check className="w-5 h-5 text-neonGreen" />
+            <span className="text-neonGreen font-medium">Added to cart!</span>
+          </div>
+        </div>
+      )}
+
+      {/* Product Display */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+        {/* 3D Model */}
+        <CyberCard 
+          variant="default" 
+          showEffects={false}
+          className="h-[500px]"
+        >
+          <div className="h-full flex flex-col">
+            <div className="flex-1">
+              <ProteinModel scale={1.2} autoRotate={true} />
+            </div>
+            <div className="text-center pt-4">
+              <div className="inline-flex items-center space-x-2 px-3 py-1 bg-neonGreen/10 border border-neonGreen/30 rounded-sm">
+                <Shield className="w-4 h-4 text-neonGreen" />
+                <span className="text-xs text-neonGreen">Blockchain Verified</span>
+              </div>
+            </div>
+          </div>
+        </CyberCard>
+
+        {/* Product Info */}
+        <div className="space-y-6">
+          {/* Product Header */}
+          <div>
+            <h3 className="text-2xl font-heading font-bold text-white mb-2">
+              {product.name}
+            </h3>
+            <div className="flex items-center space-x-4 mb-4">
+              <div className="flex items-center space-x-1">
+                {[...Array(5)].map((_, i) => (
+                  <Star 
+                    key={i} 
+                    className={`w-4 h-4 ${i < Math.floor(product.rating) ? 'text-neonOrange fill-current' : 'text-gray-400'}`} 
+                  />
+                ))}
+                <span className="text-sm text-gray-400 ml-2">({product.rating})</span>
+              </div>
+              <span className="text-sm text-neonGreen">{product.inStock} in stock</span>
+            </div>
+            <p className="text-gray-400 leading-relaxed">
+              {product.description}
+            </p>
+          </div>
+
+          {/* Currency Selection */}
+          <div>
+            <label className="block text-sm font-medium text-white mb-2">Payment Currency</label>
+            <div className="flex space-x-2">
+              {(['ETH', 'USDC', 'USDT'] as const).map((currency) => (
+                <button
+                  key={currency}
+                  onClick={() => setSelectedCurrency(currency)}
+                  className={`px-4 py-2 rounded-sm border transition-colors ${
+                    selectedCurrency === currency
+                      ? 'bg-neonGreen/10 border-neonGreen text-neonGreen'
+                      : 'border-dark-300 text-gray-300 hover:border-gray-500'
+                  }`}
+                >
+                  {currency}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Price */}
+          <div className="border border-dark-300 rounded-sm p-4 bg-dark-200/30">
+            <div className="flex items-center justify-between">
+              <div>
+                <div className="text-2xl font-bold text-neonGreen">
+                  {price.symbol} {price.value}
+                </div>
+                {selectedCurrency === 'ETH' && (
+                  <div className="text-sm text-gray-400">
+                    ≈ ${product.price.usd} USD
+                  </div>
+                )}
+              </div>
+              <div className="text-right">
+                <div className="text-xs text-gray-500">per 50g serving</div>
+                <div className="text-xs text-gray-500">Invoice-based payment</div>
+              </div>
+            </div>
+          </div>
+
+          {/* Quantity Selector */}
+          <div className="flex items-center space-x-4">
+            <label className="text-sm font-medium text-white">Quantity:</label>
+            <div className="flex items-center border border-dark-300 rounded-sm">
+              <button
+                onClick={() => setQuantity(Math.max(1, quantity - 1))}
+                className="px-3 py-2 text-white hover:bg-dark-200 transition-colors"
+              >
+                -
+              </button>
+              <span className="px-4 py-2 bg-dark-200 text-white min-w-[60px] text-center">
+                {quantity}
+              </span>
+              <button
+                onClick={() => setQuantity(Math.min(10, quantity + 1))}
+                className="px-3 py-2 text-white hover:bg-dark-200 transition-colors"
+              >
+                +
+              </button>
+            </div>
+            {currentCartQuantity > 0 && (
+              <span className="text-sm text-neonGreen">
+                {currentCartQuantity} in cart
+              </span>
+            )}
+          </div>
+
+          {/* Invoice Payment Info */}
+          <div className="p-3 border border-neonGreen/30 rounded-sm bg-neonGreen/5">
+            <div className="text-neonGreen text-sm font-medium mb-1">
+              💡 Simple Crypto Payment
+            </div>
+            <div className="text-xs text-gray-300">
+              No wallet connection needed! We'll generate a payment invoice with QR code for easy crypto payment.
+            </div>
+          </div>
+
+          {/* Action Buttons */}
+          <div className="space-y-3">
+            <CyberButton
+              variant="primary"
+              className="w-full flex items-center justify-center space-x-2"
+              onClick={handleBuyNow}
+            >
+              <Zap className="w-4 h-4" />
+              <span>Buy Now - Generate Invoice</span>
+            </CyberButton>
+            
+            <CyberButton
+              variant="outline"
+              className="w-full flex items-center justify-center space-x-2"
+              onClick={handleAddToCart}
+            >
+              <ShoppingCart className="w-4 h-4" />
+              <span>Add to Cart</span>
+            </CyberButton>
+          </div>
+
+          {/* Features */}
+          <div className="space-y-3">
+            <h4 className="text-lg font-semibold text-white">Key Features</h4>
+            <div className="grid grid-cols-1 gap-2">
+              {product.features.map((feature, index) => (
+                <div key={index} className="flex items-center space-x-2">
+                  <div className="w-2 h-2 bg-neonGreen rounded-full"></div>
+                  <span className="text-sm text-gray-300">{feature}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Payment Process */}
+      <CyberCard 
+        title="How Payment Works" 
+        description="Simple 3-step process"
+        showEffects={false}
+      >
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div className="text-center p-4">
+            <div className="w-12 h-12 bg-neonGreen/20 rounded-full flex items-center justify-center mx-auto mb-3">
+              <span className="text-neonGreen font-bold">1</span>
+            </div>
+            <h4 className="text-white font-medium mb-2">Choose & Order</h4>
+            <p className="text-xs text-gray-400">Select your products and quantities</p>
+          </div>
+          <div className="text-center p-4">
+            <div className="w-12 h-12 bg-neonOrange/20 rounded-full flex items-center justify-center mx-auto mb-3">
+              <span className="text-neonOrange font-bold">2</span>
+            </div>
+            <h4 className="text-white font-medium mb-2">Get Invoice</h4>
+            <p className="text-xs text-gray-400">Receive payment address & QR code</p>
+          </div>
+          <div className="text-center p-4">
+            <div className="w-12 h-12 bg-neonGreen/20 rounded-full flex items-center justify-center mx-auto mb-3">
+              <span className="text-neonGreen font-bold">3</span>
+            </div>
+            <h4 className="text-white font-medium mb-2">Pay & Ship</h4>
+            <p className="text-xs text-gray-400">Send crypto and get instant shipping</p>
+          </div>
+        </div>
+      </CyberCard>
+
+      {/* Nutrition Facts */}
+      <CyberCard 
+        title="Nutrition Facts" 
+        description="Per 50g serving"
+        showEffects={false}
+      >
+        <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+          {Object.entries(product.nutritionFacts).map(([key, value]) => (
+            <div key={key} className="text-center">
+              <div className="text-lg font-bold text-neonGreen">{value}</div>
+              <div className="text-xs text-gray-400 capitalize">{key}</div>
+            </div>
+          ))}
+        </div>
+      </CyberCard>
+    </div>
+  );
+};
+
+export default ShopSection;-e 
+### FILE: ./src/app/dashboard/components/DashboardCard.tsx
+
+// src/app/dashboard/components/DashboardCard.tsx
+'use client';
+
+import React, { useState } from 'react';
+import { DashboardCardProps } from '../../../../types/dashboard';
+import GridPattern from '../../components/common/GridPattern';
+
+const DashboardCard: React.FC<DashboardCardProps> = ({
+  title,
+  description,
+  icon,
+  stats,
+  badge,
+  onClick,
+  className = ''
+}) => {
+  const [isHovered, setIsHovered] = useState(false);
+
+  return (
+    <div
+      className={`
+        relative bg-gradient-to-t from-dark-100 to-black 
+        border border-dark-300 rounded-sm overflow-hidden
+        cursor-pointer transition-all duration-300 ease-out
+        hover:border-neonGreen hover:scale-[1.02]
+        hover:shadow-lg hover:shadow-neonGreen/20
+        ${className}
+      `}
+      onMouseEnter={() => setIsHovered(true)}
+      onMouseLeave={() => setIsHovered(false)}
+    >
+      {/* Background Effects - スキャンラインなし、軽微なグリッドのみ */}
+      <GridPattern 
+        size={30} 
+        opacity={0.03} 
+        color="rgba(0, 255, 127, 0.08)"
+      />
+
+      {/* Content */}
+      <div className="relative z-10 p-6">
+        {/* Header */}
+        <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center space-x-3">
+            <div className="p-2 rounded-sm bg-dark-200/50 border border-dark-300">
+              {icon}
+            </div>
+            <div>
+              <h3 className="text-white font-heading font-semibold text-lg">
+                {title}
+              </h3>
+            </div>
+          </div>
+          
+          {badge && (
+            <span className="inline-block px-2 py-1 text-xs rounded-sm bg-neonGreen/10 text-neonGreen border border-neonGreen/30 animate-pulse">
+              {badge}
+            </span>
+          )}
+        </div>
+
+        {/* Description */}
+        <p className="text-gray-400 text-sm mb-4 leading-relaxed">
+          {description}
+        </p>
+
+        {/* Stats */}
+        {stats && (
+          <div className="flex items-center justify-between border-t border-dark-300 pt-3">
+            <span className="text-xs text-gray-500">
+              {stats}
+            </span>
+            <div className="w-2 h-2 bg-neonGreen rounded-full animate-pulse opacity-60" />
+          </div>
+        )}
+
+        {/* Action Indicator */}
+        <div className="absolute top-4 right-4 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
+          <div className="w-6 h-6 border border-neonGreen rounded-sm flex items-center justify-center">
+            <svg
+              className="w-3 h-3 text-neonGreen"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M9 5l7 7-7 7"
+              />
+            </svg>
+          </div>
+        </div>
+      </div>
+
+      {/* Hover Overlay */}
+      <div 
+        className={`
+          absolute inset-0 bg-gradient-to-r from-neonGreen/5 to-neonOrange/5 
+          transition-opacity duration-300 pointer-events-none
+          ${isHovered ? 'opacity-100' : 'opacity-0'}
+        `} 
+      />
+
+      {/* Subtle glow on hover */}
+      {isHovered && (
+        <div className="absolute inset-0 border border-neonGreen/20 rounded-sm pointer-events-none" />
+      )}
+    </div>
+  );
+};
+
+export default DashboardCard;-e 
+### FILE: ./src/app/dashboard/components/DashboardGrid.tsx
+
+// src/app/dashboard/components/DashboardGrid.tsx
+'use client';
+
+import React from 'react';
+import DashboardCard from './DashboardCard';
+import { SectionType } from '../../../types/dashboard';
+import { useCart } from '../context/DashboardContext';
+import { 
+  ShoppingBag, 
+  TrendingUp, 
+  FileText, 
+  User, 
+  ShoppingCart,
+  CreditCard
+} from 'lucide-react';
+
+interface DashboardGridProps {
+  onCardClick: (section: SectionType) => void;
+}
+
+const DashboardGrid: React.FC<DashboardGridProps> = ({ onCardClick }) => {
+  const { getCartItemCount } = useCart();
+  const cartItemCount = getCartItemCount();
+
+  const dashboardCards = [
+    {
+      id: 'shop' as SectionType,
+      title: 'Shop',
+      description: 'Browse and purchase premium protein',
+      icon: <ShoppingBag className="w-8 h-8 text-neonGreen" />,
+      stats: '1 Product Available',
+      badge: 'New'
+    },
+    {
+      id: 'how-to-buy' as SectionType,
+      title: 'How to Buy',
+      description: 'Complete guide for crypto purchases',
+      icon: <CreditCard className="w-8 h-8 text-neonOrange" />,
+      stats: '5 Simple Steps'
+    },
+    {
+      id: 'purchase-scan' as SectionType,
+      title: 'Purchase Scan',
+      description: 'View community purchase rankings',
+      icon: <TrendingUp className="w-8 h-8 text-neonGreen" />,
+      stats: '247 Total Purchases',
+      badge: 'Live'
+    },
+    {
+      id: 'whitepaper' as SectionType,
+      title: 'Whitepaper',
+      description: 'Technical documentation and guides',
+      icon: <FileText className="w-8 h-8 text-neonOrange" />,
+      stats: '6 Sections'
+    },
+    {
+      id: 'profile' as SectionType,
+      title: 'Profile',
+      description: 'Manage your account and view history',
+      icon: <User className="w-8 h-8 text-neonGreen" />,
+      stats: 'Rank #42'
+    },
+    {
+      id: 'cart' as SectionType,
+      title: 'Cart',
+      description: 'Review and checkout your items',
+      icon: <ShoppingCart className="w-8 h-8 text-neonOrange" />,
+      stats: cartItemCount > 0 ? `${cartItemCount} Items` : '0 Items',
+      badge: cartItemCount > 0 ? 'Ready' : undefined
+    }
+  ];
+
+  return (
+    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+      {dashboardCards.map((card) => (
+        <DashboardCard
+          key={card.id}
+          {...card}
+          onClick={() => onCardClick(card.id)}
+        />
+      ))}
+    </div>
+  );
+};
+
+export default DashboardGrid;-e 
+### FILE: ./src/app/dashboard/components/SlideInPanel.tsx
+
+// src/app/dashboard/components/SlideInPanel.tsx
+'use client';
+
+import React, { useEffect } from 'react';
+import { SlideInPanelProps } from '../../../../types/dashboard';
+import { X, ArrowLeft } from 'lucide-react';
+import CyberButton from '../../components/common/CyberButton';
+import GridPattern from '../../components/common/GridPattern';
+
+const SlideInPanel: React.FC<SlideInPanelProps> = ({
+  isOpen,
+  onClose,
+  title,
+  children,
+  className = ''
+}) => {
+  // Escape key handling
+  useEffect(() => {
+    const handleEscape = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && isOpen) {
+        onClose();
+      }
+    };
+
+    if (isOpen) {
+      document.addEventListener('keydown', handleEscape);
+      // Prevent background scrolling
+      document.body.style.overflow = 'hidden';
+    }
+
+    return () => {
+      document.removeEventListener('keydown', handleEscape);
+      document.body.style.overflow = 'unset';
+    };
+  }, [isOpen, onClose]);
+
+  if (!isOpen) return null;
+
+  return (
+    <>
+      {/* Backdrop */}
+      <div 
+        className="fixed inset-0 bg-black/50 backdrop-blur-sm z-40 transition-opacity duration-300"
+        onClick={onClose}
+      />
+
+      {/* Panel */}
+      <div 
+        className={`
+          fixed top-0 right-0 h-full w-full md:w-4/5 lg:w-3/4 xl:w-2/3 2xl:w-1/2
+          bg-gradient-to-t from-dark-100 to-black
+          border-l border-dark-300 shadow-2xl z-50
+          transform transition-transform duration-300 ease-out
+          ${isOpen ? 'translate-x-0' : 'translate-x-full'}
+          ${className}
+        `}
+      >
+        {/* Background Effects - スキャンラインなし */}
+        <div className="absolute inset-0 overflow-hidden">
+          <GridPattern 
+            size={40} 
+            opacity={0.02} 
+            color="rgba(0, 255, 127, 0.06)"
+          />
+        </div>
+
+        {/* Header */}
+        <div className="relative z-10 flex items-center justify-between p-6 border-b border-dark-300">
+          <div className="flex items-center space-x-4">
+            {/* Back Button */}
+            <CyberButton
+              variant="outline"
+              size="sm"
+              onClick={onClose}
+              className="flex items-center space-x-2"
+            >
+              <ArrowLeft className="w-4 h-4" />
+              <span>Back</span>
+            </CyberButton>
+
+            {/* Title */}
+            <h2 className="text-2xl font-heading font-bold text-white">
+              {title}
+            </h2>
+          </div>
+
+          {/* Close Button */}
+          <button
+            onClick={onClose}
+            className="p-2 text-gray-400 hover:text-white transition-colors duration-200 hover:bg-dark-200 rounded-sm"
+            aria-label="Close panel"
+          >
+            <X className="w-6 h-6" />
+          </button>
+        </div>
+
+        {/* Content */}
+        <div className="relative z-10 h-[calc(100%-5rem)] overflow-y-auto">
+          <div className="p-6">
+            {children}
+          </div>
+        </div>
+
+        {/* Subtle border glow */}
+        <div className="absolute inset-0 border-l-2 border-neonGreen/10 pointer-events-none" />
+      </div>
+    </>
+  );
+};
+
+export default SlideInPanel;-e 
+### FILE: ./src/app/dashboard/layout.tsx
+
+// src/app/dashboard/layout.tsx
+'use client';
+
+import Header from '../components/home/ui/Header';
+import Footer from '../components/home/ui/Footer';
+import GridPattern from '../components/common/GridPattern';
+import { DashboardProvider } from './context/DashboardContext';
+
+interface DashboardLayoutProps {
+	children: React.ReactNode;
+}
+
+export default function DashboardLayout({ children }: DashboardLayoutProps) {
+	return (
+		<DashboardProvider>
+			<div className="min-h-screen bg-black text-white relative">
+				{/* Header */}
+				<Header />
+
+				{/* Background Effects - 軽微なグリッドのみ */}
+				<div className="fixed inset-0 z-0">
+					<div className="absolute inset-0 bg-gradient-to-b from-black via-dark-100 to-black opacity-80" />
+					<GridPattern
+						size={40}
+						opacity={0.02}
+						color="rgba(0, 255, 127, 0.05)"
+					/>
+				</div>
+
+				{/* Main Content */}
+				<main className="relative z-10 pt-16 min-h-[calc(100vh-4rem)]">
+					<div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+						{children}
+					</div>
+				</main>
+
+				{/* Footer */}
+				<Footer />
+			</div>
+		</DashboardProvider>
+	);
+}-e 
+### FILE: ./src/app/dashboard/context/DashboardContext.tsx
+
+// src/app/dashboard/context/DashboardContext.tsx
+'use client';
+
+import React, { createContext, useContext, useReducer, useEffect } from 'react';
+import { DashboardState, CartItem, UserProfile } from '../../../../types/dashboard';
+
+// Actions
+type DashboardAction =
+	| { type: 'SET_USER_PROFILE'; payload: UserProfile | null }
+	| { type: 'ADD_TO_CART'; payload: CartItem }
+	| { type: 'REMOVE_FROM_CART'; payload: string }
+	| { type: 'UPDATE_CART_QUANTITY'; payload: { id: string; quantity: number } }
+	| { type: 'CLEAR_CART' }
+	| { type: 'LOAD_FROM_STORAGE'; payload: Partial<DashboardState> };
+
+// Initial state
+const initialState: DashboardState = {
+	activeSection: null,
+	isSlideOpen: false,
+	cartItems: [],
+	userProfile: null,
+	walletConnected: false, // Optional field for fuFture wallet integration
+};
+
+// Reducer
+function dashboardReducer(state: DashboardState, action: DashboardAction): DashboardState {
+	switch (action.type) {
+		case 'SET_USER_PROFILE':
+			return { ...state, userProfile: action.payload };
+
+		case 'ADD_TO_CART': {
+			const existingItem = state.cartItems.find(item => item.id === action.payload.id);
+			if (existingItem) {
+				return {
+					...state,
+					cartItems: state.cartItems.map(item =>
+						item.id === action.payload.id
+							? { ...item, quantity: item.quantity + action.payload.quantity }
+							: item
+					),
+				};
+			}
+			return {
+				...state,
+				cartItems: [...state.cartItems, action.payload],
+			};
+		}
+
+		case 'REMOVE_FROM_CART':
+			return {
+				...state,
+				cartItems: state.cartItems.filter(item => item.id !== action.payload),
+			};
+
+		case 'UPDATE_CART_QUANTITY':
+			return {
+				...state,
+				cartItems: state.cartItems.map(item =>
+					item.id === action.payload.id
+						? { ...item, quantity: Math.max(0, action.payload.quantity) }
+						: item
+				).filter(item => item.quantity > 0),
+			};
+
+		case 'CLEAR_CART':
+			return { ...state, cartItems: [] };
+
+		case 'LOAD_FROM_STORAGE':
+			return { ...state, ...action.payload };
+
+		default:
+			return state;
+	}
+}
+
+// Context
+const DashboardContext = createContext<{
+	state: DashboardState;
+	dispatch: React.Dispatch<DashboardAction>;
+} | null>(null);
+
+// Provider
+export function DashboardProvider({ children }: { children: React.ReactNode }) {
+	const [state, dispatch] = useReducer(dashboardReducer, initialState);
+
+	// Load from localStorage on mount
+	useEffect(() => {
+		try {
+			const savedState = localStorage.getItem('dashboard-state');
+			if (savedState) {
+				const parsed = JSON.parse(savedState);
+				dispatch({ type: 'LOAD_FROM_STORAGE', payload: parsed });
+			}
+		} catch (error) {
+			console.error('Failed to load dashboard state from localStorage:', error);
+		}
+	}, []);
+
+	// Save to localStorage when state changes
+	useEffect(() => {
+		try {
+			const stateToSave = {
+				cartItems: state.cartItems,
+				userProfile: state.userProfile,
+			};
+			localStorage.setItem('dashboard-state', JSON.stringify(stateToSave));
+		} catch (error) {
+			console.error('Failed to save dashboard state to localStorage:', error);
+		}
+	}, [state.cartItems, state.userProfile]);
+
+	return (
+		<DashboardContext.Provider value={{ state, dispatch }}>
+			{children}
+		</DashboardContext.Provider>
+	);
+}
+
+// Hook
+export function useDashboard() {
+	const context = useContext(DashboardContext);
+	if (!context) {
+		throw new Error('useDashboard must be used within a DashboardProvider');
+	}
+	return context;
+}
+
+// Cart management hook
+export function useCart() {
+	const { state, dispatch } = useDashboard();
+
+	const addToCart = (item: CartItem) => {
+		dispatch({ type: 'ADD_TO_CART', payload: item });
+	};
+
+	const removeFromCart = (id: string) => {
+		dispatch({ type: 'REMOVE_FROM_CART', payload: id });
+	};
+
+	const updateQuantity = (id: string, quantity: number) => {
+		dispatch({ type: 'UPDATE_CART_QUANTITY', payload: { id, quantity } });
+	};
+
+	const clearCart = () => {
+		dispatch({ type: 'CLEAR_CART' });
+	};
+
+	const getCartTotal = () => {
+		return state.cartItems.reduce((total, item) => total + (item.price * item.quantity), 0);
+	};
+
+	const getCartItemCount = () => {
+		return state.cartItems.reduce((count, item) => count + item.quantity, 0);
+	};
+
+	return {
+		cartItems: state.cartItems,
+		addToCart,
+		removeFromCart,
+		updateQuantity,
+		clearCart,
+		getCartTotal,
+		getCartItemCount,
+	};
+}
+
+// Profile management hook
+export function useProfile() {
+	const { state, dispatch } = useDashboard();
+
+	const setUserProfile = (profile: UserProfile | null) => {
+		dispatch({ type: 'SET_USER_PROFILE', payload: profile });
+	};
+
+	return {
+		userProfile: state.userProfile,
+		setUserProfile,
+	};
+}
+
+// Optional wallet hook for future integration
+export function useWallet() {
+	const { state } = useDashboard();
+
+	// Mock implementation - can be extended later if wallet integration is needed
+	const connectWallet = () => {
+		console.log('Wallet connection not required for invoice payments');
+	};
+
+	const disconnectWallet = () => {
+		console.log('Wallet disconnection not required for invoice payments');
+	};
+
+	return {
+		walletConnected: false, // Always false for invoice-based payments
+		userProfile: state.userProfile,
+		connectWallet,
+		disconnectWallet,
+	};
+}-e 
+### FILE: ./src/app/dashboard/page.tsx
+
+// src/app/dashboard/page.tsx
+'use client';
+
+import React, { useState } from 'react';
+import DashboardGrid from './components/DashboardGrid';
+import SlideInPanel from './components/SlideInPanel';
+import { SectionType } from '../../../types/dashboard';
+
+// Import actual section components
+import ShopSection from './components/sections/ShopSection';
+import HowToBuySection from './components/sections/HowToBuySection';
+import PurchaseScanSection from './components/sections/PurchaseScanSection';
+import WhitepaperSection from './components/sections/WhitepaperSection';
+import ProfileSection from './components/sections/ProfileSection';
+import CartSection from './components/sections/CartSection';
+
+export default function DashboardPage() {
+	const [activeSection, setActiveSection] = useState<SectionType | null>(null);
+	const [isSlideOpen, setIsSlideOpen] = useState(false);
+
+	const handleCardClick = (section: SectionType) => {
+		setActiveSection(section);
+		setIsSlideOpen(true);
+	};
+
+	const handleCloseSlide = () => {
+		setIsSlideOpen(false);
+		// アニメーション完了後にactiveSectionをクリア
+		setTimeout(() => setActiveSection(null), 300);
+	};
+
+	const renderSectionContent = () => {
+		switch (activeSection) {
+			case 'shop':
+				return <ShopSection />;
+			case 'how-to-buy':
+				return <HowToBuySection />;
+			case 'purchase-scan':
+				return <PurchaseScanSection />;
+			case 'whitepaper':
+				return <WhitepaperSection />;
+			case 'profile':
+				return <ProfileSection />;
+			case 'cart':
+				return <CartSection />;
+			default:
+				return <div className="text-white">Loading...</div>;
+		}
+	};
+
+	const getSectionTitle = (section: SectionType | null): string => {
+		const titles = {
+			'shop': 'Shop',
+			'how-to-buy': 'How to Buy',
+			'purchase-scan': 'Purchase Scan',
+			'whitepaper': 'Whitepaper',
+			'profile': 'Profile',
+			'cart': 'Cart'
+		};
+		return section ? titles[section] : '';
+	};
+
+	return (
+		<>
+			{/* ダッシュボードヘッダー */}
+			<div className="mb-8">
+				<h1 className="text-4xl font-heading font-bold text-white mb-2">
+					Dashboard
+				</h1>
+				<p className="text-gray-400">
+					Welcome to your Web3 protein command center
+				</p>
+			</div>
+
+			{/* ダッシュボードグリッド */}
+			<DashboardGrid onCardClick={handleCardClick} />
+
+			{/* スライドインパネル */}
+			<SlideInPanel
+				isOpen={isSlideOpen}
+				onClose={handleCloseSlide}
+				title={getSectionTitle(activeSection)}
+			>
+				{renderSectionContent()}
+			</SlideInPanel>
+		</>
+	);
+}-e 
+### FILE: ./src/app/components/home/layout/constants.ts
 
 // src/app/components/floating-images-fix/cyber-scroll-messages/constants.ts
 
@@ -114,7 +2711,7 @@ export const generateRandomHex = (length: number): string => {
 		() => hexChars[Math.floor(Math.random() * hexChars.length)]
 	).join('');
 };-e 
-### FILE: ./src/app/components/layout/CyberInterface.tsx
+### FILE: ./src/app/components/home/layout/CyberInterface.tsx
 
 // src/app/components/floating-images-fix/cyber-scroll-messages/CyberInterface.tsx
 
@@ -393,7 +2990,7 @@ const CyberInterface: React.FC<CyberInterfaceProps> = ({
 };
 
 export default CyberInterface;-e 
-### FILE: ./src/app/components/layout/ScanlineEffect.tsx
+### FILE: ./src/app/components/home/layout/ScanlineEffect.tsx
 
 // src/app/components/ui/ScanlineEffect.tsx
 import React from 'react';
@@ -411,7 +3008,7 @@ export const ScanlineEffect: React.FC = () => {
 };
 
 export default ScanlineEffect;-e 
-### FILE: ./src/app/components/layout/PulsatingComponent.tsx
+### FILE: ./src/app/components/home/layout/PulsatingComponent.tsx
 
 'use client';
 import { useState, useEffect } from 'react';
@@ -480,7 +3077,7 @@ const PulsatingComponent = () => {
 
 export default PulsatingComponent;
 -e 
-### FILE: ./src/app/components/ui/Footer.tsx
+### FILE: ./src/app/components/home/ui/Footer.tsx
 
 'use client';
 
@@ -680,7 +3277,7 @@ const Footer = () => {
 };
 
 export default Footer;-e 
-### FILE: ./src/app/components/ui/Header.tsx
+### FILE: ./src/app/components/home/ui/Header.tsx
 
 'use client';
 
@@ -821,7 +3418,7 @@ const Header = () => {
 };
 
 export default Header;-e 
-### FILE: ./src/app/components/ui/GlitchText.tsx
+### FILE: ./src/app/components/home/ui/GlitchText.tsx
 
 // src/app/components/ui/GlitchText.tsx
 'use client';
@@ -945,7 +3542,7 @@ export const GlitchText: React.FC<GlitchTextProps> = ({
 };
 
 export default GlitchText;-e 
-### FILE: ./src/app/components/hero-section/GlitchEffects.tsx
+### FILE: ./src/app/components/home/hero-section/GlitchEffects.tsx
 
 // src/app/components/hero-section/GlitchEffects.tsx
 'use client';
@@ -1073,7 +3670,7 @@ export function useGlitchEffect(
 
   return { glitchState, getGlitchStyle };
 }-e 
-### FILE: ./src/app/components/hero-section/HeroTitle.tsx
+### FILE: ./src/app/components/home/hero-section/HeroTitle.tsx
 
 // src/app/components/hero-section/HeroTitle.tsx
 import React from 'react';
@@ -1119,7 +3716,7 @@ export const HeroTitle: React.FC<HeroTitleProps> = ({ style }) => {
 };
 
 export default HeroTitle;-e 
-### FILE: ./src/app/components/hero-section/HeroBackground.tsx
+### FILE: ./src/app/components/home/hero-section/HeroBackground.tsx
 
 // src/app/components/hero-section/HeroBackground.tsx
 
@@ -1196,7 +3793,7 @@ export const HeroBackground: React.FC<HeroBackgroundProps> = ({
 
 export default HeroBackground;
 -e 
-### FILE: ./src/app/components/hero-section/HeroSection.tsx
+### FILE: ./src/app/components/home/hero-section/HeroSection.tsx
 
 'use client';
 import React, { useState, useEffect } from 'react';
@@ -1258,7 +3855,7 @@ export const HeroSection: React.FC = () => {
 
 export default HeroSection;
 -e 
-### FILE: ./src/app/components/pepePush/types/index.ts
+### FILE: ./src/app/components/home/pepePush/types/index.ts
 
 // types/index.ts
 export interface ControlPoint {
@@ -1287,7 +3884,7 @@ export interface StickyCanvasProps {
   children: React.ReactNode;
   className?: string;
 }-e 
-### FILE: ./src/app/components/pepePush/config/controlPoints.ts
+### FILE: ./src/app/components/home/pepePush/config/controlPoints.ts
 
 // config/controlPoints.ts
 import { ControlPoint } from '../types';
@@ -1384,7 +3981,7 @@ export const CONFIG = {
 	MOBILE_BREAKPOINT: 768,
 	MOBILE_SCALE_FACTOR: 0.6 // スマホでの最終スケール
 } as const;-e 
-### FILE: ./src/app/components/pepePush/config/animations.ts
+### FILE: ./src/app/components/home/pepePush/config/animations.ts
 
 // config/animations.ts
 
@@ -1458,7 +4055,7 @@ export const getAnimationForScrollProgress = (progress: number) => {
 
 	return scrollAnimations[targetKey as keyof typeof scrollAnimations];
 };-e 
-### FILE: ./src/app/components/pepePush/StickyCanvas.tsx
+### FILE: ./src/app/components/home/pepePush/StickyCanvas.tsx
 
 // StickyCanvas.tsx
 'use client';
@@ -1496,12 +4093,12 @@ export default function StickyCanvas({ children, className = '' }: StickyCanvasP
 		</div>
 	);
 }-e 
-### FILE: ./src/app/components/pepePush/messages/MessageTest.tsx
+### FILE: ./src/app/components/home/pepePush/messages/MessageTest.tsx
 
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { ScrollMessages } from './';
+import { ScrollMessages } from '.';
 
 /**
  * メッセージ表示機能のテスト用コンポーネント
@@ -1589,7 +4186,7 @@ const MessageTest: React.FC = () => {
 };
 
 export default MessageTest;-e 
-### FILE: ./src/app/components/pepePush/messages/constants.ts
+### FILE: ./src/app/components/home/pepePush/messages/constants.ts
 
 // src/app/components/pepePush/messages/constants.ts
 import { MessageConfig, ScrollMessageConfig, GlitchEffectType } from './types';
@@ -1712,7 +4309,7 @@ export const calculateMessageVisibility = (
 
   return { isVisible, opacity, isActive };
 };-e 
-### FILE: ./src/app/components/pepePush/messages/MessageText.tsx
+### FILE: ./src/app/components/home/pepePush/messages/MessageText.tsx
 
 'use client';
 
@@ -1870,7 +4467,7 @@ const MessageText: React.FC<MessageTextProps> = ({
 };
 
 export default MessageText;-e 
-### FILE: ./src/app/components/pepePush/messages/ScrollMessages.tsx
+### FILE: ./src/app/components/home/pepePush/messages/ScrollMessages.tsx
 
 'use client';
 
@@ -1925,7 +4522,7 @@ const ScrollMessages: React.FC<ScrollMessagesProps> = ({
 };
 
 export default ScrollMessages;-e 
-### FILE: ./src/app/components/pepePush/messages/types.ts
+### FILE: ./src/app/components/home/pepePush/messages/types.ts
 
 // src/app/components/pepePush/messages/types.ts
 
@@ -1979,7 +4576,7 @@ export interface DebugInfo {
   viewportHeight: number;
   scrollY: number;
 }-e 
-### FILE: ./src/app/components/pepePush/messages/index.ts
+### FILE: ./src/app/components/home/pepePush/messages/index.ts
 
 // src/app/components/pepePush/messages/index.ts
 
@@ -2004,7 +4601,7 @@ export {
   getEffectClass,
   isMobile
 } from './constants';-e 
-### FILE: ./src/app/components/pepePush/hooks/useScrollProgress.ts
+### FILE: ./src/app/components/home/pepePush/hooks/useScrollProgress.ts
 
 // hooks/useScrollProgress.ts
 'use client';
@@ -2074,7 +4671,7 @@ export function useScrollProgress() {
 
   return { scrollState, sectionRef };
 }-e 
-### FILE: ./src/app/components/pepePush/hooks/useModelPosition.ts
+### FILE: ./src/app/components/home/pepePush/hooks/useModelPosition.ts
 
 // hooks/useModelPosition.ts
 'use client';
@@ -2156,7 +4753,7 @@ export function useModelPosition(scrollProgress: number): ModelTransform {
 		};
 	}, [scrollProgress]);
 }-e 
-### FILE: ./src/app/components/pepePush/hooks/useScrollMessages.ts
+### FILE: ./src/app/components/home/pepePush/hooks/useScrollMessages.ts
 
 'use client';
 
@@ -2239,7 +4836,7 @@ export function useScrollMessages(scrollProgress: number) {
     debugInfo
   };
 }-e 
-### FILE: ./src/app/components/pepePush/PepeModel3D.tsx
+### FILE: ./src/app/components/home/pepePush/PepeModel3D.tsx
 
 // PepeModel3D.tsx
 'use client';
@@ -2380,7 +4977,7 @@ export default function PepeModel3D({
 
 // モデルのプリロード
 useGLTF.preload(`${process.env.NEXT_PUBLIC_CLOUDFRONT_URL}/pepe/push-up-pepe.glb`);-e 
-### FILE: ./src/app/components/pepePush/PepePush.tsx
+### FILE: ./src/app/components/home/pepePush/PepePush.tsx
 
 // ScrollController.tsx (Modified)
 'use client';
@@ -2423,7 +5020,7 @@ export default function PepePush({}: ScrollControllerProps) {
 		</div>
 	);
 }-e 
-### FILE: ./src/app/components/glowing-3d-text/PepeFlavorModel.tsx
+### FILE: ./src/app/components/home/glowing-3d-text/PepeFlavorModel.tsx
 
 'use client';
 import { useRef, useEffect, useState } from 'react';
@@ -2562,7 +5159,7 @@ const PepeFlavorModel: React.FC<PepeFlavorModelProps> = ({
 useGLTF.preload(`${process.env.NEXT_PUBLIC_CLOUDFRONT_URL}/pepe/pepe_flavor.glb`);
 
 export default PepeFlavorModel;-e 
-### FILE: ./src/app/components/glowing-3d-text/GlowingTextScene.tsx
+### FILE: ./src/app/components/home/glowing-3d-text/GlowingTextScene.tsx
 
 import { Canvas } from '@react-three/fiber';
 import { Suspense } from 'react';
@@ -2594,7 +5191,7 @@ const GlowingTextScene: React.FC<GlowingTextSceneProps> = ({
 };
 
 export default GlowingTextScene;-e 
-### FILE: ./src/app/components/glowing-3d-text/HeroModel.tsx
+### FILE: ./src/app/components/home/glowing-3d-text/HeroModel.tsx
 
 // src/app/components/hero-section/HeroModel.tsx
 import React from 'react';
@@ -2618,7 +5215,7 @@ export const HeroModel: React.FC<HeroModelProps> = ({
 };
 
 export default HeroModel;-e 
-### FILE: ./src/app/components/glowing-3d-text/ProteinModel.tsx
+### FILE: ./src/app/components/home/glowing-3d-text/ProteinModel.tsx
 
 // src/app/components/3d/ProteinModel.tsx
 'use client';
@@ -2752,7 +5349,7 @@ if (typeof window !== 'undefined' && process.env.NEXT_PUBLIC_CLOUDFRONT_URL) {
 	useGLTF.preload(`${process.env.NEXT_PUBLIC_CLOUDFRONT_URL}/pepe/protein_powder.glb`);
 }
 -e 
-### FILE: ./src/app/components/glowing-3d-text/GlowingTextSection.tsx
+### FILE: ./src/app/components/home/glowing-3d-text/GlowingTextSection.tsx
 
 "use client";
 import { useRef } from 'react';
@@ -2834,7 +5431,7 @@ const GlowingTextSection = () => {
 };
 
 export default GlowingTextSection;-e 
-### FILE: ./src/app/components/glowing-3d-text/LightingSetup.tsx
+### FILE: ./src/app/components/home/glowing-3d-text/LightingSetup.tsx
 
 import { useRef } from 'react';
 import { useFrame } from '@react-three/fiber';
@@ -2872,6 +5469,266 @@ const LightingSetup = () => {
 };
 
 export default LightingSetup;-e 
+### FILE: ./src/app/components/common/GridPattern.tsx
+
+// src/app/components/common/GridPattern.tsx
+'use client';
+
+import React from 'react';
+
+export interface GridPatternProps {
+  size?: number;
+  opacity?: number;
+  color?: string;
+  className?: string;
+  animated?: boolean;
+}
+
+const GridPattern: React.FC<GridPatternProps> = ({
+  size = 50,
+  opacity = 0.05,
+  color = 'rgba(0, 255, 127, 0.1)',
+  className = '',
+  animated = false
+}) => {
+  const gridStyle: React.CSSProperties = {
+    backgroundImage: `
+      linear-gradient(${color} 1px, transparent 1px),
+      linear-gradient(90deg, ${color} 1px, transparent 1px)
+    `,
+    backgroundSize: `${size}px ${size}px`,
+    opacity,
+  };
+
+  const animatedStyle = animated
+    ? {
+        ...gridStyle,
+        animation: 'gridPulse 4s ease-in-out infinite',
+      }
+    : gridStyle;
+
+  return (
+    <>
+      <div
+        className={`absolute inset-0 pointer-events-none ${className}`}
+        style={animatedStyle}
+      />
+      
+      {/* CSS アニメーション定義 */}
+      {animated && (
+        <style jsx>{`
+          @keyframes gridPulse {
+            0%, 100% {
+              opacity: ${opacity};
+            }
+            50% {
+              opacity: ${opacity * 2};
+            }
+          }
+        `}</style>
+      )}
+    </>
+  );
+};
+
+export default GridPattern;-e 
+### FILE: ./src/app/components/common/CyberCard.tsx
+
+// src/app/components/common/CyberCard.tsx
+'use client';
+
+import React from 'react';
+import GridPattern from './GridPattern';
+
+export interface CyberCardProps {
+  children: React.ReactNode;
+  title?: string;
+  description?: string;
+  stats?: string;
+  badge?: string;
+  onClick?: () => void;
+  className?: string;
+  variant?: 'default' | 'dashboard' | 'interactive';
+  showEffects?: boolean;
+  glowIntensity?: 'low' | 'medium' | 'high';
+}
+
+const CyberCard: React.FC<CyberCardProps> = ({
+  children,
+  title,
+  description,
+  stats,
+  badge,
+  onClick,
+  className = '',
+  variant = 'default',
+  showEffects = true,
+  glowIntensity = 'medium'
+}) => {
+  const baseClasses = `
+    relative bg-gradient-to-t from-dark-100 to-black 
+    border border-dark-300 rounded-sm overflow-hidden
+    transition-all duration-300 ease-out
+  `;
+
+  const variantClasses = {
+    default: 'p-6',
+    dashboard: 'p-6 cursor-pointer hover:border-neonGreen hover:scale-[1.02]',
+    interactive: 'p-4 cursor-pointer hover:border-neonGreen hover:shadow-lg hover:shadow-neonGreen/20'
+  };
+
+  const glowClasses = {
+    low: 'hover:shadow-md hover:shadow-neonGreen/10',
+    medium: 'hover:shadow-lg hover:shadow-neonGreen/20',
+    high: 'hover:shadow-xl hover:shadow-neonGreen/30'
+  };
+
+  const handleClick = () => {
+    if (onClick) {
+      onClick();
+    }
+  };
+
+  return (
+    <div
+      className={`
+        ${baseClasses}
+        ${variantClasses[variant]}
+        ${glowClasses[glowIntensity]}
+        ${className}
+      `}
+      onClick={handleClick}
+    >
+      {/* Background Effects */}
+      {showEffects && (
+        <>
+          <GridPattern />
+        </>
+      )}
+
+      {/* Content Container */}
+      <div className="relative z-10">
+        {/* Header */}
+        {(title || badge) && (
+          <div className="flex items-center justify-between mb-4">
+            {title && (
+              <h3 className="text-white font-heading font-semibold text-lg cyber-text-glitch">
+                {title}
+              </h3>
+            )}
+            {badge && (
+              <span className="inline-block px-2 py-1 text-xs rounded-sm bg-neonGreen/10 text-neonGreen border border-neonGreen/30">
+                {badge}
+              </span>
+            )}
+          </div>
+        )}
+
+        {/* Description */}
+        {description && (
+          <p className="text-gray-400 text-sm mb-4 leading-relaxed">
+            {description}
+          </p>
+        )}
+
+        {/* Main Content */}
+        <div className="mb-4">
+          {children}
+        </div>
+
+        {/* Stats */}
+        {stats && (
+          <div className="text-xs text-gray-500 border-t border-dark-300 pt-3">
+            {stats}
+          </div>
+        )}
+      </div>
+
+      {/* Hover Overlay */}
+      <div className="absolute inset-0 bg-gradient-to-r from-neonGreen/5 to-neonOrange/5 opacity-0 hover:opacity-100 transition-opacity duration-300 pointer-events-none" />
+    </div>
+  );
+};
+
+export default CyberCard;-e 
+### FILE: ./src/app/components/common/CyberButton.tsx
+
+// src/app/components/common/CyberButton.tsx
+'use client';
+
+import React from 'react';
+
+export interface CyberButtonProps {
+	children: React.ReactNode;
+	onClick?: () => void;
+	variant?: 'primary' | 'secondary' | 'outline';
+	size?: 'sm' | 'md' | 'lg';
+	disabled?: boolean;
+	className?: string;
+	type?: 'button' | 'submit' | 'reset';
+}
+
+const CyberButton: React.FC<CyberButtonProps> = ({
+	children,
+	onClick,
+	variant = 'primary',
+	size = 'md',
+	disabled = false,
+	className = '',
+	type = 'button',
+}) => {
+	const baseClasses = 'relative font-semibold rounded-sm transition-all duration-200 overflow-hidden group';
+
+	const variantClasses = {
+		primary: 'bg-gradient-to-r from-neonGreen to-neonOrange text-black hover:shadow-lg hover:shadow-neonGreen/25',
+		secondary: 'bg-gradient-to-r from-neonOrange to-neonGreen text-black hover:shadow-lg hover:shadow-neonOrange/25',
+		outline: 'border border-neonGreen text-neonGreen hover:bg-neonGreen hover:text-black'
+	};
+
+	const sizeClasses = {
+		sm: 'px-4 py-2 text-sm',
+		md: 'px-6 py-3 text-base',
+		lg: 'px-8 py-4 text-lg'
+	};
+
+	const disabledClasses = disabled
+		? 'opacity-50 cursor-not-allowed'
+		: 'cursor-pointer';
+
+	return (
+		<button
+			type={type}
+			onClick={disabled ? undefined : onClick}
+			disabled={disabled}
+			className={`
+        ${baseClasses}
+        ${variantClasses[variant]}
+        ${sizeClasses[size]}
+        ${disabledClasses}
+        ${className}
+      `}
+		>
+			{/* ホバー時のリバースグラデーション */}
+			{variant === 'primary' && (
+				<div className="absolute inset-0 bg-gradient-to-r from-neonOrange to-neonGreen transform scale-x-0 group-hover:scale-x-100 transition-transform duration-200 origin-left"></div>
+			)}
+
+			{variant === 'secondary' && (
+				<div className="absolute inset-0 bg-gradient-to-r from-neonGreen to-neonOrange transform scale-x-0 group-hover:scale-x-100 transition-transform duration-200 origin-left"></div>
+			)}
+
+			{/* パルス効果 */}
+			{!disabled && (
+				<div className="absolute inset-0 animate-pulse bg-white/10 opacity-0 group-hover:opacity-100 transition-opacity duration-200"></div>
+			)}
+
+			{/* テキスト */}
+			<span className="relative z-10">{children}</span>
+		</button>
+	);
+};
+
+export default CyberButton;-e 
 ### FILE: ./src/app/layout.tsx
 
 import { Montserrat, Space_Grotesk } from 'next/font/google';
@@ -2911,12 +5768,12 @@ export default function RootLayout({
 }-e 
 ### FILE: ./src/app/page.tsx
 
-import HeroSection from './components/hero-section/HeroSection';
-import GlowingTextSection from './components/glowing-3d-text/GlowingTextSection';
-import Header from './components/ui/Header';
-import Footer from './components/ui/Footer';
-import CyberInterface from './components/layout/CyberInterface';
-import PepePush from './components/pepePush/PepePush';
+import HeroSection from './components/home/hero-section/HeroSection';
+import GlowingTextSection from './components/home/glowing-3d-text/GlowingTextSection';
+import Header from './components/home/ui/Header';
+import Footer from './components/home/ui/Footer';
+import CyberInterface from './components/home/layout/CyberInterface';
+import PepePush from './components/home/pepePush/PepePush';
 export default function Home() {
 	return (
 		<main className="relative flex flex-col items-center w-full">
@@ -2954,6 +5811,77 @@ declare global {
 }
 
 export {}-e 
+### FILE: ./types/dashboard.ts
+
+// types/dashboard.ts
+export type SectionType = 'shop' | 'how-to-buy' | 'purchase-scan' | 'whitepaper' | 'profile' | 'cart';
+
+export interface DashboardState {
+	activeSection: SectionType | null;
+	isSlideOpen: boolean;
+	cartItems: CartItem[];
+	userProfile: UserProfile | null;
+	walletConnected: boolean;
+}
+
+export interface DashboardCardProps {
+	id: SectionType;
+	title: string;
+	description: string;
+	icon: React.ReactNode;
+	stats?: string;
+	badge?: string;
+	onClick: (section: SectionType) => void;
+	className?: string;
+}
+
+export interface CartItem {
+	id: string;
+	name: string;
+	price: number;
+	quantity: number;
+	currency: 'ETH' | 'USDC' | 'USDT';
+	image?: string;
+}
+
+export interface UserProfile {
+	walletAddress: string;
+	displayName?: string;
+	totalSpent: number;
+	totalOrders: number;
+	rank: number;
+	badges: string[];
+	joinDate: Date;
+}
+
+export interface SlideInPanelProps {
+	isOpen: boolean;
+	onClose: () => void;
+	title: string;
+	children: React.ReactNode;
+	className?: string;
+}
+
+export interface PurchaseRecord {
+	rank: number;
+	walletAddress: string;
+	displayAddress: string; // 部分匿名化されたアドレス
+	totalSpent: number;
+	totalSpentUSD: number;
+	purchaseCount: number;
+	lastPurchase: Date;
+	txHashes: string[];
+	badges?: string[];
+	isCurrentUser?: boolean;
+}
+
+export interface FilterOptions {
+	period: 'today' | 'week' | 'month' | 'all';
+	minAmount?: number;
+	maxAmount?: number;
+	sortBy: 'amount' | 'count' | 'date';
+	sortOrder: 'asc' | 'desc';
+}-e 
 ### FILE: ./tailwind.config.js
 
 /** @type {import('tailwindcss').Config} */

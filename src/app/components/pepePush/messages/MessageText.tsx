@@ -55,7 +55,7 @@ const MessageText: React.FC<MessageTextProps> = ({
 				style.top = '40vh';
 				break;
 			case 'message-4':
-				style.top = '60vh';
+				style.top = '80vh';
 				break;
 			case 'message-5':
 				style.top = '10vh';

@@ -24,7 +24,7 @@ export default function PepePush({}: ScrollControllerProps) {
 			</StickyCanvas>
 			<ScrollMessages scrollProgress={scrollState.scrollProgress}/>
 			{scrollState.isInSection && (
-				<div className="fixed top-20 left-1/2 transform -translate-x-1/2 z-40">
+				<div className="fixed top-5 md:top-20 left-1/2 transform -translate-x-1/2 z-40">
 					<div className="w-64 h-2 bg-white/20 rounded-full overflow-hidden">
 						<div
 							className="h-full bg-white/80 rounded-full transition-all duration-100"

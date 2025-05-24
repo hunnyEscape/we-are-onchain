@@ -24,19 +24,15 @@ import {
 	MessageCircle,
 	QrCode,
 	Wallet,
-	TrendingUp
+	TrendingUp,
+	ChevronDown,
+	ChevronUp
 } from 'lucide-react';
 
 interface PaymentMethod {
 	id: string;
-	name: string;
 	symbol: string;
 	chain: string;
-	type: 'stablecoin' | 'native';
-	icon: React.ReactNode;
-	fees: string;
-	speed: string;
-	description: string;
 }
 
 interface LoginOption {
@@ -55,6 +51,7 @@ interface WalletOption {
 
 const HowToBuySection: React.FC = () => {
 	const [activeStep, setActiveStep] = useState(1);
+	const [isPaymentTableOpen, setIsPaymentTableOpen] = useState(false);
 
 	const loginOptions: LoginOption[] = [
 		{
@@ -91,59 +88,44 @@ const HowToBuySection: React.FC = () => {
 
 	const paymentMethods: PaymentMethod[] = [
 		{
-			id: 'eth-mainnet',
-			name: 'Ethereum',
-			symbol: 'ETH',
-			chain: 'Ethereum',
-			type: 'native',
-			icon: <div className="w-6 h-6 bg-blue-500 rounded-full flex items-center justify-center text-white text-xs font-bold">ETH</div>,
-			fees: '$5-25',
-			speed: '2-5 min',
-			description: 'Most popular native token with wide acceptance'
+			id: 'solana',
+			symbol: '$SOL, $USDT',
+			chain: 'Solana'
 		},
 		{
-			id: 'usdc-mainnet',
-			name: 'USD Coin',
-			symbol: 'USDC',
-			chain: 'Ethereum',
-			type: 'stablecoin',
-			icon: <div className="w-6 h-6 bg-blue-600 rounded-full flex items-center justify-center text-white text-xs font-bold">USDC</div>,
-			fees: '$5-25',
-			speed: '2-5 min',
-			description: 'Stable value pegged to USD'
+			id: 'lightning',
+			symbol: '$BTC',
+			chain: 'Lightning'
 		},
 		{
-			id: 'usdt-mainnet',
-			name: 'Tether',
-			symbol: 'USDT',
-			chain: 'Ethereum',
-			type: 'stablecoin',
-			icon: <div className="w-6 h-6 bg-green-500 rounded-full flex items-center justify-center text-white text-xs font-bold">USDT</div>,
-			fees: '$5-25',
-			speed: '2-5 min',
-			description: 'Popular stablecoin option'
+			id: 'avalanche',
+			symbol: '$AVAX, $USDC, $USDT',
+			chain: 'Avalanche'
 		},
 		{
-			id: 'matic-polygon',
-			name: 'Polygon',
-			symbol: 'MATIC',
-			chain: 'Polygon',
-			type: 'native',
-			icon: <div className="w-6 h-6 bg-purple-500 rounded-full flex items-center justify-center text-white text-xs font-bold">MATIC</div>,
-			fees: '$0.01-0.1',
-			speed: '5-30 sec',
-			description: 'Low-cost Layer 2 solution'
+			id: 'sui',
+			symbol: '$SUI',
+			chain: 'SUI'
 		},
 		{
-			id: 'usdc-polygon',
-			name: 'USD Coin',
-			symbol: 'USDC',
-			chain: 'Polygon',
-			type: 'stablecoin',
-			icon: <div className="w-6 h-6 bg-blue-600 rounded-full flex items-center justify-center text-white text-xs font-bold">USDC</div>,
-			fees: '$0.01-0.1',
-			speed: '5-30 sec',
-			description: 'USDC on Polygon network'
+			id: 'eth',
+			symbol: '$ETH, $USDC, $USDT',
+			chain: 'ETH'
+		},
+		{
+			id: 'arbitrum',
+			symbol: '$ETH, $USDT',
+			chain: 'Arbitrum'
+		},
+		{
+			id: 'optimism',
+			symbol: '$ETH, $USDT',
+			chain: 'Optimism'
+		},
+		{
+			id: 'bnb',
+			symbol: '$BNB',
+			chain: 'BNB'
 		}
 	];
 
@@ -179,13 +161,13 @@ const HowToBuySection: React.FC = () => {
 			id: 1,
 			title: 'Web2 Account Login',
 			description: 'Simple login like traditional websites',
-			details: 'Create an account using familiar social login methods. No crypto wallet required for this step. Your account will manage order history and shipping addresses.'
+			details: '(1) Create an account using social login. No crypto wallet required for this step.'
 		},
 		{
 			id: 2,
 			title: 'Cart & Checkout',
 			description: 'Add products and set preferences',
-			details: 'Select products, set shipping address, and choose your preferred cryptocurrency and blockchain network for payment.'
+			details:`When you checkout. (1) Selact your payment currency. (2) Set shipping address. International shipping available.`
 		},
 		{
 			id: 3,
@@ -204,6 +186,8 @@ const HowToBuySection: React.FC = () => {
 	const handleCopyAddress = (address: string) => {
 		navigator.clipboard.writeText(address);
 	};
+
+	const availableMethods = paymentMethods;
 
 	return (
 		<div className="space-y-8">
@@ -224,7 +208,7 @@ const HowToBuySection: React.FC = () => {
 							<h3 className="text-neonGreen font-semibold">Web2.0 + Web3.0 Hybrid</h3>
 						</div>
 						<p className="text-sm text-gray-300">
-							Combining traditional e-commerce usability with cryptocurrency payments
+							Combining web2.0 usability with cryptocurrency payments
 						</p>
 					</div>
 
@@ -234,7 +218,7 @@ const HowToBuySection: React.FC = () => {
 							<h3 className="text-neonOrange font-semibold">Invoice Method</h3>
 						</div>
 						<p className="text-sm text-gray-300">
-							No wallet connection required, simple payment via QR codes and URLs
+							No wallet connection required, simple payment via QR codes and URLs with your wallet
 						</p>
 					</div>
 				</div>
@@ -267,7 +251,6 @@ const HowToBuySection: React.FC = () => {
 										</div>
 										<div>
 											<div className="font-medium">{step.title}</div>
-											<div className="text-xs opacity-70">{step.description}</div>
 										</div>
 									</div>
 								</button>
@@ -298,7 +281,6 @@ const HowToBuySection: React.FC = () => {
 														{login.icon}
 														<div>
 															<div className="text-white font-medium">{login.name}</div>
-															<div className="text-xs text-gray-400">{login.description}</div>
 														</div>
 														{login.available && (
 															<CheckCircle className="w-5 h-5 text-neonGreen ml-auto" />
@@ -321,47 +303,6 @@ const HowToBuySection: React.FC = () => {
 									{/* Step 2: Checkout Process */}
 									{step.id === 2 && (
 										<div className="space-y-6">
-											{/* Shipping Address */}
-											<div>
-												<h4 className="text-lg font-semibold text-white mb-3">Shipping Address</h4>
-												<div className="p-4 border border-dark-300 rounded-sm bg-dark-200/30">
-													<div className="text-sm text-gray-300">
-														• Multiple address support<br />
-														• Save addresses for future orders<br />
-														• International shipping available
-													</div>
-												</div>
-											</div>
-
-											{/* Payment Currency Selection */}
-											<div>
-												<h4 className="text-lg font-semibold text-white mb-3">Payment Currency Selection</h4>
-												<div className="space-y-3">
-													{paymentMethods.map((method) => (
-														<div key={method.id} className="p-3 border border-dark-300 rounded-sm">
-															<div className="flex items-center justify-between">
-																<div className="flex items-center space-x-3">
-																	{method.icon}
-																	<div>
-																		<div className="text-white font-medium">
-																			{method.name} ({method.symbol})
-																			<span className="ml-2 text-xs bg-gray-600 px-2 py-1 rounded">
-																				{method.chain}
-																			</span>
-																		</div>
-																		<div className="text-xs text-gray-400">{method.description}</div>
-																	</div>
-																</div>
-																<div className="text-right">
-																	<div className="text-sm text-gray-300">Fees: {method.fees}</div>
-																	<div className="text-xs text-gray-400">Speed: {method.speed}</div>
-																</div>
-															</div>
-														</div>
-													))}
-												</div>
-											</div>
-
 											{/* Important Notice */}
 											<div className="p-4 border border-yellow-600/30 rounded-sm bg-yellow-600/5">
 												<div className="flex items-start space-x-3">
@@ -373,6 +314,50 @@ const HowToBuySection: React.FC = () => {
 														</div>
 													</div>
 												</div>
+											</div>
+
+											{/* Payment Currency Selection - Collapsible Table */}
+											<div className="border border-dark-300 rounded-sm">
+												<button
+													onClick={() => setIsPaymentTableOpen(!isPaymentTableOpen)}
+													className="w-full p-4 flex items-center justify-between bg-dark-200/30 hover:bg-dark-200/50 transition-colors"
+												>
+													<h4 className="text-lg font-semibold text-white">Payment Currency Selection</h4>
+													{isPaymentTableOpen ? (
+														<ChevronUp className="w-5 h-5 text-gray-400" />
+													) : (
+														<ChevronDown className="w-5 h-5 text-gray-400" />
+													)}
+												</button>
+
+												{isPaymentTableOpen && (
+													<div className="p-4 border-t border-dark-300">
+														<div className="overflow-x-auto">
+															<table className="w-full">
+																<thead>
+																	<tr className="border-b border-dark-300">
+																		<th className="text-left p-3 text-gray-300 font-medium">Method</th>
+																		<th className="text-left p-3 text-gray-300 font-medium">Currency</th>
+																	</tr>
+																</thead>
+																<tbody>
+																	{paymentMethods.map((method) => (
+																		<tr key={method.id} className="border-b border-dark-300/50 hover:bg-dark-200/20">
+																			<td className="p-3">
+																				<span className="text-sm bg-gray-600 px-2 py-1 rounded text-gray-200">
+																					{method.chain}
+																				</span>
+																			</td>
+																			<td className="p-3 text-white font-medium">
+																				{method.symbol}
+																			</td>
+																		</tr>
+																	))}
+																</tbody>
+															</table>
+														</div>
+													</div>
+												)}
 											</div>
 
 											{/* Checkout Demo Area */}

@@ -1,4 +1,4 @@
-// src/app/dashboard/components/sections/ShopSection.tsx
+// src/app/dashboard/components/sections/ShopSection.tsx (簡易版)
 'use client';
 
 import React, { useState, useEffect } from 'react';
@@ -9,7 +9,6 @@ import { useCart } from '../../context/DashboardContext';
 import { ShoppingCart, Star, Shield, Zap, Check, AlertTriangle, Clock, Loader2 } from 'lucide-react';
 import { ProductDetails } from '../../../../../types/product';
 import { getProductDetails, subscribeToProduct } from '@/lib/firestore/products';
-import { checkStockAvailability, reserveStock, generateSessionId } from '@/lib/firestore/inventory';
 
 const ShopSection: React.FC = () => {
 	const [quantity, setQuantity] = useState(1);
@@ -19,12 +18,11 @@ const ShopSection: React.FC = () => {
 	const [stockWarningMessage, setStockWarningMessage] = useState('');
 	const [loading, setLoading] = useState(true);
 	const [product, setProduct] = useState<ProductDetails | null>(null);
-	const [sessionId] = useState(() => generateSessionId());
 	const [isAddingToCart, setIsAddingToCart] = useState(false);
 
 	const { addToCart, cartItems } = useCart();
 
-	// 固定の商品ID（実際のアプリでは動的に決定）
+	// 固定の商品ID
 	const PRODUCT_ID = 'pepe-protein-1';
 
 	// 商品データをリアルタイムで取得
@@ -34,13 +32,13 @@ const ShopSection: React.FC = () => {
 		const loadProduct = async () => {
 			try {
 				setLoading(true);
-
+				
 				// 初回データ取得
 				const productData = await getProductDetails(PRODUCT_ID);
 				if (productData) {
 					setProduct(productData);
 				}
-
+				
 				// リアルタイム監視を開始
 				unsubscribe = subscribeToProduct(PRODUCT_ID, (firestoreProduct) => {
 					if (firestoreProduct) {
@@ -73,13 +71,13 @@ const ShopSection: React.FC = () => {
 								updatedAt: firestoreProduct.timestamps.updatedAt.toDate()
 							}
 						};
-
+						
 						setProduct(productDetails);
 					} else {
 						setProduct(null);
 					}
 				});
-
+				
 			} catch (error) {
 				console.error('Error loading product:', error);
 				setProduct(null);
@@ -103,8 +101,42 @@ const ShopSection: React.FC = () => {
 		return cartItem ? cartItem.quantity : 0;
 	};
 
+	// 簡易在庫チェック（Firestoreトランザクションなし）
+	const checkSimpleStock = (requestedQuantity: number) => {
+		if (!product) return { canAdd: false, message: 'Product not found' };
+		
+		const currentCartQuantity = getCartQuantity();
+		const totalRequested = currentCartQuantity + requestedQuantity;
+		
+		// 在庫チェック
+		if (totalRequested > product.inventory.inStock) {
+			return { 
+				canAdd: false, 
+				message: `Only ${product.inventory.inStock - currentCartQuantity} items available` 
+			};
+		}
+		
+		// 注文制限チェック
+		if (totalRequested > product.settings.maxOrderQuantity) {
+			return { 
+				canAdd: false, 
+				message: `Maximum ${product.settings.maxOrderQuantity} items per order` 
+			};
+		}
+		
+		// 商品アクティブチェック
+		if (!product.settings.isActive) {
+			return { 
+				canAdd: false, 
+				message: 'Product is currently unavailable' 
+			};
+		}
+		
+		return { canAdd: true, message: '' };
+	};
+
 	// 数量変更時のバリデーション
-	const handleQuantityChange = async (newQuantity: number) => {
+	const handleQuantityChange = (newQuantity: number) => {
 		if (!product) return;
 
 		if (newQuantity < 1) {
@@ -112,23 +144,22 @@ const ShopSection: React.FC = () => {
 			return;
 		}
 
-		// リアルタイム在庫チェック
-		const stockCheck = await checkStockAvailability(PRODUCT_ID, newQuantity, undefined, sessionId);
-
-		if (!stockCheck.canReserve && newQuantity > quantity) {
-			if (stockCheck.limitReasons.exceedsStock) {
-				setStockWarningMessage(`Only ${stockCheck.maxCanReserve} items available`);
-			} else if (stockCheck.limitReasons.exceedsOrderLimit) {
-				setStockWarningMessage(`Maximum ${product.settings.maxOrderQuantity} items per order`);
-			} else if (stockCheck.limitReasons.productInactive) {
-				setStockWarningMessage('Product is currently unavailable');
-			}
+		const stockCheck = checkSimpleStock(newQuantity - quantity);
+		
+		if (!stockCheck.canAdd && newQuantity > quantity) {
+			setStockWarningMessage(stockCheck.message);
 			setShowStockWarning(true);
 			setTimeout(() => setShowStockWarning(false), 3000);
 			return;
 		}
 
-		setQuantity(Math.min(newQuantity, stockCheck.maxCanReserve || product.settings.maxOrderQuantity));
+		const maxAllowed = Math.min(
+			product.inventory.inStock - getCartQuantity(),
+			product.settings.maxOrderQuantity - getCartQuantity(),
+			product.settings.maxOrderQuantity
+		);
+
+		setQuantity(Math.min(newQuantity, Math.max(1, maxAllowed)));
 	};
 
 	const handleAddToCart = async () => {
@@ -137,33 +168,17 @@ const ShopSection: React.FC = () => {
 		try {
 			setIsAddingToCart(true);
 
-			// 1. 在庫確認
-			const stockCheck = await checkStockAvailability(PRODUCT_ID, quantity, undefined, sessionId);
-
-			if (!stockCheck.canReserve) {
-				if (stockCheck.limitReasons.exceedsStock) {
-					setStockWarningMessage(`Only ${stockCheck.maxCanReserve} items available`);
-				} else if (stockCheck.limitReasons.exceedsOrderLimit) {
-					setStockWarningMessage(`Maximum ${product.settings.maxOrderQuantity} items per order`);
-				} else if (stockCheck.limitReasons.productInactive) {
-					setStockWarningMessage('Product is currently unavailable');
-				}
+			// 簡易在庫チェック
+			const stockCheck = checkSimpleStock(quantity);
+			
+			if (!stockCheck.canAdd) {
+				setStockWarningMessage(stockCheck.message);
 				setShowStockWarning(true);
 				setTimeout(() => setShowStockWarning(false), 3000);
 				return;
 			}
 
-			// 2. Firestore在庫予約
-			const reservationResult = await reserveStock(PRODUCT_ID, quantity, undefined, sessionId);
-
-			if (!reservationResult.success) {
-				setStockWarningMessage(reservationResult.error?.message || 'Failed to reserve stock');
-				setShowStockWarning(true);
-				setTimeout(() => setShowStockWarning(false), 3000);
-				return;
-			}
-
-			// 3. ローカルカートに追加
+			// ローカルカートに追加（Firestore予約なし）
 			const cartItem = {
 				id: product.id,
 				name: product.name,
@@ -192,11 +207,6 @@ const ShopSection: React.FC = () => {
 		}
 	};
 
-	const handleBuyNow = () => {
-		handleAddToCart();
-		console.log(`Generate invoice for: ${quantity}x ${product?.name}`);
-	};
-
 	// ローディング状態
 	if (loading) {
 		return (
@@ -209,7 +219,7 @@ const ShopSection: React.FC = () => {
 						Loading product information...
 					</p>
 				</div>
-
+				
 				<div className="flex justify-center items-center h-64">
 					<Loader2 className="w-8 h-8 text-neonGreen animate-spin" />
 				</div>
@@ -229,7 +239,7 @@ const ShopSection: React.FC = () => {
 						Product not found or currently unavailable
 					</p>
 				</div>
-
+				
 				<CyberCard showEffects={false} className="text-center py-12">
 					<AlertTriangle className="w-16 h-16 text-yellow-400 mx-auto mb-4" />
 					<h3 className="text-xl font-semibold text-white mb-2">Product Unavailable</h3>
@@ -242,6 +252,10 @@ const ShopSection: React.FC = () => {
 	const currentCartQuantity = getCartQuantity();
 	const isOutOfStock = !product.inventory.isAvailable;
 	const isAtOrderLimit = currentCartQuantity >= product.settings.maxOrderQuantity;
+	const availableToAdd = Math.min(
+		product.inventory.inStock - currentCartQuantity,
+		product.settings.maxOrderQuantity - currentCartQuantity
+	);
 
 	return (
 		<div className="space-y-8">
@@ -319,12 +333,13 @@ const ShopSection: React.FC = () => {
 									<span className="text-sm text-gray-400">• {product.metadata.reviewCount} reviews</span>
 								)}
 							</div>
-							<span className={`text-sm ${product.inventory.stockLevel === 'high' ? 'text-neonGreen' :
-									product.inventory.stockLevel === 'medium' ? 'text-yellow-400' :
-										product.inventory.stockLevel === 'low' ? 'text-orange-400' : 'text-red-400'
-								}`}>
-								{product.inventory.isAvailable ?
-									`${product.inventory.inStock} in stock` :
+							<span className={`text-sm ${
+								product.inventory.stockLevel === 'high' ? 'text-neonGreen' : 
+								product.inventory.stockLevel === 'medium' ? 'text-yellow-400' : 
+								product.inventory.stockLevel === 'low' ? 'text-orange-400' : 'text-red-400'
+							}`}>
+								{product.inventory.isAvailable ? 
+									`${product.inventory.inStock} in stock` : 
 									'Out of stock'
 								}
 							</span>
@@ -356,32 +371,29 @@ const ShopSection: React.FC = () => {
 							<span className="text-sm text-neonGreen">
 								{currentCartQuantity} item{currentCartQuantity > 1 ? 's' : ''} in cart
 							</span>
-							{currentCartQuantity >= 5 && (
-								<>
-									<Clock className="w-4 h-4 text-yellow-400" />
-									<span className="text-xs text-yellow-400">Items expire in 30 days</span>
-								</>
-							)}
 						</div>
 					)}
 
 					{/* Stock Level Indicator */}
 					{product.inventory.isAvailable && (
-						<div className={`flex items-center space-x-2 p-2 rounded-sm ${product.inventory.stockLevel === 'high' ? 'bg-neonGreen/5 border border-neonGreen/20' :
-								product.inventory.stockLevel === 'medium' ? 'bg-yellow-400/5 border border-yellow-400/20' :
-									'bg-orange-400/5 border border-orange-400/20'
+						<div className={`flex items-center space-x-2 p-2 rounded-sm ${
+							product.inventory.stockLevel === 'high' ? 'bg-neonGreen/5 border border-neonGreen/20' :
+							product.inventory.stockLevel === 'medium' ? 'bg-yellow-400/5 border border-yellow-400/20' :
+							'bg-orange-400/5 border border-orange-400/20'
+						}`}>
+							<div className={`w-2 h-2 rounded-full ${
+								product.inventory.stockLevel === 'high' ? 'bg-neonGreen' :
+								product.inventory.stockLevel === 'medium' ? 'bg-yellow-400' :
+								'bg-orange-400'
+							}`}></div>
+							<span className={`text-xs ${
+								product.inventory.stockLevel === 'high' ? 'text-neonGreen' :
+								product.inventory.stockLevel === 'medium' ? 'text-yellow-400' :
+								'text-orange-400'
 							}`}>
-							<div className={`w-2 h-2 rounded-full ${product.inventory.stockLevel === 'high' ? 'bg-neonGreen' :
-									product.inventory.stockLevel === 'medium' ? 'bg-yellow-400' :
-										'bg-orange-400'
-								}`}></div>
-							<span className={`text-xs ${product.inventory.stockLevel === 'high' ? 'text-neonGreen' :
-									product.inventory.stockLevel === 'medium' ? 'text-yellow-400' :
-										'text-orange-400'
-								}`}>
 								{product.inventory.stockLevel === 'high' ? 'In Stock' :
-									product.inventory.stockLevel === 'medium' ? 'Limited Stock' :
-										'Low Stock'}
+								 product.inventory.stockLevel === 'medium' ? 'Limited Stock' :
+								 'Low Stock'}
 							</span>
 						</div>
 					)}
@@ -403,15 +415,15 @@ const ShopSection: React.FC = () => {
 							<button
 								onClick={() => handleQuantityChange(quantity + 1)}
 								className="px-3 py-2 text-white hover:bg-dark-200 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-								disabled={quantity >= product.settings.maxOrderQuantity || isOutOfStock || isAtOrderLimit || isAddingToCart}
+								disabled={availableToAdd <= 0 || isOutOfStock || isAtOrderLimit || isAddingToCart}
 							>
 								+
 							</button>
 						</div>
 						<div className="text-xs text-gray-400">
-							{isOutOfStock ? 'Out of stock' :
-								isAtOrderLimit ? 'Max limit reached' :
-									`Max ${product.settings.maxOrderQuantity}`}
+							{isOutOfStock ? 'Out of stock' : 
+							 isAtOrderLimit ? 'Max limit reached' :
+							 `Max ${product.settings.maxOrderQuantity}`}
 						</div>
 					</div>
 
@@ -421,7 +433,7 @@ const ShopSection: React.FC = () => {
 							<AlertTriangle className="w-4 h-4 text-yellow-400 flex-shrink-0 mt-0.5" />
 							<div className="text-xs text-gray-300">
 								{isOutOfStock ? 'This item is currently out of stock.' :
-									`Maximum order limit (${product.settings.maxOrderQuantity} items) reached for this product.`}
+								 `Maximum order limit (${product.settings.maxOrderQuantity} items) reached for this product.`}
 							</div>
 						</div>
 					)}
@@ -431,7 +443,7 @@ const ShopSection: React.FC = () => {
 							variant="outline"
 							className="w-full flex items-center justify-center space-x-2"
 							onClick={handleAddToCart}
-							disabled={isOutOfStock || isAtOrderLimit || isAddingToCart}
+							disabled={isOutOfStock || isAtOrderLimit || isAddingToCart || availableToAdd <= 0}
 						>
 							{isAddingToCart ? (
 								<Loader2 className="w-4 h-4 animate-spin" />
@@ -461,7 +473,7 @@ const ShopSection: React.FC = () => {
 							<h4 className="text-lg font-semibold text-white">Tags</h4>
 							<div className="flex flex-wrap gap-2">
 								{product.metadata.tags.map((tag, index) => (
-									<span
+									<span 
 										key={index}
 										className="px-2 py-1 text-xs bg-dark-200 text-neonGreen border border-neonGreen/30 rounded-sm"
 									>

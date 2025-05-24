@@ -85,6 +85,7 @@
 │   │   │   │   └── sections
 │   │   │   │       ├── CartSection.tsx
 │   │   │   │       ├── HowToBuySection.tsx
+│   │   │   │       ├── ProfileEditModal.tsx
 │   │   │   │       ├── ProfileSection.tsx
 │   │   │   │       ├── PurchaseScanSection.tsx
 │   │   │   │       ├── ShopSection.tsx
@@ -101,12 +102,19 @@
 │   │       └── cyber-components.css
 │   ├── contexts
 │   │   └── AuthContext.tsx
-│   └── lib
-│       └── firebase.ts
+│   ├── lib
+│   │   ├── firebase.ts
+│   │   └── firestore
+│   │       └── users.ts
+│   └── utils
+│       ├── errorHandling.ts
+│       ├── userHelpers.ts
+│       └── validation.ts
 ├── tailwind.config.js
 ├── tsconfig.json
 └── types
     ├── dashboard.ts
-    └── react-three-fiber.d.ts
+    ├── react-three-fiber.d.ts
+    └── user.ts
 
-26 directories, 83 files
+28 directories, 89 files

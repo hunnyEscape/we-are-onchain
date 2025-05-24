@@ -4,9 +4,9 @@
 // src/contexts/AuthContext.tsx
 'use client';
 
-import { createContext, useContext, useEffect, useState, ReactNode } from 'react';
+import { createContext, useContext, useEffect, useState, ReactNode, useRef } from 'react';
 import {
-	User,
+	User as FirebaseUser,
 	onAuthStateChanged,
 	signInWithEmailAndPassword,
 	createUserWithEmailAndPassword,
@@ -15,14 +15,31 @@ import {
 	signInWithPopup
 } from 'firebase/auth';
 import { auth } from '@/lib/firebase';
+import { 
+	FirestoreUser, 
+	UpdateUserProfile 
+} from '../../types/user';
+import {
+	syncAuthWithFirestore,
+	updateUserProfile,
+	subscribeToUser,
+	getUserById
+} from '@/lib/firestore/users';
 
 interface AuthContextType {
-	user: User | null;
+	// Firebase Auth関連
+	user: FirebaseUser | null;
 	loading: boolean;
 	signIn: (email: string, password: string) => Promise<void>;
 	signUp: (email: string, password: string) => Promise<void>;
 	signInWithGoogle: () => Promise<void>;
 	logout: () => Promise<void>;
+	
+	// Firestore関連
+	firestoreUser: FirestoreUser | null;
+	firestoreLoading: boolean;
+	updateProfile: (data: UpdateUserProfile) => Promise<void>;
+	refreshUserData: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -40,62 +57,197 @@ interface AuthProviderProps {
 }
 
 export const AuthProvider = ({ children }: AuthProviderProps) => {
-	const [user, setUser] = useState<User | null>(null);
+	// Firebase Auth状態
+	const [user, setUser] = useState<FirebaseUser | null>(null);
 	const [loading, setLoading] = useState(true);
+	
+	// Firestore状態
+	const [firestoreUser, setFirestoreUser] = useState<FirestoreUser | null>(null);
+	const [firestoreLoading, setFirestoreLoading] = useState(false);
+	
+	// 無限ループ防止用のref
+	const lastSyncedUserId = useRef<string | null>(null);
+	const firestoreUnsubscribe = useRef<(() => void) | null>(null);
+	const isSyncing = useRef<boolean>(false);
 
+	// Firebase Auth状態変化を監視
 	useEffect(() => {
-		const unsubscribe = onAuthStateChanged(auth, (user) => {
-			setUser(user);
+		const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
+			console.log('🔄 Auth state changed:', firebaseUser?.uid || 'null');
+			
+			// 既存のFirestore監視を停止
+			if (firestoreUnsubscribe.current) {
+				firestoreUnsubscribe.current();
+				firestoreUnsubscribe.current = null;
+			}
+
+			if (firebaseUser) {
+				setUser(firebaseUser);
+				
+				// 同じユーザーで既に同期済みの場合はスキップ
+				if (lastSyncedUserId.current === firebaseUser.uid && !isSyncing.current) {
+					console.log('👤 User already synced, skipping sync:', firebaseUser.uid);
+					setLoading(false);
+					return;
+				}
+				
+				// 同期中フラグを設定
+				if (isSyncing.current) {
+					console.log('⏳ Sync already in progress, skipping...');
+					return;
+				}
+				
+				setFirestoreLoading(true);
+				isSyncing.current = true;
+				
+				try {
+					// Firebase AuthとFirestoreを同期（初回のみlastLoginAtを更新）
+					const shouldUpdateLastLogin = lastSyncedUserId.current !== firebaseUser.uid;
+					
+					if (shouldUpdateLastLogin) {
+						await syncAuthWithFirestore(firebaseUser);
+						lastSyncedUserId.current = firebaseUser.uid;
+						console.log('✅ Initial sync completed for user:', firebaseUser.uid);
+					}
+					
+					// Firestoreユーザーデータをリアルタイム監視開始
+					const unsubscribeFirestore = subscribeToUser(firebaseUser.uid, (userData) => {
+						console.log('📊 Firestore user data updated:', userData?.id || 'null');
+						setFirestoreUser(userData);
+						setFirestoreLoading(false);
+					});
+					
+					firestoreUnsubscribe.current = unsubscribeFirestore;
+					
+				} catch (error) {
+					console.error('❌ Error syncing with Firestore:', error);
+					setFirestoreUser(null);
+					setFirestoreLoading(false);
+				} finally {
+					isSyncing.current = false;
+				}
+			} else {
+				// ログアウト時の状態リセット
+				setUser(null);
+				setFirestoreUser(null);
+				setFirestoreLoading(false);
+				lastSyncedUserId.current = null;
+				isSyncing.current = false;
+			}
+			
 			setLoading(false);
 		});
 
-		return () => unsubscribe();
-	}, []);
+		return () => {
+			unsubscribe();
+			if (firestoreUnsubscribe.current) {
+				firestoreUnsubscribe.current();
+			}
+		};
+	}, []); // 空の依存配列で一度だけ実行
 
+	// 認証関数
 	const signIn = async (email: string, password: string) => {
 		try {
+			setLoading(true);
 			await signInWithEmailAndPassword(auth, email, password);
+			// onAuthStateChangedで自動的にFirestore同期が実行される
 		} catch (error) {
-			console.error('サインインエラー:', error);
+			console.error('❌ サインインエラー:', error);
+			setLoading(false);
 			throw error;
 		}
 	};
 
 	const signUp = async (email: string, password: string) => {
 		try {
+			setLoading(true);
 			await createUserWithEmailAndPassword(auth, email, password);
+			// onAuthStateChangedで自動的にFirestore同期が実行される
 		} catch (error) {
-			console.error('サインアップエラー:', error);
+			console.error('❌ サインアップエラー:', error);
+			setLoading(false);
 			throw error;
 		}
 	};
 
 	const signInWithGoogle = async () => {
 		try {
+			setLoading(true);
 			const provider = new GoogleAuthProvider();
 			await signInWithPopup(auth, provider);
+			// onAuthStateChangedで自動的にFirestore同期が実行される
 		} catch (error) {
-			console.error('Googleサインインエラー:', error);
+			console.error('❌ Googleサインインエラー:', error);
+			setLoading(false);
 			throw error;
 		}
 	};
 
 	const logout = async () => {
 		try {
+			setLoading(true);
+			lastSyncedUserId.current = null; // リセット
 			await signOut(auth);
+			// onAuthStateChangedで自動的に状態がリセットされる
 		} catch (error) {
-			console.error('ログアウトエラー:', error);
+			console.error('❌ ログアウトエラー:', error);
+			setLoading(false);
+			throw error;
+		}
+	};
+
+	// Firestoreプロフィール更新
+	const updateProfile = async (data: UpdateUserProfile) => {
+		if (!user) {
+			throw new Error('User not authenticated');
+		}
+		
+		try {
+			setFirestoreLoading(true);
+			await updateUserProfile(user.uid, data);
+			// subscribeToUserで自動的に最新データが反映される
+			console.log('✅ Profile updated successfully');
+		} catch (error) {
+			console.error('❌ Error updating profile:', error);
+			setFirestoreLoading(false);
+			throw error;
+		}
+	};
+
+	// Firestoreユーザーデータを手動で再取得
+	const refreshUserData = async () => {
+		if (!user) {
+			throw new Error('User not authenticated');
+		}
+		
+		try {
+			setFirestoreLoading(true);
+			const userData = await getUserById(user.uid);
+			setFirestoreUser(userData);
+			setFirestoreLoading(false);
+			console.log('🔄 User data refreshed');
+		} catch (error) {
+			console.error('❌ Error refreshing user data:', error);
+			setFirestoreLoading(false);
 			throw error;
 		}
 	};
 
 	const value = {
+		// Firebase Auth
 		user,
 		loading,
 		signIn,
 		signUp,
 		signInWithGoogle,
 		logout,
+		
+		// Firestore
+		firestoreUser,
+		firestoreLoading,
+		updateProfile,
+		refreshUserData,
 	};
 
 	return (
@@ -109,6 +261,7 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
 // src/lib/firebase.ts
 import { initializeApp } from 'firebase/app';
 import { getAuth } from 'firebase/auth';
+import { getFirestore } from 'firebase/firestore';
 
 const firebaseConfig = {
 	apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
@@ -125,7 +278,302 @@ const app = initializeApp(firebaseConfig);
 // Authentication初期化
 export const auth = getAuth(app);
 
+export const db = getFirestore(app);
+
 export default app;-e 
+### FILE: ./src/lib/firestore/users.ts
+
+// src/lib/firestore/users.ts
+import {
+	doc,
+	getDoc,
+	setDoc,
+	updateDoc,
+	collection,
+	query,
+	where,
+	onSnapshot,
+	serverTimestamp,
+	Timestamp
+} from 'firebase/firestore';
+import { User as FirebaseUser } from 'firebase/auth';
+import { db } from '@/lib/firebase';
+import {
+	FirestoreUser,
+	CreateUserData,
+	UpdateUserProfile,
+	UpdateUserStats,
+	ProfileCompleteness
+} from '@/types/user';
+import { UserProfile } from '@/types/dashboard';
+
+// コレクション名
+const USERS_COLLECTION = 'users';
+
+/**
+ * ユーザーが存在するかチェック
+ */
+export const checkUserExists = async (userId: string): Promise<boolean> => {
+	try {
+		const userRef = doc(db, USERS_COLLECTION, userId);
+		const userSnap = await getDoc(userRef);
+		return userSnap.exists();
+	} catch (error) {
+		console.error('Error checking user existence:', error);
+		return false;
+	}
+};
+
+/**
+ * ユーザーIDでFirestoreユーザーデータを取得
+ */
+export const getUserById = async (userId: string): Promise<FirestoreUser | null> => {
+	try {
+		const userRef = doc(db, USERS_COLLECTION, userId);
+		const userSnap = await getDoc(userRef);
+
+		if (userSnap.exists()) {
+			return { id: userSnap.id, ...userSnap.data() } as FirestoreUser;
+		}
+		return null;
+	} catch (error) {
+		console.error('Error getting user:', error);
+		return null;
+	}
+};
+
+/**
+ * EmptyUserデータを生成
+ */
+export const generateEmptyUserData = (firebaseUser: FirebaseUser): CreateUserData => {
+	return {
+		id: firebaseUser.uid,
+		email: firebaseUser.email || '',
+		displayName: firebaseUser.displayName || firebaseUser.email?.split('@')[0] || 'Anonymous User',
+		nickname: firebaseUser.displayName || undefined,
+		profileImage: firebaseUser.photoURL || undefined,
+		address: {},
+		isEmailVerified: firebaseUser.emailVerified,
+		isActive: true,
+		membershipTier: 'bronze',
+		isProfileComplete: false,
+		stats: {
+			totalSpent: 0,
+			totalSpentUSD: 0,
+			totalOrders: 0,
+			rank: 999999,
+			badges: ['New Member']
+		}
+	};
+};
+
+/**
+ * 新規ユーザーをFirestoreに作成
+ */
+export const createEmptyUser = async (firebaseUser: FirebaseUser): Promise<FirestoreUser> => {
+	try {
+		const userData = generateEmptyUserData(firebaseUser);
+		const userRef = doc(db, USERS_COLLECTION, firebaseUser.uid);
+
+		const firestoreUserData = {
+			...userData,
+			createdAt: serverTimestamp(),
+			updatedAt: serverTimestamp(),
+			lastLoginAt: serverTimestamp(),
+		};
+
+		await setDoc(userRef, firestoreUserData);
+
+		// 作成されたデータを返す（serverTimestampはFirestoreで自動変換される）
+		const createdUser = await getUserById(firebaseUser.uid);
+		if (!createdUser) {
+			throw new Error('Failed to retrieve created user');
+		}
+
+		console.log('✅ New user created in Firestore:', firebaseUser.uid);
+		return createdUser;
+	} catch (error) {
+		console.error('Error creating empty user:', error);
+		throw error;
+	}
+};
+
+/**
+ * 最終ログイン時刻を更新
+ */
+export const updateLastLogin = async (userId: string): Promise<void> => {
+	try {
+		const userRef = doc(db, USERS_COLLECTION, userId);
+		await updateDoc(userRef, {
+			lastLoginAt: serverTimestamp(),
+			updatedAt: serverTimestamp()
+		});
+		console.log('✅ Last login updated for user:', userId);
+	} catch (error) {
+		console.error('Error updating last login:', error);
+		throw error;
+	}
+};
+
+/**
+ * プロフィール情報を更新
+ */
+export const updateUserProfile = async (
+	userId: string,
+	profileData: UpdateUserProfile
+): Promise<void> => {
+	try {
+		const userRef = doc(db, USERS_COLLECTION, userId);
+		await updateDoc(userRef, {
+			...profileData,
+			updatedAt: serverTimestamp()
+		});
+		console.log('✅ User profile updated:', userId);
+	} catch (error) {
+		console.error('Error updating user profile:', error);
+		throw error;
+	}
+};
+
+/**
+ * ユーザー統計を更新
+ */
+export const updateUserStats = async (
+	userId: string,
+	statsData: UpdateUserStats
+): Promise<void> => {
+	try {
+		const userRef = doc(db, USERS_COLLECTION, userId);
+		await updateDoc(userRef, {
+			'stats.totalSpent': statsData.totalSpent,
+			'stats.totalSpentUSD': statsData.totalSpentUSD,
+			'stats.totalOrders': statsData.totalOrders,
+			'stats.rank': statsData.rank,
+			'stats.badges': statsData.badges,
+			updatedAt: serverTimestamp()
+		});
+		console.log('✅ User stats updated:', userId);
+	} catch (error) {
+		console.error('Error updating user stats:', error);
+		throw error;
+	}
+};
+
+/**
+ * Firebase AuthとFirestoreの自動同期（最適化版）
+ */
+export const syncAuthWithFirestore = async (firebaseUser: FirebaseUser): Promise<FirestoreUser> => {
+	try {
+		// 1. ユーザー存在確認
+		const existingUser = await getUserById(firebaseUser.uid);
+
+		if (!existingUser) {
+			// 2. 存在しない場合：EmptyUserを作成
+			console.log('🆕 Creating new user in Firestore:', firebaseUser.uid);
+			return await createEmptyUser(firebaseUser);
+		} else {
+			// 3. 存在する場合：lastLoginAtを更新（ただし、最後の更新から5分以上経過している場合のみ）
+			const now = new Date();
+			const lastLogin = existingUser.lastLoginAt instanceof Timestamp
+				? existingUser.lastLoginAt.toDate()
+				: new Date(existingUser.lastLoginAt as any);
+
+			const timeDiff = now.getTime() - lastLogin.getTime();
+			const fiveMinutesInMs = 5 * 60 * 1000; // 5分
+
+			if (timeDiff > fiveMinutesInMs) {
+				console.log('🔄 Updating lastLoginAt for user:', firebaseUser.uid);
+				await updateLastLogin(firebaseUser.uid);
+			} else {
+				console.log('⏭️ Skipping lastLoginAt update (too recent):', firebaseUser.uid);
+			}
+
+			// 最新データを取得して返す
+			const updatedUser = await getUserById(firebaseUser.uid);
+			return updatedUser!;
+		}
+	} catch (error) {
+		console.error('Error syncing auth with Firestore:', error);
+		throw error;
+	}
+};
+
+/**
+ * リアルタイムでユーザーデータを監視
+ */
+export const subscribeToUser = (
+	userId: string,
+	callback: (user: FirestoreUser | null) => void
+): (() => void) => {
+	const userRef = doc(db, USERS_COLLECTION, userId);
+
+	return onSnapshot(userRef, (doc) => {
+		if (doc.exists()) {
+			callback({ id: doc.id, ...doc.data() } as FirestoreUser);
+		} else {
+			callback(null);
+		}
+	}, (error) => {
+		console.error('Error subscribing to user:', error);
+		callback(null);
+	});
+};
+
+/**
+ * プロフィール完成度をチェック
+ */
+export const checkProfileCompleteness = (user: FirestoreUser): ProfileCompleteness => {
+	const requiredFields: (keyof FirestoreUser)[] = [
+		'displayName',
+		'address'
+	];
+
+	const missingFields: string[] = [];
+	let completedFields = 0;
+
+	// 基本情報チェック
+	if (!user.displayName?.trim()) {
+		missingFields.push('Display Name');
+	} else {
+		completedFields++;
+	}
+
+	// 住所情報チェック
+	if (!user.address?.country || !user.address?.prefecture ||
+		!user.address?.city || !user.address?.addressLine1 ||
+		!user.address?.postalCode) {
+		missingFields.push('Address Information');
+	} else {
+		completedFields++;
+	}
+
+	const completionPercentage = Math.round((completedFields / requiredFields.length) * 100);
+	const isComplete = missingFields.length === 0;
+
+	return {
+		isComplete,
+		completionPercentage,
+		missingFields,
+		requiredFields
+	};
+};
+
+/**
+ * FirestoreUserを既存のUserProfile形式に変換
+ */
+export const firestoreUserToUserProfile = (firestoreUser: FirestoreUser): UserProfile => {
+	return {
+		walletAddress: firestoreUser.walletAddress || firestoreUser.id,
+		displayName: firestoreUser.displayName,
+		totalSpent: firestoreUser.stats.totalSpent,
+		totalOrders: firestoreUser.stats.totalOrders,
+		rank: firestoreUser.stats.rank,
+		badges: firestoreUser.stats.badges,
+		joinDate: firestoreUser.createdAt instanceof Timestamp
+			? firestoreUser.createdAt.toDate()
+			: new Date(firestoreUser.createdAt as any)
+	};
+};-e 
 ### FILE: ./src/app/dashboard/components/sections/ProfileSection.tsx
 
 // src/app/dashboard/components/sections/ProfileSection.tsx
@@ -135,7 +583,7 @@ import React, { useState, useEffect } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import CyberCard from '../../../components/common/CyberCard';
 import CyberButton from '../../../components/common/CyberButton';
-import { UserProfile } from '../../../../../types/dashboard';
+import { ProfileEditModal } from './ProfileEditModal';
 import {
 	User,
 	Wallet,
@@ -148,24 +596,28 @@ import {
 	Copy,
 	Check,
 	Shield,
-	LogIn
+	LogIn,
+	Edit,
+	AlertCircle,
+	CheckCircle
 } from 'lucide-react';
+import {
+	getUserDisplayName,
+	getUserAvatarUrl,
+	getUserInitials,
+	formatUserStats,
+	formatDate,
+	formatAddress,
+	calculateProfileCompleteness
+} from '@/utils/userHelpers';
 
 const ProfileSection: React.FC = () => {
-	const { user, loading } = useAuth();
+	const { user, loading, firestoreUser, firestoreLoading } = useAuth();
 	const [copiedAddress, setCopiedAddress] = useState(false);
-	const [showLoginPrompt, setShowLoginPrompt] = useState(false);
-
-	useEffect(() => {
-		if (!loading && !user) {
-			setShowLoginPrompt(true);
-		} else {
-			setShowLoginPrompt(false);
-		}
-	}, [user, loading]);
+	const [isEditModalOpen, setIsEditModalOpen] = useState(false);
 
 	// ローディング状態
-	if (loading) {
+	if (loading || firestoreLoading) {
 		return (
 			<div className="space-y-8">
 				<div className="text-center">
@@ -221,7 +673,6 @@ const ProfileSection: React.FC = () => {
 								variant="primary"
 								className="flex items-center space-x-2"
 								onClick={() => {
-									// ヘッダーのログインボタンをクリックするか、カスタムイベントを発火
 									const loginEvent = new CustomEvent('openAuthModal');
 									window.dispatchEvent(loginEvent);
 								}}
@@ -253,15 +704,56 @@ const ProfileSection: React.FC = () => {
 		);
 	}
 
-	// 認証されたユーザーのプロフィールデータ（実際のFirebaseユーザーデータを使用）
-	const userProfile: UserProfile = {
-		walletAddress: user.uid, // Firebase UIDを使用（実際のウォレット接続時は置き換え）
-		displayName: user.displayName || user.email?.split('@')[0] || 'Anonymous User',
-		totalSpent: 0.125, // 実際のデータベースから取得
-		totalOrders: 3,
-		rank: 42,
-		badges: ['New Member', 'Early Adopter', 'Community Supporter'],
-		joinDate: user.metadata.creationTime ? new Date(user.metadata.creationTime) : new Date()
+	// Firestoreユーザーデータが存在しない場合
+	if (!firestoreUser) {
+		return (
+			<div className="space-y-8">
+				<div className="text-center">
+					<h2 className="text-3xl font-heading font-bold text-white mb-2">
+						Profile
+					</h2>
+					<p className="text-gray-400">
+						Setting up your profile...
+					</p>
+				</div>
+
+				<CyberCard showEffects={false}>
+					<div className="text-center py-12">
+						<div className="w-20 h-20 bg-gradient-to-br from-neonOrange/20 to-red-500/20 rounded-full flex items-center justify-center mx-auto mb-6">
+							<AlertCircle className="w-10 h-10 text-neonOrange" />
+						</div>
+
+						<h3 className="text-2xl font-bold text-white mb-4">
+							Profile Setup in Progress
+						</h3>
+
+						<p className="text-gray-400 mb-8 max-w-md mx-auto">
+							We're setting up your profile. This usually takes just a moment.
+						</p>
+
+						<CyberButton
+							variant="outline"
+							onClick={() => window.location.reload()}
+						>
+							Refresh Page
+						</CyberButton>
+					</div>
+				</CyberCard>
+			</div>
+		);
+	}
+
+	// プロフィール完成度を計算
+	const profileCompleteness = calculateProfileCompleteness(firestoreUser);
+	const formattedStats = formatUserStats(firestoreUser.stats);
+	const displayName = getUserDisplayName(firestoreUser, user);
+	const avatarUrl = getUserAvatarUrl(firestoreUser, user);
+	const initials = getUserInitials(firestoreUser, user);
+
+	const handleCopyAddress = () => {
+		navigator.clipboard.writeText(firestoreUser.walletAddress || firestoreUser.id);
+		setCopiedAddress(true);
+		setTimeout(() => setCopiedAddress(false), 2000);
 	};
 
 	const orderHistory = [
@@ -299,24 +791,10 @@ const ProfileSection: React.FC = () => {
 
 	const achievements = [
 		{ name: 'First Purchase', description: 'Made your first crypto purchase', earned: true },
-		{ name: 'Loyal Customer', description: 'Made 5+ purchases', earned: false, progress: 3 },
+		{ name: 'Loyal Customer', description: 'Made 5+ purchases', earned: false, progress: firestoreUser.stats.totalOrders },
 		{ name: 'Community Champion', description: 'Active in Discord for 30 days', earned: true },
-		{ name: 'Whale Status', description: 'Spent over 1 ETH total', earned: false, progress: 0.125 }
+		{ name: 'Whale Status', description: 'Spent over 1 ETH total', earned: false, progress: firestoreUser.stats.totalSpent }
 	];
-
-	const handleCopyAddress = () => {
-		navigator.clipboard.writeText(userProfile.walletAddress);
-		setCopiedAddress(true);
-		setTimeout(() => setCopiedAddress(false), 2000);
-	};
-
-	const formatDate = (date: Date) => {
-		return date.toLocaleDateString('en-US', {
-			year: 'numeric',
-			month: 'short',
-			day: 'numeric'
-		});
-	};
 
 	const getStatusColor = (status: string) => {
 		switch (status) {
@@ -339,19 +817,74 @@ const ProfileSection: React.FC = () => {
 				</p>
 			</div>
 
-			{/* Welcome Message for Authenticated User */}
+			{/* Profile Completeness Alert */}
+			{!profileCompleteness.isComplete && (
+				<div className="bg-gradient-to-r from-neonOrange/10 to-yellow-500/10 border border-neonOrange/30 rounded-sm p-4">
+					<div className="flex items-start space-x-3">
+						<AlertCircle className="w-5 h-5 text-neonOrange mt-0.5" />
+						<div className="flex-1">
+							<h4 className="text-neonOrange font-semibold mb-1">
+								Complete Your Profile ({profileCompleteness.completionPercentage}%)
+							</h4>
+							<p className="text-sm text-gray-300 mb-3">
+								Add missing information to unlock all features and improve your experience.
+							</p>
+							<div className="w-full bg-dark-300 rounded-full h-2 mb-3">
+								<div
+									className="bg-gradient-to-r from-neonOrange to-yellow-500 h-2 rounded-full transition-all duration-300"
+									style={{ width: `${profileCompleteness.completionPercentage}%` }}
+								/>
+							</div>
+							<div className="flex flex-wrap gap-2 mb-3">
+								{profileCompleteness.missingFields.map((field, index) => (
+									<span key={index} className="text-xs bg-neonOrange/20 text-neonOrange px-2 py-1 rounded">
+										{field}
+									</span>
+								))}
+							</div>
+							<CyberButton
+								variant="outline"
+								size="sm"
+								onClick={() => setIsEditModalOpen(true)}
+								className="flex items-center space-x-2"
+							>
+								<Edit className="w-3 h-3" />
+								<span>Complete Profile</span>
+							</CyberButton>
+						</div>
+					</div>
+				</div>
+			)}
+
+			{/* Welcome Message */}
 			<div className="bg-gradient-to-r from-neonGreen/10 to-neonOrange/10 border border-neonGreen/30 rounded-sm p-4">
-				<div className="flex items-center space-x-3">
-					<div className="w-10 h-10 bg-gradient-to-br from-neonGreen to-neonOrange rounded-full flex items-center justify-center">
-						<User className="w-5 h-5 text-black" />
+				<div className="flex items-center justify-between">
+					<div className="flex items-center space-x-3">
+						<div className="w-10 h-10 bg-gradient-to-br from-neonGreen to-neonOrange rounded-full flex items-center justify-center">
+							{profileCompleteness.isComplete ? (
+								<CheckCircle className="w-5 h-5 text-black" />
+							) : (
+								<User className="w-5 h-5 text-black" />
+							)}
+						</div>
+						<div>
+							<h3 className="text-white font-semibold">Welcome back, {displayName}!</h3>
+							<p className="text-sm text-gray-400">
+								Connected via {user.providerData[0]?.providerId === 'google.com' ? 'Google' : 'Email'}
+								{user.emailVerified && <span className="text-neonGreen ml-2">✓ Verified</span>}
+								{profileCompleteness.isComplete && <span className="text-neonGreen ml-2">✓ Complete</span>}
+							</p>
+						</div>
 					</div>
-					<div>
-						<h3 className="text-white font-semibold">Welcome back, {userProfile.displayName}!</h3>
-						<p className="text-sm text-gray-400">
-							Connected via {user.providerData[0]?.providerId === 'google.com' ? 'Google' : 'Email'}
-							{user.emailVerified && <span className="text-neonGreen ml-2">✓ Verified</span>}
-						</p>
-					</div>
+					<CyberButton
+						variant="outline"
+						size="sm"
+						onClick={() => setIsEditModalOpen(true)}
+						className="flex items-center space-x-2"
+					>
+						<Edit className="w-3 h-3" />
+						<span>Edit</span>
+					</CyberButton>
 				</div>
 			</div>
 
@@ -362,16 +895,16 @@ const ProfileSection: React.FC = () => {
 					<div className="flex items-start space-x-6">
 						{/* Avatar */}
 						<div className="flex-shrink-0">
-							{user.photoURL ? (
+							{avatarUrl ? (
 								<img
-									src={user.photoURL}
+									src={avatarUrl}
 									alt="Profile"
 									className="w-20 h-20 rounded-full border-2 border-neonGreen"
 								/>
 							) : (
 								<div className="w-20 h-20 bg-gradient-to-br from-neonGreen to-neonOrange rounded-full flex items-center justify-center">
 									<span className="text-2xl font-bold text-black">
-										{userProfile.displayName[0].toUpperCase()}
+										{initials}
 									</span>
 								</div>
 							)}
@@ -379,11 +912,16 @@ const ProfileSection: React.FC = () => {
 
 						{/* Profile Info */}
 						<div className="flex-1">
-							<h3 className="text-xl font-bold text-white mb-2">{userProfile.displayName}</h3>
+							<div className="flex items-center space-x-3 mb-2">
+								<h3 className="text-xl font-bold text-white">{displayName}</h3>
+								{firestoreUser.nickname && firestoreUser.nickname !== displayName && (
+									<span className="text-sm text-gray-400">({firestoreUser.nickname})</span>
+								)}
+							</div>
 
 							<div className="flex items-center space-x-2 mb-2">
 								<span className="text-sm text-gray-400">Email:</span>
-								<span className="text-sm text-gray-300">{user.email}</span>
+								<span className="text-sm text-gray-300">{firestoreUser.email}</span>
 								{user.emailVerified && (
 									<span className="text-xs bg-neonGreen/20 text-neonGreen px-2 py-1 rounded">Verified</span>
 								)}
@@ -392,7 +930,7 @@ const ProfileSection: React.FC = () => {
 							<div className="flex items-center space-x-2 mb-4">
 								<Wallet className="w-4 h-4 text-gray-400" />
 								<span className="font-mono text-sm text-gray-300">
-									User ID: {user.uid.slice(0, 8)}...{user.uid.slice(-4)}
+									User ID: {firestoreUser.id.slice(0, 8)}...{firestoreUser.id.slice(-4)}
 								</span>
 								<button
 									onClick={handleCopyAddress}
@@ -405,12 +943,18 @@ const ProfileSection: React.FC = () => {
 							<div className="grid grid-cols-2 gap-4">
 								<div>
 									<div className="text-sm text-gray-400">Member Since</div>
-									<div className="text-white font-semibold">{formatDate(userProfile.joinDate)}</div>
+									<div className="text-white font-semibold">{formatDate(firestoreUser.createdAt)}</div>
 								</div>
 								<div>
 									<div className="text-sm text-gray-400">Community Rank</div>
-									<div className="text-neonGreen font-semibold">#{userProfile.rank}</div>
+									<div className="text-neonGreen font-semibold">{formattedStats.rankFormatted}</div>
 								</div>
+							</div>
+
+							{/* Address Display */}
+							<div className="mt-4 p-3 bg-dark-200/30 rounded-sm">
+								<div className="text-sm text-gray-400 mb-1">Address</div>
+								<div className="text-sm text-gray-300">{formatAddress(firestoreUser.address)}</div>
 							</div>
 						</div>
 					</div>
@@ -422,19 +966,26 @@ const ProfileSection: React.FC = () => {
 						<div className="flex justify-between items-center">
 							<span className="text-gray-400">Total Spent</span>
 							<div className="text-right">
-								<div className="text-neonGreen font-bold">Ξ {userProfile.totalSpent}</div>
-								<div className="text-xs text-gray-500">$420.25</div>
+								<div className="text-neonGreen font-bold">{formattedStats.totalSpentFormatted}</div>
+								<div className="text-xs text-gray-500">{formattedStats.totalSpentUSDFormatted}</div>
 							</div>
 						</div>
 
 						<div className="flex justify-between items-center">
 							<span className="text-gray-400">Total Orders</span>
-							<span className="text-white font-semibold">{userProfile.totalOrders}</span>
+							<span className="text-white font-semibold">{firestoreUser.stats.totalOrders}</span>
 						</div>
 
 						<div className="flex justify-between items-center">
 							<span className="text-gray-400">Badges Earned</span>
-							<span className="text-neonOrange font-semibold">{userProfile.badges.length}</span>
+							<span className="text-neonOrange font-semibold">{formattedStats.badgeCount}</span>
+						</div>
+
+						<div className="flex justify-between items-center">
+							<span className="text-gray-400">Profile Status</span>
+							<span className={`font-semibold ${profileCompleteness.isComplete ? 'text-neonGreen' : 'text-neonOrange'}`}>
+								{profileCompleteness.isComplete ? 'Complete' : `${profileCompleteness.completionPercentage}%`}
+							</span>
 						</div>
 					</div>
 				</CyberCard>
@@ -443,7 +994,7 @@ const ProfileSection: React.FC = () => {
 			{/* Badges */}
 			<CyberCard title="Badges & Achievements" showEffects={false}>
 				<div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-					{userProfile.badges.map((badge, index) => (
+					{firestoreUser.stats.badges.map((badge, index) => (
 						<div key={index} className="flex items-center space-x-3 p-3 border border-neonOrange/30 rounded-sm bg-neonOrange/5">
 							<Award className="w-5 h-5 text-neonOrange" />
 							<span className="text-white font-medium">{badge}</span>
@@ -537,6 +1088,13 @@ const ProfileSection: React.FC = () => {
 					</table>
 				</div>
 			</CyberCard>
+
+			{/* Profile Edit Modal */}
+			<ProfileEditModal
+				isOpen={isEditModalOpen}
+				onClose={() => setIsEditModalOpen(false)}
+				firestoreUser={firestoreUser}
+			/>
 		</div>
 	);
 };
@@ -1396,6 +1954,433 @@ const CartSection: React.FC = () => {
 };
 
 export default CartSection;-e 
+### FILE: ./src/app/dashboard/components/sections/ProfileEditModal.tsx
+
+// src/app/dashboard/components/sections/ProfileEditModal.tsx
+'use client';
+
+import React, { useState, useEffect } from 'react';
+import { useAuth } from '@/contexts/AuthContext';
+import CyberButton from '../../../components/common/CyberButton';
+import { FirestoreUser, UpdateUserProfile } from '../../../../../types/user';
+import {
+	X,
+	User,
+	Mail,
+	MapPin,
+	Phone,
+	Save,
+	AlertCircle,
+	CheckCircle,
+	Loader
+} from 'lucide-react';
+import { handleAsyncOperation } from '@/utils/errorHandling';
+import { calculateProfileCompleteness } from '@/utils/userHelpers';
+
+interface ProfileEditModalProps {
+	isOpen: boolean;
+	onClose: () => void;
+	firestoreUser: FirestoreUser;
+}
+
+export const ProfileEditModal: React.FC<ProfileEditModalProps> = ({
+	isOpen,
+	onClose,
+	firestoreUser
+}) => {
+	const { updateProfile } = useAuth();
+	const [loading, setLoading] = useState(false);
+	const [error, setError] = useState<string | null>(null);
+	const [success, setSuccess] = useState(false);
+
+	// フォームデータ
+	const [formData, setFormData] = useState({
+		displayName: '',
+		nickname: '',
+		address: {
+			country: '',
+			prefecture: '',
+			city: '',
+			addressLine1: '',
+			addressLine2: '',
+			postalCode: '',
+			phone: ''
+		}
+	});
+
+	// firestoreUserが変更されたときにフォームデータを更新
+	useEffect(() => {
+		if (firestoreUser) {
+			setFormData({
+				displayName: firestoreUser.displayName || '',
+				nickname: firestoreUser.nickname || '',
+				address: {
+					country: firestoreUser.address?.country || '',
+					prefecture: firestoreUser.address?.prefecture || '',
+					city: firestoreUser.address?.city || '',
+					addressLine1: firestoreUser.address?.addressLine1 || '',
+					addressLine2: firestoreUser.address?.addressLine2 || '',
+					postalCode: firestoreUser.address?.postalCode || '',
+					phone: firestoreUser.address?.phone || ''
+				}
+			});
+		}
+	}, [firestoreUser]);
+
+	// モーダルが閉じられたときの状態リセット
+	useEffect(() => {
+		if (!isOpen) {
+			setError(null);
+			setSuccess(false);
+		}
+	}, [isOpen]);
+
+	const handleInputChange = (field: string, value: string) => {
+		if (field.startsWith('address.')) {
+			const addressField = field.replace('address.', '');
+			setFormData(prev => ({
+				...prev,
+				address: {
+					...prev.address,
+					[addressField]: value
+				}
+			}));
+		} else {
+			setFormData(prev => ({
+				...prev,
+				[field]: value
+			}));
+		}
+	};
+
+	const validateForm = (): string[] => {
+		const errors: string[] = [];
+
+		if (!formData.displayName.trim()) {
+			errors.push('Display name is required');
+		}
+
+		if (!formData.address.country.trim()) {
+			errors.push('Country is required');
+		}
+
+		if (!formData.address.prefecture.trim()) {
+			errors.push('Prefecture is required');
+		}
+
+		if (!formData.address.city.trim()) {
+			errors.push('City is required');
+		}
+
+		if (!formData.address.addressLine1.trim()) {
+			errors.push('Address line 1 is required');
+		}
+
+		if (!formData.address.postalCode.trim()) {
+			errors.push('Postal code is required');
+		}
+
+		return errors;
+	};
+
+	const handleSubmit = async (e: React.FormEvent) => {
+		e.preventDefault();
+		setError(null);
+		setSuccess(false);
+		setLoading(true);
+
+		// バリデーション
+		const validationErrors = validateForm();
+		if (validationErrors.length > 0) {
+			setError(validationErrors.join(', '));
+			setLoading(false);
+			return;
+		}
+
+		// プロフィール完成度をチェック
+		const tempUser: FirestoreUser = {
+			...firestoreUser,
+			displayName: formData.displayName,
+			nickname: formData.nickname,
+			address: formData.address
+		};
+		const completeness = calculateProfileCompleteness(tempUser);
+
+		const updateData: UpdateUserProfile = {
+			displayName: formData.displayName,
+			nickname: formData.nickname || undefined,
+			address: formData.address,
+			isProfileComplete: completeness.isComplete
+		};
+
+		const { error: updateError } = await handleAsyncOperation(
+			() => updateProfile(updateData),
+			'profile-update'
+		);
+
+		if (updateError) {
+			setError(updateError.userMessage);
+			setLoading(false);
+			return;
+		}
+
+		setSuccess(true);
+		setLoading(false);
+
+		// 成功後に1.5秒でモーダルを閉じる
+		setTimeout(() => {
+			onClose();
+		}, 1500);
+	};
+
+	if (!isOpen) return null;
+
+	return (
+		<div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+			<div className="relative bg-black/90 backdrop-blur-md border border-neonGreen/30 rounded-lg shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-hidden">
+				{/* Scanline effect */}
+				<div className="absolute inset-0 overflow-hidden pointer-events-none">
+					<div className="absolute w-full h-px bg-gradient-to-r from-transparent via-neonGreen to-transparent animate-scanline opacity-30"></div>
+				</div>
+
+				{/* Header */}
+				<div className="relative p-6 border-b border-gray-700">
+					<div className="flex justify-between items-center">
+						<div>
+							<h2 className="text-2xl font-heading font-bold text-white mb-1">
+								Edit Profile
+							</h2>
+							<p className="text-sm text-gray-400">
+								Update your information and complete your profile
+							</p>
+						</div>
+						<button
+							onClick={onClose}
+							className="text-gray-400 hover:text-neonGreen transition-colors text-2xl font-light"
+						>
+							<X className="w-6 h-6" />
+						</button>
+					</div>
+				</div>
+
+				{/* Content */}
+				<div className="relative p-6 max-h-[calc(90vh-140px)] overflow-y-auto">
+					{/* Success Message */}
+					{success && (
+						<div className="bg-neonGreen/10 border border-neonGreen/30 text-neonGreen px-4 py-3 rounded-sm mb-6 flex items-center">
+							<CheckCircle className="w-5 h-5 mr-3" />
+							<span>Profile updated successfully!</span>
+						</div>
+					)}
+
+					{/* Error Message */}
+					{error && (
+						<div className="bg-red-900/30 border border-red-500/50 text-red-300 px-4 py-3 rounded-sm mb-6 flex items-center">
+							<AlertCircle className="w-5 h-5 mr-3" />
+							<span>{error}</span>
+						</div>
+					)}
+
+					<form onSubmit={handleSubmit} className="space-y-6">
+						{/* Personal Information */}
+						<div>
+							<h3 className="text-lg font-semibold text-white mb-4 flex items-center">
+								<User className="w-5 h-5 mr-2 text-neonGreen" />
+								Personal Information
+							</h3>
+
+							<div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+								<div>
+									<label htmlFor="displayName" className="block text-sm font-medium text-gray-300 mb-2">
+										Display Name *
+									</label>
+									<input
+										type="text"
+										id="displayName"
+										value={formData.displayName}
+										onChange={(e) => handleInputChange('displayName', e.target.value)}
+										required
+										className="w-full px-4 py-3 bg-black/50 border border-gray-600 rounded-sm focus:outline-none focus:border-neonGreen focus:ring-1 focus:ring-neonGreen text-white placeholder-gray-500 transition-all duration-200"
+										placeholder="Your display name"
+									/>
+								</div>
+
+								<div>
+									<label htmlFor="nickname" className="block text-sm font-medium text-gray-300 mb-2">
+										Nickname
+									</label>
+									<input
+										type="text"
+										id="nickname"
+										value={formData.nickname}
+										onChange={(e) => handleInputChange('nickname', e.target.value)}
+										className="w-full px-4 py-3 bg-black/50 border border-gray-600 rounded-sm focus:outline-none focus:border-neonGreen focus:ring-1 focus:ring-neonGreen text-white placeholder-gray-500 transition-all duration-200"
+										placeholder="Optional nickname"
+									/>
+								</div>
+							</div>
+						</div>
+
+						{/* Address Information */}
+						<div>
+							<h3 className="text-lg font-semibold text-white mb-4 flex items-center">
+								<MapPin className="w-5 h-5 mr-2 text-neonGreen" />
+								Address Information
+							</h3>
+
+							<div className="space-y-4">
+								<div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+									<div>
+										<label htmlFor="country" className="block text-sm font-medium text-gray-300 mb-2">
+											Country *
+										</label>
+										<input
+											type="text"
+											id="country"
+											value={formData.address.country}
+											onChange={(e) => handleInputChange('address.country', e.target.value)}
+											required
+											className="w-full px-4 py-3 bg-black/50 border border-gray-600 rounded-sm focus:outline-none focus:border-neonGreen focus:ring-1 focus:ring-neonGreen text-white placeholder-gray-500 transition-all duration-200"
+											placeholder="Japan"
+										/>
+									</div>
+
+									<div>
+										<label htmlFor="prefecture" className="block text-sm font-medium text-gray-300 mb-2">
+											Prefecture/State *
+										</label>
+										<input
+											type="text"
+											id="prefecture"
+											value={formData.address.prefecture}
+											onChange={(e) => handleInputChange('address.prefecture', e.target.value)}
+											required
+											className="w-full px-4 py-3 bg-black/50 border border-gray-600 rounded-sm focus:outline-none focus:border-neonGreen focus:ring-1 focus:ring-neonGreen text-white placeholder-gray-500 transition-all duration-200"
+											placeholder="Tokyo"
+										/>
+									</div>
+								</div>
+
+								<div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+									<div>
+										<label htmlFor="city" className="block text-sm font-medium text-gray-300 mb-2">
+											City *
+										</label>
+										<input
+											type="text"
+											id="city"
+											value={formData.address.city}
+											onChange={(e) => handleInputChange('address.city', e.target.value)}
+											required
+											className="w-full px-4 py-3 bg-black/50 border border-gray-600 rounded-sm focus:outline-none focus:border-neonGreen focus:ring-1 focus:ring-neonGreen text-white placeholder-gray-500 transition-all duration-200"
+											placeholder="Shibuya"
+										/>
+									</div>
+
+									<div>
+										<label htmlFor="postalCode" className="block text-sm font-medium text-gray-300 mb-2">
+											Postal Code *
+										</label>
+										<input
+											type="text"
+											id="postalCode"
+											value={formData.address.postalCode}
+											onChange={(e) => handleInputChange('address.postalCode', e.target.value)}
+											required
+											className="w-full px-4 py-3 bg-black/50 border border-gray-600 rounded-sm focus:outline-none focus:border-neonGreen focus:ring-1 focus:ring-neonGreen text-white placeholder-gray-500 transition-all duration-200"
+											placeholder="150-0001"
+										/>
+									</div>
+								</div>
+
+								<div>
+									<label htmlFor="addressLine1" className="block text-sm font-medium text-gray-300 mb-2">
+										Address Line 1 *
+									</label>
+									<input
+										type="text"
+										id="addressLine1"
+										value={formData.address.addressLine1}
+										onChange={(e) => handleInputChange('address.addressLine1', e.target.value)}
+										required
+										className="w-full px-4 py-3 bg-black/50 border border-gray-600 rounded-sm focus:outline-none focus:border-neonGreen focus:ring-1 focus:ring-neonGreen text-white placeholder-gray-500 transition-all duration-200"
+										placeholder="1-1-1 Shibuya"
+									/>
+								</div>
+
+								<div>
+									<label htmlFor="addressLine2" className="block text-sm font-medium text-gray-300 mb-2">
+										Address Line 2
+									</label>
+									<input
+										type="text"
+										id="addressLine2"
+										value={formData.address.addressLine2}
+										onChange={(e) => handleInputChange('address.addressLine2', e.target.value)}
+										className="w-full px-4 py-3 bg-black/50 border border-gray-600 rounded-sm focus:outline-none focus:border-neonGreen focus:ring-1 focus:ring-neonGreen text-white placeholder-gray-500 transition-all duration-200"
+										placeholder="Apartment, suite, etc. (optional)"
+									/>
+								</div>
+
+								<div>
+									<label htmlFor="phone" className="block text-sm font-medium text-gray-300 mb-2">
+										<Phone className="w-4 h-4 inline mr-1" />
+										Phone Number
+									</label>
+									<input
+										type="tel"
+										id="phone"
+										value={formData.address.phone}
+										onChange={(e) => handleInputChange('address.phone', e.target.value)}
+										className="w-full px-4 py-3 bg-black/50 border border-gray-600 rounded-sm focus:outline-none focus:border-neonGreen focus:ring-1 focus:ring-neonGreen text-white placeholder-gray-500 transition-all duration-200"
+										placeholder="+81 90-1234-5678"
+									/>
+								</div>
+							</div>
+						</div>
+
+						{/* Form Actions */}
+						<div className="flex items-center justify-between pt-4 border-t border-gray-700">
+							<div className="text-sm text-gray-400">
+								<span className="text-red-400">*</span> Required fields
+							</div>
+
+							<div className="flex space-x-4">
+								<CyberButton
+									type="button"
+									variant="outline"
+									onClick={onClose}
+									disabled={loading}
+								>
+									Cancel
+								</CyberButton>
+
+								<CyberButton
+									type="submit"
+									variant="primary"
+									disabled={loading}
+									className="flex items-center space-x-2"
+								>
+									{loading ? (
+										<>
+											<Loader className="w-4 h-4 animate-spin" />
+											<span>Saving...</span>
+										</>
+									) : (
+										<>
+											<Save className="w-4 h-4" />
+											<span>Save Changes</span>
+										</>
+									)}
+								</CyberButton>
+							</div>
+						</div>
+					</form>
+				</div>
+			</div>
+		</div>
+	);
+};-e 
 ### FILE: ./src/app/dashboard/components/sections/PurchaseScanSection.tsx
 
 // src/app/dashboard/components/sections/PurchaseScanSection.tsx
@@ -6558,6 +7543,802 @@ export default function Home() {
 		</main>
 	);
 }-e 
+### FILE: ./src/utils/errorHandling.ts
+
+// src/utils/errorHandling.ts
+import { FirebaseError } from 'firebase/app';
+
+// エラータイプの定義
+export interface AppError {
+	code: string;
+	message: string;
+	userMessage: string;
+	details?: any;
+}
+
+// Firebase Authエラーコードのマッピング
+const authErrorMessages: Record<string, string> = {
+	'auth/user-not-found': 'このメールアドレスに関連付けられたアカウントが見つかりません。',
+	'auth/wrong-password': 'パスワードが正しくありません。',
+	'auth/email-already-in-use': 'このメールアドレスは既に使用されています。',
+	'auth/weak-password': 'パスワードは6文字以上で入力してください。',
+	'auth/invalid-email': 'メールアドレスの形式が正しくありません。',
+	'auth/user-disabled': 'このアカウントは無効化されています。',
+	'auth/too-many-requests': '試行回数が多すぎます。しばらく待ってから再度お試しください。',
+	'auth/network-request-failed': 'ネットワークに接続できません。インターネット接続を確認してください。',
+	'auth/popup-closed-by-user': 'サインインがキャンセルされました。',
+	'auth/cancelled-popup-request': 'サインインがキャンセルされました。',
+	'auth/popup-blocked': 'ポップアップがブロックされました。ポップアップを許可してください。'
+};
+
+// Firestoreエラーコードのマッピング
+const firestoreErrorMessages: Record<string, string> = {
+	'permission-denied': 'データへのアクセス権限がありません。',
+	'not-found': 'データが見つかりません。',
+	'already-exists': 'データは既に存在します。',
+	'failed-precondition': 'データの前提条件が満たされていません。',
+	'aborted': '操作が中断されました。再度お試しください。',
+	'out-of-range': 'データの範囲が正しくありません。',
+	'unimplemented': 'この機能は実装されていません。',
+	'internal': 'サーバー内部でエラーが発生しました。',
+	'unavailable': 'サービスが一時的に利用できません。',
+	'data-loss': 'データの損失が発生しました。',
+	'unauthenticated': '認証が必要です。ログインしてください。',
+	'deadline-exceeded': '操作がタイムアウトしました。',
+	'resource-exhausted': 'リソースの制限に達しました。'
+};
+
+// 一般的なエラーメッセージ
+const generalErrorMessages: Record<string, string> = {
+	'network-error': 'ネットワークエラーが発生しました。インターネット接続を確認してください。',
+	'unknown-error': '予期しないエラーが発生しました。',
+	'validation-error': '入力内容に問題があります。',
+	'user-creation-failed': 'ユーザーアカウントの作成に失敗しました。',
+	'profile-update-failed': 'プロフィールの更新に失敗しました。',
+	'data-sync-failed': 'データの同期に失敗しました。'
+};
+
+/**
+ * Firebaseエラーを解析してユーザーフレンドリーなメッセージに変換
+ */
+export const parseFirebaseError = (error: FirebaseError): AppError => {
+	const { code, message } = error;
+
+	let userMessage: string;
+
+	if (code.startsWith('auth/')) {
+		userMessage = authErrorMessages[code] || 'ログイン処理でエラーが発生しました。';
+	} else if (code.startsWith('firestore/')) {
+		const firestoreCode = code.replace('firestore/', '');
+		userMessage = firestoreErrorMessages[firestoreCode] || 'データベース処理でエラーが発生しました。';
+	} else {
+		userMessage = generalErrorMessages['unknown-error'];
+	}
+
+	return {
+		code,
+		message,
+		userMessage,
+		details: error
+	};
+};
+
+/**
+ * 一般的なエラーをAppError形式に変換
+ */
+export const parseGeneralError = (error: Error, context?: string): AppError => {
+	let userMessage = generalErrorMessages['unknown-error'];
+
+	// ネットワークエラーの検出
+	if (error.message.includes('network') || error.message.includes('fetch')) {
+		userMessage = generalErrorMessages['network-error'];
+	}
+
+	// コンテキスト別のエラーメッセージ
+	if (context) {
+		switch (context) {
+			case 'user-creation':
+				userMessage = generalErrorMessages['user-creation-failed'];
+				break;
+			case 'profile-update':
+				userMessage = generalErrorMessages['profile-update-failed'];
+				break;
+			case 'data-sync':
+				userMessage = generalErrorMessages['data-sync-failed'];
+				break;
+		}
+	}
+
+	return {
+		code: 'general-error',
+		message: error.message,
+		userMessage,
+		details: error
+	};
+};
+
+/**
+ * エラーハンドリング用のラッパー関数
+ */
+export const handleAsyncOperation = async <T>(
+	operation: () => Promise<T>,
+	context?: string
+): Promise<{ data?: T; error?: AppError }> => {
+	try {
+		const data = await operation();
+		return { data };
+	} catch (error) {
+		let appError: AppError;
+
+		if (error instanceof FirebaseError) {
+			appError = parseFirebaseError(error);
+		} else if (error instanceof Error) {
+			appError = parseGeneralError(error, context);
+		} else {
+			appError = {
+				code: 'unknown-error',
+				message: String(error),
+				userMessage: generalErrorMessages['unknown-error'],
+				details: error
+			};
+		}
+
+		// ログ出力（開発環境のみ）
+		if (process.env.NODE_ENV === 'development') {
+			console.error('🚨 Error in operation:', {
+				context,
+				error: appError,
+				stack: error instanceof Error ? error.stack : undefined
+			});
+		}
+
+		return { error: appError };
+	}
+};
+
+/**
+ * エラーメッセージをトーストで表示する用のユーティリティ
+ */
+export const getErrorDisplayMessage = (error: AppError): {
+	title: string;
+	message: string;
+	type: 'error' | 'warning';
+} => {
+	// ネットワークエラーは警告レベル
+	if (error.code.includes('network') || error.code.includes('unavailable')) {
+		return {
+			title: 'Connection Issue',
+			message: error.userMessage,
+			type: 'warning'
+		};
+	}
+
+	// 認証エラーは情報レベル
+	if (error.code.startsWith('auth/')) {
+		return {
+			title: 'Authentication Required',
+			message: error.userMessage,
+			type: 'warning'
+		};
+	}
+
+	// その他はエラーレベル
+	return {
+		title: 'Error',
+		message: error.userMessage,
+		type: 'error'
+	};
+};
+
+/**
+ * リトライ機能付きの操作実行
+ */
+export const retryOperation = async <T>(
+	operation: () => Promise<T>,
+	maxRetries: number = 3,
+	delay: number = 1000
+): Promise<T> => {
+	let lastError: Error;
+
+	for (let attempt = 1; attempt <= maxRetries; attempt++) {
+		try {
+			return await operation();
+		} catch (error) {
+			lastError = error as Error;
+
+			// 最後の試行でない場合、待機してからリトライ
+			if (attempt < maxRetries) {
+				await new Promise(resolve => setTimeout(resolve, delay * attempt));
+				console.log(`🔄 Retry attempt ${attempt}/${maxRetries} for operation`);
+			}
+		}
+	}
+
+	throw lastError!;
+};
+
+/**
+ * バリデーションエラーを生成
+ */
+export const createValidationError = (field: string, message: string): AppError => {
+	return {
+		code: 'validation-error',
+		message: `Validation failed for ${field}: ${message}`,
+		userMessage: message,
+		details: { field }
+	};
+};-e 
+### FILE: ./src/utils/userHelpers.ts
+
+// src/utils/userHelpers.ts
+import { Timestamp } from 'firebase/firestore';
+import { User as FirebaseUser } from 'firebase/auth';
+import { FirestoreUser, ProfileCompleteness } from '../../types/user';
+import { UserProfile } from '../../types/dashboard';
+
+/**
+ * FirestoreUserを既存のUserProfile形式に変換
+ */
+export const convertFirestoreUserToUserProfile = (firestoreUser: FirestoreUser): UserProfile => {
+	return {
+		walletAddress: firestoreUser.walletAddress || firestoreUser.id,
+		displayName: firestoreUser.displayName,
+		totalSpent: firestoreUser.stats.totalSpent,
+		totalOrders: firestoreUser.stats.totalOrders,
+		rank: firestoreUser.stats.rank,
+		badges: firestoreUser.stats.badges,
+		joinDate: firestoreUser.createdAt instanceof Timestamp
+			? firestoreUser.createdAt.toDate()
+			: new Date(firestoreUser.createdAt as any)
+	};
+};
+
+/**
+ * Firebase UserからFirestoreUser作成時の初期データを生成
+ */
+export const generateInitialUserData = (firebaseUser: FirebaseUser) => {
+	return {
+		id: firebaseUser.uid,
+		email: firebaseUser.email || '',
+		displayName: firebaseUser.displayName || firebaseUser.email?.split('@')[0] || 'Anonymous User',
+		nickname: firebaseUser.displayName || undefined,
+		profileImage: firebaseUser.photoURL || undefined,
+		address: {},
+		isEmailVerified: firebaseUser.emailVerified,
+		isActive: true as const,
+		membershipTier: 'bronze' as const,
+		isProfileComplete: false,
+		stats: {
+			totalSpent: 0,
+			totalSpentUSD: 0,
+			totalOrders: 0,
+			rank: 999999,
+			badges: ['New Member']
+		}
+	};
+};
+
+/**
+ * プロフィール完成度を計算
+ */
+export const calculateProfileCompleteness = (user: FirestoreUser): ProfileCompleteness => {
+	const requiredFields = [
+		'displayName',
+		'address.country',
+		'address.prefecture',
+		'address.city',
+		'address.addressLine1',
+		'address.postalCode'
+	];
+
+	const missingFields: string[] = [];
+	let completedFields = 0;
+
+	// 表示名チェック
+	if (!user.displayName?.trim()) {
+		missingFields.push('Display Name');
+	} else {
+		completedFields++;
+	}
+
+	// 住所情報チェック
+	const addressFields = [
+		{ key: 'country', label: 'Country' },
+		{ key: 'prefecture', label: 'Prefecture' },
+		{ key: 'city', label: 'City' },
+		{ key: 'addressLine1', label: 'Address Line 1' },
+		{ key: 'postalCode', label: 'Postal Code' }
+	];
+
+	addressFields.forEach(field => {
+		const value = user.address?.[field.key as keyof typeof user.address];
+		if (!value || !value.trim()) {
+			missingFields.push(field.label);
+		} else {
+			completedFields++;
+		}
+	});
+
+	const totalFields = requiredFields.length;
+	const completionPercentage = Math.round((completedFields / totalFields) * 100);
+	const isComplete = missingFields.length === 0;
+
+	return {
+		isComplete,
+		completionPercentage,
+		missingFields,
+		requiredFields: requiredFields as (keyof FirestoreUser)[]
+	};
+};
+
+/**
+ * ユーザーの表示名を取得（フォールバック付き）
+ */
+export const getUserDisplayName = (
+	firestoreUser?: FirestoreUser | null,
+	firebaseUser?: FirebaseUser | null
+): string => {
+	if (firestoreUser?.nickname) return firestoreUser.nickname;
+	if (firestoreUser?.displayName) return firestoreUser.displayName;
+	if (firebaseUser?.displayName) return firebaseUser.displayName;
+	if (firebaseUser?.email) return firebaseUser.email.split('@')[0];
+	return 'Anonymous User';
+};
+
+/**
+ * ユーザーのアバター画像URLを取得（フォールバック付き）
+ */
+export const getUserAvatarUrl = (
+	firestoreUser?: FirestoreUser | null,
+	firebaseUser?: FirebaseUser | null
+): string | null => {
+	if (firestoreUser?.profileImage) return firestoreUser.profileImage;
+	if (firebaseUser?.photoURL) return firebaseUser.photoURL;
+	return null;
+};
+
+/**
+ * ユーザーのイニシャルを取得
+ */
+export const getUserInitials = (
+	firestoreUser?: FirestoreUser | null,
+	firebaseUser?: FirebaseUser | null
+): string => {
+	const displayName = getUserDisplayName(firestoreUser, firebaseUser);
+	return displayName[0].toUpperCase();
+};
+
+/**
+ * メンバーシップティアの表示用ラベルを取得
+ */
+export const getMembershipTierLabel = (tier: FirestoreUser['membershipTier']): string => {
+	const labels = {
+		bronze: '🥉 Bronze',
+		silver: '🥈 Silver',
+		gold: '🥇 Gold',
+		platinum: '💎 Platinum'
+	};
+	return labels[tier];
+};
+
+/**
+ * メンバーシップティアの色を取得
+ */
+export const getMembershipTierColor = (tier: FirestoreUser['membershipTier']): string => {
+	const colors = {
+		bronze: 'text-amber-600',
+		silver: 'text-gray-400',
+		gold: 'text-yellow-400',
+		platinum: 'text-cyan-400'
+	};
+	return colors[tier];
+};
+
+/**
+ * 統計データをフォーマット
+ */
+export const formatUserStats = (stats: FirestoreUser['stats']) => {
+	return {
+		totalSpentFormatted: `Ξ ${stats.totalSpent.toFixed(3)}`,
+		totalSpentUSDFormatted: `$${stats.totalSpentUSD.toLocaleString()}`,
+		rankFormatted: `#${stats.rank.toLocaleString()}`,
+		badgeCount: stats.badges.length
+	};
+};
+
+/**
+ * 住所を1行のテキストにフォーマット
+ */
+export const formatAddress = (address?: FirestoreUser['address']): string => {
+	if (!address) return 'No address provided';
+
+	const parts = [
+		address.addressLine1,
+		address.addressLine2,
+		address.city,
+		address.prefecture,
+		address.postalCode,
+		address.country
+	].filter(Boolean);
+
+	return parts.length > 0 ? parts.join(', ') : 'No address provided';
+};
+
+/**
+ * 日付をフォーマット
+ */
+export const formatDate = (timestamp: Timestamp | Date | string): string => {
+	let date: Date;
+
+	if (timestamp instanceof Timestamp) {
+		date = timestamp.toDate();
+	} else if (timestamp instanceof Date) {
+		date = timestamp;
+	} else {
+		date = new Date(timestamp);
+	}
+
+	return date.toLocaleDateString('en-US', {
+		year: 'numeric',
+		month: 'short',
+		day: 'numeric'
+	});
+};
+
+/**
+ * 相対時間をフォーマット（例：2 days ago）
+ */
+export const formatRelativeTime = (timestamp: Timestamp | Date | string): string => {
+	let date: Date;
+
+	if (timestamp instanceof Timestamp) {
+		date = timestamp.toDate();
+	} else if (timestamp instanceof Date) {
+		date = timestamp;
+	} else {
+		date = new Date(timestamp);
+	}
+
+	const now = new Date();
+	const diffInSeconds = Math.floor((now.getTime() - date.getTime()) / 1000);
+
+	if (diffInSeconds < 60) return 'Just now';
+	if (diffInSeconds < 3600) return `${Math.floor(diffInSeconds / 60)} minutes ago`;
+	if (diffInSeconds < 86400) return `${Math.floor(diffInSeconds / 3600)} hours ago`;
+	if (diffInSeconds < 2592000) return `${Math.floor(diffInSeconds / 86400)} days ago`;
+
+	return formatDate(date);
+};-e 
+### FILE: ./src/utils/validation.ts
+
+// src/utils/validation.ts
+import { FirestoreUser, UpdateUserProfile } from '../../types/user';
+
+// バリデーションエラーの型
+export interface ValidationError {
+	field: string;
+	message: string;
+}
+
+// バリデーション結果の型
+export interface ValidationResult {
+	isValid: boolean;
+	errors: ValidationError[];
+}
+
+/**
+ * メールアドレスのバリデーション
+ */
+export const validateEmail = (email: string): boolean => {
+	const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+	return emailRegex.test(email);
+};
+
+/**
+ * 表示名のバリデーション
+ */
+export const validateDisplayName = (displayName: string): ValidationError[] => {
+	const errors: ValidationError[] = [];
+
+	if (!displayName || !displayName.trim()) {
+		errors.push({
+			field: 'displayName',
+			message: 'Display name is required'
+		});
+		return errors;
+	}
+
+	if (displayName.trim().length < 2) {
+		errors.push({
+			field: 'displayName',
+			message: 'Display name must be at least 2 characters long'
+		});
+	}
+
+	if (displayName.trim().length > 50) {
+		errors.push({
+			field: 'displayName',
+			message: 'Display name must be less than 50 characters'
+		});
+	}
+
+	// 特殊文字のチェック（基本的な文字、数字、スペース、一部の記号のみ許可）
+	const allowedCharsRegex = /^[a-zA-Z0-9\s\-_.あ-んア-ン一-龯]+$/;
+	if (!allowedCharsRegex.test(displayName.trim())) {
+		errors.push({
+			field: 'displayName',
+			message: 'Display name contains invalid characters'
+		});
+	}
+
+	return errors;
+};
+
+/**
+ * ニックネームのバリデーション
+ */
+export const validateNickname = (nickname?: string): ValidationError[] => {
+	const errors: ValidationError[] = [];
+
+	if (!nickname) return errors; // ニックネームはオプショナル
+
+	if (nickname.trim().length > 30) {
+		errors.push({
+			field: 'nickname',
+			message: 'Nickname must be less than 30 characters'
+		});
+	}
+
+	const allowedCharsRegex = /^[a-zA-Z0-9\s\-_.あ-んア-ン一-龯]+$/;
+	if (!allowedCharsRegex.test(nickname.trim())) {
+		errors.push({
+			field: 'nickname',
+			message: 'Nickname contains invalid characters'
+		});
+	}
+
+	return errors;
+};
+
+/**
+ * 住所のバリデーション
+ */
+export const validateAddress = (address?: FirestoreUser['address']): ValidationError[] => {
+	const errors: ValidationError[] = [];
+
+	if (!address) {
+		errors.push({
+			field: 'address',
+			message: 'Address information is required'
+		});
+		return errors;
+	}
+
+	// 国
+	if (!address.country || !address.country.trim()) {
+		errors.push({
+			field: 'address.country',
+			message: 'Country is required'
+		});
+	} else if (address.country.trim().length > 50) {
+		errors.push({
+			field: 'address.country',
+			message: 'Country name is too long'
+		});
+	}
+
+	// 都道府県
+	if (!address.prefecture || !address.prefecture.trim()) {
+		errors.push({
+			field: 'address.prefecture',
+			message: 'Prefecture/State is required'
+		});
+	} else if (address.prefecture.trim().length > 50) {
+		errors.push({
+			field: 'address.prefecture',
+			message: 'Prefecture/State name is too long'
+		});
+	}
+
+	// 市区町村
+	if (!address.city || !address.city.trim()) {
+		errors.push({
+			field: 'address.city',
+			message: 'City is required'
+		});
+	} else if (address.city.trim().length > 100) {
+		errors.push({
+			field: 'address.city',
+			message: 'City name is too long'
+		});
+	}
+
+	// 住所1
+	if (!address.addressLine1 || !address.addressLine1.trim()) {
+		errors.push({
+			field: 'address.addressLine1',
+			message: 'Address line 1 is required'
+		});
+	} else if (address.addressLine1.trim().length > 200) {
+		errors.push({
+			field: 'address.addressLine1',
+			message: 'Address line 1 is too long'
+		});
+	}
+
+	// 住所2（オプショナル）
+	if (address.addressLine2 && address.addressLine2.trim().length > 200) {
+		errors.push({
+			field: 'address.addressLine2',
+			message: 'Address line 2 is too long'
+		});
+	}
+
+	// 郵便番号
+	if (!address.postalCode || !address.postalCode.trim()) {
+		errors.push({
+			field: 'address.postalCode',
+			message: 'Postal code is required'
+		});
+	} else if (address.postalCode.trim().length > 20) {
+		errors.push({
+			field: 'address.postalCode',
+			message: 'Postal code is too long'
+		});
+	}
+
+	// 電話番号（オプショナル）
+	if (address.phone && address.phone.trim()) {
+		const phoneRegex = /^[\+]?[0-9\s\-\(\)]+$/;
+		if (!phoneRegex.test(address.phone.trim())) {
+			errors.push({
+				field: 'address.phone',
+				message: 'Invalid phone number format'
+			});
+		} else if (address.phone.trim().length > 20) {
+			errors.push({
+				field: 'address.phone',
+				message: 'Phone number is too long'
+			});
+		}
+	}
+
+	return errors;
+};
+
+/**
+ * プロフィール更新データの全体バリデーション
+ */
+export const validateUpdateUserProfile = (data: UpdateUserProfile): ValidationResult => {
+	const allErrors: ValidationError[] = [];
+
+	// 表示名のバリデーション
+	if (data.displayName !== undefined) {
+		allErrors.push(...validateDisplayName(data.displayName));
+	}
+
+	// ニックネームのバリデーション
+	if (data.nickname !== undefined) {
+		allErrors.push(...validateNickname(data.nickname));
+	}
+
+	// 住所のバリデーション
+	if (data.address !== undefined) {
+		allErrors.push(...validateAddress(data.address));
+	}
+
+	return {
+		isValid: allErrors.length === 0,
+		errors: allErrors
+	};
+};
+
+/**
+ * Firestoreユーザーデータの全体バリデーション
+ */
+export const validateFirestoreUser = (user: Partial<FirestoreUser>): ValidationResult => {
+	const allErrors: ValidationError[] = [];
+
+	// 必須フィールドのチェック
+	if (!user.id || !user.id.trim()) {
+		allErrors.push({
+			field: 'id',
+			message: 'User ID is required'
+		});
+	}
+
+	if (!user.email || !user.email.trim()) {
+		allErrors.push({
+			field: 'email',
+			message: 'Email is required'
+		});
+	} else if (!validateEmail(user.email)) {
+		allErrors.push({
+			field: 'email',
+			message: 'Invalid email format'
+		});
+	}
+
+	// 表示名のバリデーション
+	if (user.displayName !== undefined) {
+		allErrors.push(...validateDisplayName(user.displayName));
+	}
+
+	// ニックネームのバリデーション
+	if (user.nickname !== undefined) {
+		allErrors.push(...validateNickname(user.nickname));
+	}
+
+	// 住所のバリデーション
+	if (user.address !== undefined) {
+		allErrors.push(...validateAddress(user.address));
+	}
+
+	return {
+		isValid: allErrors.length === 0,
+		errors: allErrors
+	};
+};
+
+/**
+ * フィールド名を日本語に変換
+ */
+export const getFieldLabel = (field: string): string => {
+	const labels: Record<string, string> = {
+		'displayName': '表示名',
+		'nickname': 'ニックネーム',
+		'email': 'メールアドレス',
+		'address': '住所',
+		'address.country': '国',
+		'address.prefecture': '都道府県',
+		'address.city': '市区町村',
+		'address.addressLine1': '住所1',
+		'address.addressLine2': '住所2',
+		'address.postalCode': '郵便番号',
+		'address.phone': '電話番号'
+	};
+
+	return labels[field] || field;
+};
+
+/**
+ * バリデーションエラーをユーザーフレンドリーなメッセージに変換
+ */
+export const formatValidationErrors = (errors: ValidationError[]): string[] => {
+	return errors.map(error => {
+		const fieldLabel = getFieldLabel(error.field);
+		return `${fieldLabel}: ${error.message}`;
+	});
+};
+
+/**
+ * データサニタイゼーション
+ */
+export const sanitizeUserData = (data: UpdateUserProfile): UpdateUserProfile => {
+	const sanitized: UpdateUserProfile = {};
+
+	if (data.displayName !== undefined) {
+		sanitized.displayName = data.displayName.trim();
+	}
+
+	if (data.nickname !== undefined) {
+		sanitized.nickname = data.nickname.trim() || undefined;
+	}
+
+	if (data.address !== undefined) {
+		sanitized.address = {
+			country: data.address.country?.trim() || '',
+			prefecture: data.address.prefecture?.trim() || '',
+			city: data.address.city?.trim() || '',
+			addressLine1: data.address.addressLine1?.trim() || '',
+			addressLine2: data.address.addressLine2?.trim() || '',
+			postalCode: data.address.postalCode?.trim() || '',
+			phone: data.address.phone?.trim() || ''
+		};
+	}
+
+	return sanitized;
+};-e 
 ### FILE: ./types/react-three-fiber.d.ts
 
 // types/react-three-fiber.d.ts
@@ -6653,6 +8434,140 @@ export interface FilterOptions {
 	maxAmount?: number;
 	sortBy: 'amount' | 'count' | 'date';
 	sortOrder: 'asc' | 'desc';
+}-e 
+### FILE: ./types/user.ts
+
+// types/user.ts
+import { Timestamp } from 'firebase/firestore';
+import { UserProfile } from './dashboard';
+
+// Firestoreで管理するユーザーデータの型
+export interface FirestoreUser {
+	id: string;                    // Firebase Auth UID
+	email: string;
+	displayName: string;
+	nickname?: string;             // ユーザーが設定可能なニックネーム
+	profileImage?: string;
+	walletAddress?: string;        // 将来のウォレット連携用
+
+	// 住所情報（初期値：空）
+	address?: {
+		country?: string;
+		prefecture?: string;          // 都道府県
+		city?: string;               // 市区町村
+		addressLine1?: string;       // 番地・建物名
+		addressLine2?: string;      // アパート・部屋番号等
+		postalCode?: string;         // 郵便番号
+		phone?: string;
+	};
+
+	// アカウント情報
+	createdAt: Timestamp;
+	updatedAt: Timestamp;
+	lastLoginAt: Timestamp;
+
+	// ユーザーステータス
+	isEmailVerified: boolean;
+	isActive: boolean;
+	membershipTier: 'bronze' | 'silver' | 'gold' | 'platinum';
+	isProfileComplete: boolean;     // 住所等必須情報が入力済みか
+
+	// 統計情報
+	stats: {
+		totalSpent: number;         // ETH（初期値：0）
+		totalSpentUSD: number;      // USD（初期値：0）
+		totalOrders: number;        // 初期値：0
+		rank: number;               // 初期値：999999
+		badges: string[];           // 初期値：['New Member']
+	};
+}
+
+// 初期ユーザー作成用の型
+export interface CreateUserData {
+	id: string;
+	email: string;
+	displayName: string;
+	nickname?: string;
+	profileImage?: string;
+	address?: {};
+	isEmailVerified: boolean;
+	isActive: true;
+	membershipTier: 'bronze';
+	isProfileComplete: false;
+	stats: {
+		totalSpent: 0;
+		totalSpentUSD: 0;
+		totalOrders: 0;
+		rank: 999999;
+		badges: ['New Member'];
+	};
+}
+
+// プロフィール更新用の部分型
+export interface UpdateUserProfile {
+	displayName?: string;
+	nickname?: string;
+	profileImage?: string;
+	address?: Partial<FirestoreUser['address']>;
+	isProfileComplete?: boolean;
+}
+
+// ユーザー統計更新用の型
+export interface UpdateUserStats {
+	totalSpent?: number;
+	totalSpentUSD?: number;
+	totalOrders?: number;
+	rank?: number;
+	badges?: string[];
+}
+
+// 注文データの型
+export interface Order {
+	id: string;                   // 注文ID
+	userId: string;               // ユーザーID（Firebase Auth UID）
+
+	// 注文情報
+	products: OrderItem[];
+	totalAmount: number;          // ETH
+	totalAmountUSD: number;
+	status: 'pending' | 'confirmed' | 'shipped' | 'delivered' | 'cancelled';
+
+	// ブロックチェーン情報
+	transactionHash?: string;     // トランザクションハッシュ
+	blockNumber?: number;
+	networkId: number;            // 1 (Ethereum), 137 (Polygon) etc.
+
+	// 配送情報
+	shippingAddress: FirestoreUser['address'];
+	trackingNumber?: string;
+
+	// タイムスタンプ
+	createdAt: Timestamp;
+	updatedAt: Timestamp;
+	shippedAt?: Timestamp;
+	deliveredAt?: Timestamp;
+}
+
+export interface OrderItem {
+	productId: string;
+	productName: string;
+	quantity: number;
+	priceETH: number;
+	priceUSD: number;
+}
+
+// 既存のUserProfileとFirestoreUserの変換用ヘルパー型
+export interface UserProfileAdapter {
+	fromFirestoreUser: (firestoreUser: FirestoreUser) => UserProfile;
+	toFirestoreUser: (userProfile: UserProfile, userId: string, email: string) => Partial<FirestoreUser>;
+}
+
+// プロフィール完成度チェック用
+export interface ProfileCompleteness {
+	isComplete: boolean;
+	completionPercentage: number;
+	missingFields: string[];
+	requiredFields: (keyof FirestoreUser)[];
 }-e 
 ### FILE: ./tailwind.config.js
 

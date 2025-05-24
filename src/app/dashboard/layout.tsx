@@ -1,8 +1,8 @@
 // src/app/dashboard/layout.tsx
 'use client';
 
-import Header from '../components/home/ui/Header';
-import Footer from '../components/home/ui/Footer';
+import Header from '../components/ui/Header';
+import Footer from '../components/ui/Footer';
 import GridPattern from '../components/common/GridPattern';
 import SlideInPanel from './components/SlideInPanel';
 import { DashboardProvider, usePanel } from './context/DashboardContext';

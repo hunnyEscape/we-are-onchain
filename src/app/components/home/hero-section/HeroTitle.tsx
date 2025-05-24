@@ -1,6 +1,6 @@
 // src/app/components/hero-section/HeroTitle.tsx
 import React from 'react';
-import GlitchText from '../ui/GlitchText';
+import GlitchText from '../../ui/GlitchText';
 import styles from './HeroSection.module.css';
 interface HeroTitleProps {
 	style?: React.CSSProperties;

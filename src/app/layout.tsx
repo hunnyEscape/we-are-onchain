@@ -1,6 +1,7 @@
 import { Montserrat, Space_Grotesk } from 'next/font/google';
 import './globals.css';
 import type { Metadata } from 'next';
+import { AuthProvider } from '@/contexts/AuthContext';
 // フォントの設定
 const montserrat = Montserrat({
 	subsets: ['latin'],
@@ -28,7 +29,9 @@ export default function RootLayout({
 	return (
 		<html lang="en" className={`${montserrat.variable} ${spaceGrotesk.variable}`}>
 			<body className="bg-black text-white min-h-screen font-sans antialiased">
-				{children}
+				<AuthProvider>
+					{children}
+				</AuthProvider>
 			</body>
 		</html>
 	);

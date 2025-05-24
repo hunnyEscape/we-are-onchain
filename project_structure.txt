@@ -22,85 +22,91 @@
 │   └── window.svg
 ├── sphere.webm
 ├── src
-│   └── app
-│       ├── components
-│       │   ├── common
-│       │   │   ├── CyberButton.tsx
-│       │   │   ├── CyberCard.tsx
-│       │   │   └── GridPattern.tsx
-│       │   └── home
-│       │       ├── glowing-3d-text
-│       │       │   ├── GlowingText.module.css
-│       │       │   ├── GlowingTextScene.tsx
-│       │       │   ├── GlowingTextSection.tsx
-│       │       │   ├── HeroModel.tsx
-│       │       │   ├── LightingSetup.tsx
-│       │       │   ├── PepeFlavorModel.tsx
-│       │       │   └── ProteinModel.tsx
-│       │       ├── hero-section
-│       │       │   ├── GlitchEffects.tsx
-│       │       │   ├── HeroBackground.tsx
-│       │       │   ├── HeroSection.module.css
-│       │       │   ├── HeroSection.tsx
-│       │       │   └── HeroTitle.tsx
-│       │       ├── layout
-│       │       │   ├── CyberInterface.tsx
-│       │       │   ├── PulsatingComponent.tsx
-│       │       │   ├── ScanlineEffect.tsx
-│       │       │   ├── constants.ts
-│       │       │   └── styles.module.css
-│       │       ├── pepePush
-│       │       │   ├── PepeModel3D.tsx
-│       │       │   ├── PepePush.tsx
-│       │       │   ├── StickyCanvas.tsx
-│       │       │   ├── config
-│       │       │   │   ├── animations.ts
-│       │       │   │   └── controlPoints.ts
-│       │       │   ├── hooks
-│       │       │   │   ├── useModelPosition.ts
-│       │       │   │   ├── useScrollMessages.ts
-│       │       │   │   └── useScrollProgress.ts
-│       │       │   ├── messages
-│       │       │   │   ├── MessageTest.tsx
-│       │       │   │   ├── MessageText.tsx
-│       │       │   │   ├── ScrollMessages.tsx
-│       │       │   │   ├── constants.ts
-│       │       │   │   ├── effects.module.css
-│       │       │   │   ├── index.ts
-│       │       │   │   └── types.ts
-│       │       │   └── types
-│       │       │       └── index.ts
-│       │       └── ui
-│       │           ├── Footer.tsx
-│       │           ├── GlitchText.tsx
-│       │           ├── Header.tsx
-│       │           └── ScanlineEffect.module.css
-│       ├── dashboard
-│       │   ├── components
-│       │   │   ├── DashboardCard.tsx
-│       │   │   ├── DashboardGrid.tsx
-│       │   │   ├── SlideInPanel.tsx
-│       │   │   └── sections
-│       │   │       ├── CartSection.tsx
-│       │   │       ├── HowToBuySection.tsx
-│       │   │       ├── ProfileSection.tsx
-│       │   │       ├── PurchaseScanSection.tsx
-│       │   │       ├── ShopSection.tsx
-│       │   │       └── WhitepaperSection.tsx
-│       │   ├── context
-│       │   │   └── DashboardContext.tsx
-│       │   ├── layout.tsx
-│       │   └── page.tsx
-│       ├── favicon.ico
-│       ├── globals.css
-│       ├── layout.tsx
-│       ├── page.tsx
-│       └── styles
-│           └── cyber-components.css
+│   ├── app
+│   │   ├── components
+│   │   │   ├── auth
+│   │   │   │   └── AuthModal.tsx
+│   │   │   ├── common
+│   │   │   │   ├── CyberButton.tsx
+│   │   │   │   ├── CyberCard.tsx
+│   │   │   │   └── GridPattern.tsx
+│   │   │   ├── home
+│   │   │   │   ├── glowing-3d-text
+│   │   │   │   │   ├── GlowingText.module.css
+│   │   │   │   │   ├── GlowingTextScene.tsx
+│   │   │   │   │   ├── GlowingTextSection.tsx
+│   │   │   │   │   ├── HeroModel.tsx
+│   │   │   │   │   ├── LightingSetup.tsx
+│   │   │   │   │   ├── PepeFlavorModel.tsx
+│   │   │   │   │   └── ProteinModel.tsx
+│   │   │   │   ├── hero-section
+│   │   │   │   │   ├── GlitchEffects.tsx
+│   │   │   │   │   ├── HeroBackground.tsx
+│   │   │   │   │   ├── HeroSection.module.css
+│   │   │   │   │   ├── HeroSection.tsx
+│   │   │   │   │   └── HeroTitle.tsx
+│   │   │   │   ├── layout
+│   │   │   │   │   ├── CyberInterface.tsx
+│   │   │   │   │   ├── PulsatingComponent.tsx
+│   │   │   │   │   ├── ScanlineEffect.tsx
+│   │   │   │   │   ├── constants.ts
+│   │   │   │   │   └── styles.module.css
+│   │   │   │   └── pepePush
+│   │   │   │       ├── PepeModel3D.tsx
+│   │   │   │       ├── PepePush.tsx
+│   │   │   │       ├── StickyCanvas.tsx
+│   │   │   │       ├── config
+│   │   │   │       │   ├── animations.ts
+│   │   │   │       │   └── controlPoints.ts
+│   │   │   │       ├── hooks
+│   │   │   │       │   ├── useModelPosition.ts
+│   │   │   │       │   ├── useScrollMessages.ts
+│   │   │   │       │   └── useScrollProgress.ts
+│   │   │   │       ├── messages
+│   │   │   │       │   ├── MessageTest.tsx
+│   │   │   │       │   ├── MessageText.tsx
+│   │   │   │       │   ├── ScrollMessages.tsx
+│   │   │   │       │   ├── constants.ts
+│   │   │   │       │   ├── effects.module.css
+│   │   │   │       │   ├── index.ts
+│   │   │   │       │   └── types.ts
+│   │   │   │       └── types
+│   │   │   │           └── index.ts
+│   │   │   └── ui
+│   │   │       ├── Footer.tsx
+│   │   │       ├── GlitchText.tsx
+│   │   │       ├── Header.tsx
+│   │   │       └── ScanlineEffect.module.css
+│   │   ├── dashboard
+│   │   │   ├── components
+│   │   │   │   ├── DashboardCard.tsx
+│   │   │   │   ├── DashboardGrid.tsx
+│   │   │   │   ├── SlideInPanel.tsx
+│   │   │   │   └── sections
+│   │   │   │       ├── CartSection.tsx
+│   │   │   │       ├── HowToBuySection.tsx
+│   │   │   │       ├── ProfileSection.tsx
+│   │   │   │       ├── PurchaseScanSection.tsx
+│   │   │   │       ├── ShopSection.tsx
+│   │   │   │       └── WhitepaperSection.tsx
+│   │   │   ├── context
+│   │   │   │   └── DashboardContext.tsx
+│   │   │   ├── layout.tsx
+│   │   │   └── page.tsx
+│   │   ├── favicon.ico
+│   │   ├── globals.css
+│   │   ├── layout.tsx
+│   │   ├── page.tsx
+│   │   └── styles
+│   │       └── cyber-components.css
+│   ├── contexts
+│   │   └── AuthContext.tsx
+│   └── lib
+│       └── firebase.ts
 ├── tailwind.config.js
 ├── tsconfig.json
 └── types
     ├── dashboard.ts
     └── react-three-fiber.d.ts
 
-23 directories, 80 files
+26 directories, 83 files

@@ -1,281 +1,544 @@
 -e 
+### FILE: ./src/contexts/AuthContext.tsx
+
+// src/contexts/AuthContext.tsx
+'use client';
+
+import { createContext, useContext, useEffect, useState, ReactNode } from 'react';
+import {
+	User,
+	onAuthStateChanged,
+	signInWithEmailAndPassword,
+	createUserWithEmailAndPassword,
+	signOut,
+	GoogleAuthProvider,
+	signInWithPopup
+} from 'firebase/auth';
+import { auth } from '@/lib/firebase';
+
+interface AuthContextType {
+	user: User | null;
+	loading: boolean;
+	signIn: (email: string, password: string) => Promise<void>;
+	signUp: (email: string, password: string) => Promise<void>;
+	signInWithGoogle: () => Promise<void>;
+	logout: () => Promise<void>;
+}
+
+const AuthContext = createContext<AuthContextType | undefined>(undefined);
+
+export const useAuth = () => {
+	const context = useContext(AuthContext);
+	if (context === undefined) {
+		throw new Error('useAuth must be used within an AuthProvider');
+	}
+	return context;
+};
+
+interface AuthProviderProps {
+	children: ReactNode;
+}
+
+export const AuthProvider = ({ children }: AuthProviderProps) => {
+	const [user, setUser] = useState<User | null>(null);
+	const [loading, setLoading] = useState(true);
+
+	useEffect(() => {
+		const unsubscribe = onAuthStateChanged(auth, (user) => {
+			setUser(user);
+			setLoading(false);
+		});
+
+		return () => unsubscribe();
+	}, []);
+
+	const signIn = async (email: string, password: string) => {
+		try {
+			await signInWithEmailAndPassword(auth, email, password);
+		} catch (error) {
+			console.error('サインインエラー:', error);
+			throw error;
+		}
+	};
+
+	const signUp = async (email: string, password: string) => {
+		try {
+			await createUserWithEmailAndPassword(auth, email, password);
+		} catch (error) {
+			console.error('サインアップエラー:', error);
+			throw error;
+		}
+	};
+
+	const signInWithGoogle = async () => {
+		try {
+			const provider = new GoogleAuthProvider();
+			await signInWithPopup(auth, provider);
+		} catch (error) {
+			console.error('Googleサインインエラー:', error);
+			throw error;
+		}
+	};
+
+	const logout = async () => {
+		try {
+			await signOut(auth);
+		} catch (error) {
+			console.error('ログアウトエラー:', error);
+			throw error;
+		}
+	};
+
+	const value = {
+		user,
+		loading,
+		signIn,
+		signUp,
+		signInWithGoogle,
+		logout,
+	};
+
+	return (
+		<AuthContext.Provider value={value}>
+			{children}
+		</AuthContext.Provider>
+	);
+};-e 
+### FILE: ./src/lib/firebase.ts
+
+// src/lib/firebase.ts
+import { initializeApp } from 'firebase/app';
+import { getAuth } from 'firebase/auth';
+
+const firebaseConfig = {
+	apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
+	authDomain: process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN,
+	projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID,
+	storageBucket: process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET,
+	messagingSenderId: process.env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID,
+	appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID,
+};
+
+// Firebase初期化
+const app = initializeApp(firebaseConfig);
+
+// Authentication初期化
+export const auth = getAuth(app);
+
+export default app;-e 
 ### FILE: ./src/app/dashboard/components/sections/ProfileSection.tsx
 
 // src/app/dashboard/components/sections/ProfileSection.tsx
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { useAuth } from '@/contexts/AuthContext';
 import CyberCard from '../../../components/common/CyberCard';
 import CyberButton from '../../../components/common/CyberButton';
 import { UserProfile } from '../../../../../types/dashboard';
-import { 
-  User, 
-  Wallet, 
-  Trophy, 
-  Calendar, 
-  ShoppingBag,
-  TrendingUp,
-  Award,
-  ExternalLink,
-  Copy,
-  Check
+import {
+	User,
+	Wallet,
+	Trophy,
+	Calendar,
+	ShoppingBag,
+	TrendingUp,
+	Award,
+	ExternalLink,
+	Copy,
+	Check,
+	Shield,
+	LogIn
 } from 'lucide-react';
 
 const ProfileSection: React.FC = () => {
-  const [copiedAddress, setCopiedAddress] = useState(false);
+	const { user, loading } = useAuth();
+	const [copiedAddress, setCopiedAddress] = useState(false);
+	const [showLoginPrompt, setShowLoginPrompt] = useState(false);
 
-  // モックユーザーデータ
-  const userProfile: UserProfile = {
-    walletAddress: '0x1234567890123456789012345678901234567890',
-    displayName: 'CryptoLifter42',
-    totalSpent: 0.125,
-    totalOrders: 3,
-    rank: 42,
-    badges: ['New Member', 'Early Adopter', 'Community Supporter'],
-    joinDate: new Date('2024-03-15')
-  };
+	useEffect(() => {
+		if (!loading && !user) {
+			setShowLoginPrompt(true);
+		} else {
+			setShowLoginPrompt(false);
+		}
+	}, [user, loading]);
 
-  const orderHistory = [
-    {
-      id: 'order-001',
-      date: new Date('2024-05-15'),
-      product: 'Pepe Flavor Protein',
-      quantity: 1,
-      amount: 0.025,
-      amountUSD: 89.99,
-      status: 'Delivered',
-      txHash: '0x789xyz...def456'
-    },
-    {
-      id: 'order-002', 
-      date: new Date('2024-04-28'),
-      product: 'Pepe Flavor Protein',
-      quantity: 2,
-      amount: 0.05,
-      amountUSD: 179.98,
-      status: 'Delivered',
-      txHash: '0xabc123...789def'
-    },
-    {
-      id: 'order-003',
-      date: new Date('2024-04-10'),
-      product: 'Pepe Flavor Protein',
-      quantity: 1,
-      amount: 0.05,
-      amountUSD: 189.99,
-      status: 'Delivered',
-      txHash: '0x456def...123abc'
-    }
-  ];
+	// ローディング状態
+	if (loading) {
+		return (
+			<div className="space-y-8">
+				<div className="text-center">
+					<h2 className="text-3xl font-heading font-bold text-white mb-2">
+						Profile
+					</h2>
+					<p className="text-gray-400">
+						Loading your Web3 protein journey...
+					</p>
+				</div>
 
-  const achievements = [
-    { name: 'First Purchase', description: 'Made your first crypto purchase', earned: true },
-    { name: 'Loyal Customer', description: 'Made 5+ purchases', earned: false, progress: 3 },
-    { name: 'Community Champion', description: 'Active in Discord for 30 days', earned: true },
-    { name: 'Whale Status', description: 'Spent over 1 ETH total', earned: false, progress: 0.125 }
-  ];
+				<CyberCard showEffects={false}>
+					<div className="flex items-center justify-center py-12">
+						<div className="flex items-center space-x-3">
+							<div className="w-8 h-8 border-2 border-neonGreen border-t-transparent rounded-full animate-spin"></div>
+							<span className="text-white">Loading profile data...</span>
+						</div>
+					</div>
+				</CyberCard>
+			</div>
+		);
+	}
 
-  const handleCopyAddress = () => {
-    navigator.clipboard.writeText(userProfile.walletAddress);
-    setCopiedAddress(true);
-    setTimeout(() => setCopiedAddress(false), 2000);
-  };
+	// 未認証の場合のプロンプト
+	if (!user) {
+		return (
+			<div className="space-y-8">
+				<div className="text-center">
+					<h2 className="text-3xl font-heading font-bold text-white mb-2">
+						Profile
+					</h2>
+					<p className="text-gray-400">
+						Your Web3 protein journey and achievements
+					</p>
+				</div>
 
-  const formatDate = (date: Date) => {
-    return date.toLocaleDateString('en-US', { 
-      year: 'numeric',
-      month: 'short', 
-      day: 'numeric' 
-    });
-  };
+				<CyberCard showEffects={false}>
+					<div className="text-center py-12">
+						<div className="w-20 h-20 bg-gradient-to-br from-neonGreen/20 to-neonOrange/20 rounded-full flex items-center justify-center mx-auto mb-6">
+							<Shield className="w-10 h-10 text-neonGreen" />
+						</div>
 
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case 'Delivered': return 'text-neonGreen';
-      case 'Shipped': return 'text-neonOrange';
-      case 'Processing': return 'text-yellow-400';
-      default: return 'text-gray-400';
-    }
-  };
+						<h3 className="text-2xl font-bold text-white mb-4">
+							Authentication Required
+						</h3>
 
-  return (
-    <div className="space-y-8">
-      {/* Header */}
-      <div className="text-center">
-        <h2 className="text-3xl font-heading font-bold text-white mb-2">
-          Profile
-        </h2>
-        <p className="text-gray-400">
-          Your Web3 protein journey and achievements
-        </p>
-      </div>
+						<p className="text-gray-400 mb-8 max-w-md mx-auto">
+							Please log in to access your profile, view your order history, and track your achievements in the on-chain protein revolution.
+						</p>
 
-      {/* Profile Overview */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Main Profile Card */}
-        <CyberCard showEffects={false} className="lg:col-span-2">
-          <div className="flex items-start space-x-6">
-            {/* Avatar */}
-            <div className="flex-shrink-0">
-              <div className="w-20 h-20 bg-gradient-to-br from-neonGreen to-neonOrange rounded-full flex items-center justify-center">
-                <User className="w-10 h-10 text-black" />
-              </div>
-            </div>
+						<div className="flex flex-col sm:flex-row gap-4 justify-center">
+							<CyberButton
+								variant="primary"
+								className="flex items-center space-x-2"
+								onClick={() => {
+									// ヘッダーのログインボタンをクリックするか、カスタムイベントを発火
+									const loginEvent = new CustomEvent('openAuthModal');
+									window.dispatchEvent(loginEvent);
+								}}
+							>
+								<LogIn className="w-4 h-4" />
+								<span>Sign In</span>
+							</CyberButton>
 
-            {/* Profile Info */}
-            <div className="flex-1">
-              <h3 className="text-xl font-bold text-white mb-2">{userProfile.displayName}</h3>
-              
-              <div className="flex items-center space-x-2 mb-4">
-                <Wallet className="w-4 h-4 text-gray-400" />
-                <span className="font-mono text-sm text-gray-300">
-                  {userProfile.walletAddress.slice(0, 6)}...{userProfile.walletAddress.slice(-4)}
-                </span>
-                <button
-                  onClick={handleCopyAddress}
-                  className="text-gray-400 hover:text-neonGreen transition-colors"
-                >
-                  {copiedAddress ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
-                </button>
-              </div>
+							<CyberButton
+								variant="outline"
+								onClick={() => window.location.href = '/'}
+							>
+								Back to Home
+							</CyberButton>
+						</div>
 
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <div className="text-sm text-gray-400">Member Since</div>
-                  <div className="text-white font-semibold">{formatDate(userProfile.joinDate)}</div>
-                </div>
-                <div>
-                  <div className="text-sm text-gray-400">Community Rank</div>
-                  <div className="text-neonGreen font-semibold">#{userProfile.rank}</div>
-                </div>
-              </div>
-            </div>
-          </div>
-        </CyberCard>
+						<div className="mt-8 p-4 border border-neonGreen/30 rounded-sm bg-neonGreen/5">
+							<h4 className="text-neonGreen font-semibold mb-2">Why Sign In?</h4>
+							<ul className="text-sm text-gray-300 space-y-1 text-left max-w-xs mx-auto">
+								<li>• Track your order history</li>
+								<li>• Earn badges and achievements</li>
+								<li>• Access exclusive member benefits</li>
+								<li>• Join the community leaderboard</li>
+							</ul>
+						</div>
+					</div>
+				</CyberCard>
+			</div>
+		);
+	}
 
-        {/* Stats Card */}
-        <CyberCard title="Stats" showEffects={false}>
-          <div className="space-y-4">
-            <div className="flex justify-between items-center">
-              <span className="text-gray-400">Total Spent</span>
-              <div className="text-right">
-                <div className="text-neonGreen font-bold">Ξ {userProfile.totalSpent}</div>
-                <div className="text-xs text-gray-500">$420.25</div>
-              </div>
-            </div>
-            
-            <div className="flex justify-between items-center">
-              <span className="text-gray-400">Total Orders</span>
-              <span className="text-white font-semibold">{userProfile.totalOrders}</span>
-            </div>
-            
-            <div className="flex justify-between items-center">
-              <span className="text-gray-400">Badges Earned</span>
-              <span className="text-neonOrange font-semibold">{userProfile.badges.length}</span>
-            </div>
-          </div>
-        </CyberCard>
-      </div>
+	// 認証されたユーザーのプロフィールデータ（実際のFirebaseユーザーデータを使用）
+	const userProfile: UserProfile = {
+		walletAddress: user.uid, // Firebase UIDを使用（実際のウォレット接続時は置き換え）
+		displayName: user.displayName || user.email?.split('@')[0] || 'Anonymous User',
+		totalSpent: 0.125, // 実際のデータベースから取得
+		totalOrders: 3,
+		rank: 42,
+		badges: ['New Member', 'Early Adopter', 'Community Supporter'],
+		joinDate: user.metadata.creationTime ? new Date(user.metadata.creationTime) : new Date()
+	};
 
-      {/* Badges */}
-      <CyberCard title="Badges & Achievements" showEffects={false}>
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {userProfile.badges.map((badge, index) => (
-            <div key={index} className="flex items-center space-x-3 p-3 border border-neonOrange/30 rounded-sm bg-neonOrange/5">
-              <Award className="w-5 h-5 text-neonOrange" />
-              <span className="text-white font-medium">{badge}</span>
-            </div>
-          ))}
-        </div>
-      </CyberCard>
+	const orderHistory = [
+		{
+			id: 'order-001',
+			date: new Date('2024-05-15'),
+			product: 'Pepe Flavor Protein',
+			quantity: 1,
+			amount: 0.025,
+			amountUSD: 89.99,
+			status: 'Delivered',
+			txHash: '0x789xyz...def456'
+		},
+		{
+			id: 'order-002',
+			date: new Date('2024-04-28'),
+			product: 'Pepe Flavor Protein',
+			quantity: 2,
+			amount: 0.05,
+			amountUSD: 179.98,
+			status: 'Delivered',
+			txHash: '0xabc123...789def'
+		},
+		{
+			id: 'order-003',
+			date: new Date('2024-04-10'),
+			product: 'Pepe Flavor Protein',
+			quantity: 1,
+			amount: 0.05,
+			amountUSD: 189.99,
+			status: 'Delivered',
+			txHash: '0x456def...123abc'
+		}
+	];
 
-      {/* Achievement Progress */}
-      <CyberCard title="Achievement Progress" showEffects={false}>
-        <div className="space-y-4">
-          {achievements.map((achievement, index) => (
-            <div key={index} className="flex items-center justify-between p-4 border border-dark-300 rounded-sm">
-              <div className="flex items-center space-x-3">
-                <Trophy className={`w-5 h-5 ${achievement.earned ? 'text-neonGreen' : 'text-gray-400'}`} />
-                <div>
-                  <div className="text-white font-medium">{achievement.name}</div>
-                  <div className="text-sm text-gray-400">{achievement.description}</div>
-                </div>
-              </div>
-              
-              <div className="text-right">
-                {achievement.earned ? (
-                  <span className="text-neonGreen font-semibold">Earned</span>
-                ) : (
-                  <div>
-                    <div className="text-sm text-gray-400">
-                      Progress: {achievement.progress}/{achievement.name === 'Loyal Customer' ? '5' : '1'}
-                    </div>
-                    <div className="w-24 h-2 bg-dark-300 rounded-full overflow-hidden">
-                      <div 
-                        className="h-full bg-neonOrange transition-all duration-300"
-                        style={{ 
-                          width: `${achievement.name === 'Loyal Customer' 
-                            ? (achievement.progress! / 5) * 100 
-                            : (achievement.progress! / 1) * 100}%` 
-                        }}
-                      />
-                    </div>
-                  </div>
-                )}
-              </div>
-            </div>
-          ))}
-        </div>
-      </CyberCard>
+	const achievements = [
+		{ name: 'First Purchase', description: 'Made your first crypto purchase', earned: true },
+		{ name: 'Loyal Customer', description: 'Made 5+ purchases', earned: false, progress: 3 },
+		{ name: 'Community Champion', description: 'Active in Discord for 30 days', earned: true },
+		{ name: 'Whale Status', description: 'Spent over 1 ETH total', earned: false, progress: 0.125 }
+	];
 
-      {/* Order History */}
-      <CyberCard title="Recent Orders" showEffects={false}>
-        <div className="overflow-x-auto">
-          <table className="w-full">
-            <thead>
-              <tr className="border-b border-dark-300">
-                <th className="text-left py-3 px-4 text-sm font-medium text-gray-400">Date</th>
-                <th className="text-left py-3 px-4 text-sm font-medium text-gray-400">Product</th>
-                <th className="text-left py-3 px-4 text-sm font-medium text-gray-400">Amount</th>
-                <th className="text-left py-3 px-4 text-sm font-medium text-gray-400">Status</th>
-                <th className="text-left py-3 px-4 text-sm font-medium text-gray-400">Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {orderHistory.map((order) => (
-                <tr key={order.id} className="border-b border-dark-300/50 hover:bg-dark-200/30 transition-colors">
-                  <td className="py-4 px-4 text-sm text-gray-300">{formatDate(order.date)}</td>
-                  <td className="py-4 px-4">
-                    <div>
-                      <div className="text-white font-medium">{order.product}</div>
-                      <div className="text-xs text-gray-400">Qty: {order.quantity}</div>
-                    </div>
-                  </td>
-                  <td className="py-4 px-4">
-                    <div>
-                      <div className="text-neonGreen font-bold">Ξ {order.amount}</div>
-                      <div className="text-xs text-gray-400">${order.amountUSD}</div>
-                    </div>
-                  </td>
-                  <td className="py-4 px-4">
-                    <span className={`font-medium ${getStatusColor(order.status)}`}>
-                      {order.status}
-                    </span>
-                  </td>
-                  <td className="py-4 px-4">
-                    <CyberButton variant="outline" size="sm" className="flex items-center space-x-1">
-                      <ExternalLink className="w-3 h-3" />
-                      <span>View</span>
-                    </CyberButton>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </CyberCard>
-    </div>
-  );
+	const handleCopyAddress = () => {
+		navigator.clipboard.writeText(userProfile.walletAddress);
+		setCopiedAddress(true);
+		setTimeout(() => setCopiedAddress(false), 2000);
+	};
+
+	const formatDate = (date: Date) => {
+		return date.toLocaleDateString('en-US', {
+			year: 'numeric',
+			month: 'short',
+			day: 'numeric'
+		});
+	};
+
+	const getStatusColor = (status: string) => {
+		switch (status) {
+			case 'Delivered': return 'text-neonGreen';
+			case 'Shipped': return 'text-neonOrange';
+			case 'Processing': return 'text-yellow-400';
+			default: return 'text-gray-400';
+		}
+	};
+
+	return (
+		<div className="space-y-8">
+			{/* Header */}
+			<div className="text-center">
+				<h2 className="text-3xl font-heading font-bold text-white mb-2">
+					Profile
+				</h2>
+				<p className="text-gray-400">
+					Your Web3 protein journey and achievements
+				</p>
+			</div>
+
+			{/* Welcome Message for Authenticated User */}
+			<div className="bg-gradient-to-r from-neonGreen/10 to-neonOrange/10 border border-neonGreen/30 rounded-sm p-4">
+				<div className="flex items-center space-x-3">
+					<div className="w-10 h-10 bg-gradient-to-br from-neonGreen to-neonOrange rounded-full flex items-center justify-center">
+						<User className="w-5 h-5 text-black" />
+					</div>
+					<div>
+						<h3 className="text-white font-semibold">Welcome back, {userProfile.displayName}!</h3>
+						<p className="text-sm text-gray-400">
+							Connected via {user.providerData[0]?.providerId === 'google.com' ? 'Google' : 'Email'}
+							{user.emailVerified && <span className="text-neonGreen ml-2">✓ Verified</span>}
+						</p>
+					</div>
+				</div>
+			</div>
+
+			{/* Profile Overview */}
+			<div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+				{/* Main Profile Card */}
+				<CyberCard showEffects={false} className="lg:col-span-2">
+					<div className="flex items-start space-x-6">
+						{/* Avatar */}
+						<div className="flex-shrink-0">
+							{user.photoURL ? (
+								<img
+									src={user.photoURL}
+									alt="Profile"
+									className="w-20 h-20 rounded-full border-2 border-neonGreen"
+								/>
+							) : (
+								<div className="w-20 h-20 bg-gradient-to-br from-neonGreen to-neonOrange rounded-full flex items-center justify-center">
+									<span className="text-2xl font-bold text-black">
+										{userProfile.displayName[0].toUpperCase()}
+									</span>
+								</div>
+							)}
+						</div>
+
+						{/* Profile Info */}
+						<div className="flex-1">
+							<h3 className="text-xl font-bold text-white mb-2">{userProfile.displayName}</h3>
+
+							<div className="flex items-center space-x-2 mb-2">
+								<span className="text-sm text-gray-400">Email:</span>
+								<span className="text-sm text-gray-300">{user.email}</span>
+								{user.emailVerified && (
+									<span className="text-xs bg-neonGreen/20 text-neonGreen px-2 py-1 rounded">Verified</span>
+								)}
+							</div>
+
+							<div className="flex items-center space-x-2 mb-4">
+								<Wallet className="w-4 h-4 text-gray-400" />
+								<span className="font-mono text-sm text-gray-300">
+									User ID: {user.uid.slice(0, 8)}...{user.uid.slice(-4)}
+								</span>
+								<button
+									onClick={handleCopyAddress}
+									className="text-gray-400 hover:text-neonGreen transition-colors"
+								>
+									{copiedAddress ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
+								</button>
+							</div>
+
+							<div className="grid grid-cols-2 gap-4">
+								<div>
+									<div className="text-sm text-gray-400">Member Since</div>
+									<div className="text-white font-semibold">{formatDate(userProfile.joinDate)}</div>
+								</div>
+								<div>
+									<div className="text-sm text-gray-400">Community Rank</div>
+									<div className="text-neonGreen font-semibold">#{userProfile.rank}</div>
+								</div>
+							</div>
+						</div>
+					</div>
+				</CyberCard>
+
+				{/* Stats Card */}
+				<CyberCard title="Stats" showEffects={false}>
+					<div className="space-y-4">
+						<div className="flex justify-between items-center">
+							<span className="text-gray-400">Total Spent</span>
+							<div className="text-right">
+								<div className="text-neonGreen font-bold">Ξ {userProfile.totalSpent}</div>
+								<div className="text-xs text-gray-500">$420.25</div>
+							</div>
+						</div>
+
+						<div className="flex justify-between items-center">
+							<span className="text-gray-400">Total Orders</span>
+							<span className="text-white font-semibold">{userProfile.totalOrders}</span>
+						</div>
+
+						<div className="flex justify-between items-center">
+							<span className="text-gray-400">Badges Earned</span>
+							<span className="text-neonOrange font-semibold">{userProfile.badges.length}</span>
+						</div>
+					</div>
+				</CyberCard>
+			</div>
+
+			{/* Badges */}
+			<CyberCard title="Badges & Achievements" showEffects={false}>
+				<div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+					{userProfile.badges.map((badge, index) => (
+						<div key={index} className="flex items-center space-x-3 p-3 border border-neonOrange/30 rounded-sm bg-neonOrange/5">
+							<Award className="w-5 h-5 text-neonOrange" />
+							<span className="text-white font-medium">{badge}</span>
+						</div>
+					))}
+				</div>
+			</CyberCard>
+
+			{/* Achievement Progress */}
+			<CyberCard title="Achievement Progress" showEffects={false}>
+				<div className="space-y-4">
+					{achievements.map((achievement, index) => (
+						<div key={index} className="flex items-center justify-between p-4 border border-dark-300 rounded-sm">
+							<div className="flex items-center space-x-3">
+								<Trophy className={`w-5 h-5 ${achievement.earned ? 'text-neonGreen' : 'text-gray-400'}`} />
+								<div>
+									<div className="text-white font-medium">{achievement.name}</div>
+									<div className="text-sm text-gray-400">{achievement.description}</div>
+								</div>
+							</div>
+
+							<div className="text-right">
+								{achievement.earned ? (
+									<span className="text-neonGreen font-semibold">Earned</span>
+								) : (
+									<div>
+										<div className="text-sm text-gray-400">
+											Progress: {achievement.progress}/{achievement.name === 'Loyal Customer' ? '5' : '1'}
+										</div>
+										<div className="w-24 h-2 bg-dark-300 rounded-full overflow-hidden">
+											<div
+												className="h-full bg-neonOrange transition-all duration-300"
+												style={{
+													width: `${achievement.name === 'Loyal Customer'
+														? (achievement.progress! / 5) * 100
+														: (achievement.progress! / 1) * 100}%`
+												}}
+											/>
+										</div>
+									</div>
+								)}
+							</div>
+						</div>
+					))}
+				</div>
+			</CyberCard>
+
+			{/* Order History */}
+			<CyberCard title="Recent Orders" showEffects={false}>
+				<div className="overflow-x-auto">
+					<table className="w-full">
+						<thead>
+							<tr className="border-b border-dark-300">
+								<th className="text-left py-3 px-4 text-sm font-medium text-gray-400">Date</th>
+								<th className="text-left py-3 px-4 text-sm font-medium text-gray-400">Product</th>
+								<th className="text-left py-3 px-4 text-sm font-medium text-gray-400">Amount</th>
+								<th className="text-left py-3 px-4 text-sm font-medium text-gray-400">Status</th>
+								<th className="text-left py-3 px-4 text-sm font-medium text-gray-400">Actions</th>
+							</tr>
+						</thead>
+						<tbody>
+							{orderHistory.map((order) => (
+								<tr key={order.id} className="border-b border-dark-300/50 hover:bg-dark-200/30 transition-colors">
+									<td className="py-4 px-4 text-sm text-gray-300">{formatDate(order.date)}</td>
+									<td className="py-4 px-4">
+										<div>
+											<div className="text-white font-medium">{order.product}</div>
+											<div className="text-xs text-gray-400">Qty: {order.quantity}</div>
+										</div>
+									</td>
+									<td className="py-4 px-4">
+										<div>
+											<div className="text-neonGreen font-bold">Ξ {order.amount}</div>
+											<div className="text-xs text-gray-400">${order.amountUSD}</div>
+										</div>
+									</td>
+									<td className="py-4 px-4">
+										<span className={`font-medium ${getStatusColor(order.status)}`}>
+											{order.status}
+										</span>
+									</td>
+									<td className="py-4 px-4">
+										<CyberButton variant="outline" size="sm" className="flex items-center space-x-1">
+											<ExternalLink className="w-3 h-3" />
+											<span>View</span>
+										</CyberButton>
+									</td>
+								</tr>
+							))}
+						</tbody>
+					</table>
+				</div>
+			</CyberCard>
+		</div>
+	);
 };
 
 export default ProfileSection;-e 
@@ -307,19 +570,15 @@ import {
 	MessageCircle,
 	QrCode,
 	Wallet,
-	TrendingUp
+	TrendingUp,
+	ChevronDown,
+	ChevronUp
 } from 'lucide-react';
 
 interface PaymentMethod {
 	id: string;
-	name: string;
 	symbol: string;
 	chain: string;
-	type: 'stablecoin' | 'native';
-	icon: React.ReactNode;
-	fees: string;
-	speed: string;
-	description: string;
 }
 
 interface LoginOption {
@@ -338,6 +597,7 @@ interface WalletOption {
 
 const HowToBuySection: React.FC = () => {
 	const [activeStep, setActiveStep] = useState(1);
+	const [isPaymentTableOpen, setIsPaymentTableOpen] = useState(false);
 
 	const loginOptions: LoginOption[] = [
 		{
@@ -374,59 +634,44 @@ const HowToBuySection: React.FC = () => {
 
 	const paymentMethods: PaymentMethod[] = [
 		{
-			id: 'eth-mainnet',
-			name: 'Ethereum',
-			symbol: 'ETH',
-			chain: 'Ethereum',
-			type: 'native',
-			icon: <div className="w-6 h-6 bg-blue-500 rounded-full flex items-center justify-center text-white text-xs font-bold">ETH</div>,
-			fees: '$5-25',
-			speed: '2-5 min',
-			description: 'Most popular native token with wide acceptance'
+			id: 'solana',
+			symbol: '$SOL, $USDT',
+			chain: 'Solana'
 		},
 		{
-			id: 'usdc-mainnet',
-			name: 'USD Coin',
-			symbol: 'USDC',
-			chain: 'Ethereum',
-			type: 'stablecoin',
-			icon: <div className="w-6 h-6 bg-blue-600 rounded-full flex items-center justify-center text-white text-xs font-bold">USDC</div>,
-			fees: '$5-25',
-			speed: '2-5 min',
-			description: 'Stable value pegged to USD'
+			id: 'lightning',
+			symbol: '$BTC',
+			chain: 'Lightning'
 		},
 		{
-			id: 'usdt-mainnet',
-			name: 'Tether',
-			symbol: 'USDT',
-			chain: 'Ethereum',
-			type: 'stablecoin',
-			icon: <div className="w-6 h-6 bg-green-500 rounded-full flex items-center justify-center text-white text-xs font-bold">USDT</div>,
-			fees: '$5-25',
-			speed: '2-5 min',
-			description: 'Popular stablecoin option'
+			id: 'avalanche',
+			symbol: '$AVAX, $USDC, $USDT',
+			chain: 'Avalanche'
 		},
 		{
-			id: 'matic-polygon',
-			name: 'Polygon',
-			symbol: 'MATIC',
-			chain: 'Polygon',
-			type: 'native',
-			icon: <div className="w-6 h-6 bg-purple-500 rounded-full flex items-center justify-center text-white text-xs font-bold">MATIC</div>,
-			fees: '$0.01-0.1',
-			speed: '5-30 sec',
-			description: 'Low-cost Layer 2 solution'
+			id: 'sui',
+			symbol: '$SUI',
+			chain: 'SUI'
 		},
 		{
-			id: 'usdc-polygon',
-			name: 'USD Coin',
-			symbol: 'USDC',
-			chain: 'Polygon',
-			type: 'stablecoin',
-			icon: <div className="w-6 h-6 bg-blue-600 rounded-full flex items-center justify-center text-white text-xs font-bold">USDC</div>,
-			fees: '$0.01-0.1',
-			speed: '5-30 sec',
-			description: 'USDC on Polygon network'
+			id: 'eth',
+			symbol: '$ETH, $USDC, $USDT',
+			chain: 'ETH'
+		},
+		{
+			id: 'arbitrum',
+			symbol: '$ETH, $USDT',
+			chain: 'Arbitrum'
+		},
+		{
+			id: 'optimism',
+			symbol: '$ETH, $USDT',
+			chain: 'Optimism'
+		},
+		{
+			id: 'bnb',
+			symbol: '$BNB',
+			chain: 'BNB'
 		}
 	];
 
@@ -462,13 +707,13 @@ const HowToBuySection: React.FC = () => {
 			id: 1,
 			title: 'Web2 Account Login',
 			description: 'Simple login like traditional websites',
-			details: 'Create an account using familiar social login methods. No crypto wallet required for this step. Your account will manage order history and shipping addresses.'
+			details: '(1) Create an account using social login. No crypto wallet required for this step.'
 		},
 		{
 			id: 2,
 			title: 'Cart & Checkout',
 			description: 'Add products and set preferences',
-			details: 'Select products, set shipping address, and choose your preferred cryptocurrency and blockchain network for payment.'
+			details:`When you checkout. (1) Selact your payment currency. (2) Set shipping address. International shipping available.`
 		},
 		{
 			id: 3,
@@ -487,6 +732,8 @@ const HowToBuySection: React.FC = () => {
 	const handleCopyAddress = (address: string) => {
 		navigator.clipboard.writeText(address);
 	};
+
+	const availableMethods = paymentMethods;
 
 	return (
 		<div className="space-y-8">
@@ -507,7 +754,7 @@ const HowToBuySection: React.FC = () => {
 							<h3 className="text-neonGreen font-semibold">Web2.0 + Web3.0 Hybrid</h3>
 						</div>
 						<p className="text-sm text-gray-300">
-							Combining traditional e-commerce usability with cryptocurrency payments
+							Combining web2.0 usability with cryptocurrency payments
 						</p>
 					</div>
 
@@ -517,7 +764,7 @@ const HowToBuySection: React.FC = () => {
 							<h3 className="text-neonOrange font-semibold">Invoice Method</h3>
 						</div>
 						<p className="text-sm text-gray-300">
-							No wallet connection required, simple payment via QR codes and URLs
+							No wallet connection required, simple payment via QR codes and URLs with your wallet
 						</p>
 					</div>
 				</div>
@@ -550,7 +797,6 @@ const HowToBuySection: React.FC = () => {
 										</div>
 										<div>
 											<div className="font-medium">{step.title}</div>
-											<div className="text-xs opacity-70">{step.description}</div>
 										</div>
 									</div>
 								</button>
@@ -581,7 +827,6 @@ const HowToBuySection: React.FC = () => {
 														{login.icon}
 														<div>
 															<div className="text-white font-medium">{login.name}</div>
-															<div className="text-xs text-gray-400">{login.description}</div>
 														</div>
 														{login.available && (
 															<CheckCircle className="w-5 h-5 text-neonGreen ml-auto" />
@@ -604,47 +849,6 @@ const HowToBuySection: React.FC = () => {
 									{/* Step 2: Checkout Process */}
 									{step.id === 2 && (
 										<div className="space-y-6">
-											{/* Shipping Address */}
-											<div>
-												<h4 className="text-lg font-semibold text-white mb-3">Shipping Address</h4>
-												<div className="p-4 border border-dark-300 rounded-sm bg-dark-200/30">
-													<div className="text-sm text-gray-300">
-														• Multiple address support<br />
-														• Save addresses for future orders<br />
-														• International shipping available
-													</div>
-												</div>
-											</div>
-
-											{/* Payment Currency Selection */}
-											<div>
-												<h4 className="text-lg font-semibold text-white mb-3">Payment Currency Selection</h4>
-												<div className="space-y-3">
-													{paymentMethods.map((method) => (
-														<div key={method.id} className="p-3 border border-dark-300 rounded-sm">
-															<div className="flex items-center justify-between">
-																<div className="flex items-center space-x-3">
-																	{method.icon}
-																	<div>
-																		<div className="text-white font-medium">
-																			{method.name} ({method.symbol})
-																			<span className="ml-2 text-xs bg-gray-600 px-2 py-1 rounded">
-																				{method.chain}
-																			</span>
-																		</div>
-																		<div className="text-xs text-gray-400">{method.description}</div>
-																	</div>
-																</div>
-																<div className="text-right">
-																	<div className="text-sm text-gray-300">Fees: {method.fees}</div>
-																	<div className="text-xs text-gray-400">Speed: {method.speed}</div>
-																</div>
-															</div>
-														</div>
-													))}
-												</div>
-											</div>
-
 											{/* Important Notice */}
 											<div className="p-4 border border-yellow-600/30 rounded-sm bg-yellow-600/5">
 												<div className="flex items-start space-x-3">
@@ -656,6 +860,50 @@ const HowToBuySection: React.FC = () => {
 														</div>
 													</div>
 												</div>
+											</div>
+
+											{/* Payment Currency Selection - Collapsible Table */}
+											<div className="border border-dark-300 rounded-sm">
+												<button
+													onClick={() => setIsPaymentTableOpen(!isPaymentTableOpen)}
+													className="w-full p-4 flex items-center justify-between bg-dark-200/30 hover:bg-dark-200/50 transition-colors"
+												>
+													<h4 className="text-lg font-semibold text-white">Payment Currency Selection</h4>
+													{isPaymentTableOpen ? (
+														<ChevronUp className="w-5 h-5 text-gray-400" />
+													) : (
+														<ChevronDown className="w-5 h-5 text-gray-400" />
+													)}
+												</button>
+
+												{isPaymentTableOpen && (
+													<div className="p-4 border-t border-dark-300">
+														<div className="overflow-x-auto">
+															<table className="w-full">
+																<thead>
+																	<tr className="border-b border-dark-300">
+																		<th className="text-left p-3 text-gray-300 font-medium">Method</th>
+																		<th className="text-left p-3 text-gray-300 font-medium">Currency</th>
+																	</tr>
+																</thead>
+																<tbody>
+																	{paymentMethods.map((method) => (
+																		<tr key={method.id} className="border-b border-dark-300/50 hover:bg-dark-200/20">
+																			<td className="p-3">
+																				<span className="text-sm bg-gray-600 px-2 py-1 rounded text-gray-200">
+																					{method.chain}
+																				</span>
+																			</td>
+																			<td className="p-3 text-white font-medium">
+																				{method.symbol}
+																			</td>
+																		</tr>
+																	))}
+																</tbody>
+															</table>
+														</div>
+													</div>
+												)}
 											</div>
 
 											{/* Checkout Demo Area */}
@@ -2447,8 +2695,8 @@ export default SlideInPanel;-e
 // src/app/dashboard/layout.tsx
 'use client';
 
-import Header from '../components/home/ui/Header';
-import Footer from '../components/home/ui/Footer';
+import Header from '../components/ui/Header';
+import Footer from '../components/ui/Footer';
 import GridPattern from '../components/common/GridPattern';
 import SlideInPanel from './components/SlideInPanel';
 import { DashboardProvider, usePanel } from './context/DashboardContext';
@@ -3289,470 +3537,6 @@ const PulsatingComponent = () => {
 
 export default PulsatingComponent;
 -e 
-### FILE: ./src/app/components/home/ui/Footer.tsx
-
-'use client';
-
-import Link from 'next/link';
-
-const Footer = () => {
-	const currentYear = new Date().getFullYear();
-
-	const productLinks = [
-		{ href: '/products/whey-protein', label: 'Whey Protein' },
-		{ href: '/products/bcaa', label: 'BCAA' },
-		{ href: '/products/pre-workout', label: 'Pre-Workout' },
-		{ href: '/products/creatine', label: 'Creatine' },
-	];
-
-	const companyLinks = [
-		{ href: '/about', label: 'About Us' },
-		{ href: '/how-to-buy', label: 'How to Buy' },
-		{ href: '/whitepaper', label: 'White Paper' },
-		{ href: '/roadmap', label: 'Roadmap' },
-	];
-
-	const communityLinks = [
-		{ href: '/discord', label: 'Discord' },
-		{ href: '/telegram', label: 'Telegram' },
-		{ href: '/twitter', label: 'Twitter' },
-		{ href: '/medium', label: 'Medium' },
-	];
-
-	const legalLinks = [
-		{ href: '/privacy', label: 'Privacy Policy' },
-		{ href: '/terms', label: 'Terms of Service' },
-		{ href: '/cookies', label: 'Cookie Policy' },
-	];
-
-	return (
-		<footer className="w-full relative bg-black border-t border-dark-300 overflow-hidden z-20">
-			{/* Background Effects */}
-			<div className="absolute inset-0 bg-gradient-to-t from-dark-100 to-black"></div>
-
-			{/* Animated scanline */}
-			<div className="absolute top-0 left-0 w-full h-px bg-gradient-to-r from-transparent via-neonGreen to-transparent animate-pulse opacity-50"></div>
-
-			{/* Grid pattern overlay */}
-			<div className="absolute inset-0 opacity-5">
-				<div className="w-full h-full" style={{
-					backgroundImage: `
-            linear-gradient(rgba(0, 255, 127, 0.1) 1px, transparent 1px),
-            linear-gradient(90deg, rgba(0, 255, 127, 0.1) 1px, transparent 1px)
-          `,
-					backgroundSize: '50px 50px'
-				}}></div>
-			</div>
-
-			<div className="relative px-4 sm:px-6 lg:px-8 py-12">
-				<div className="max-w-7xl mx-auto">
-					{/* Main Footer Content */}
-					<div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8 mb-12">
-						{/* Brand Section */}
-						<div className="lg:col-span-1">
-							<div className="flex items-center space-x-2 mb-6">
-								<div className="relative">
-									<div className="w-10 h-10 bg-gradient-to-br from-neonGreen to-neonOrange rounded-sm animate-pulse-fast"></div>
-									<div className="absolute inset-0 w-10 h-10 bg-gradient-to-br from-neonGreen to-neonOrange rounded-sm blur-md opacity-50"></div>
-								</div>
-								<span className="text-2xl font-heading font-bold text-white md:animate-glitch-slow">
-									We are on-chain
-								</span>
-							</div>
-
-							<p className="text-gray-400 text-sm leading-relaxed mb-6">
-								The first Web3-native protein brand. Premium supplements powered by blockchain technology and community governance.
-							</p>
-
-
-							{/* Connect Wallet */}
-							<button className="w-full px-6 py-3 bg-gradient-to-r from-neonGreen to-neonOrange text-black font-semibold rounded-sm transition-all duration-200 hover:shadow-lg hover:shadow-neonGreen/25 group">
-								<span className="relative z-10 text-sm">Login</span>
-							</button>
-						</div>
-
-						{/* Products */}
-						<div>
-							<h3 className="text-white font-heading font-semibold mb-4 relative">
-								Products
-								<div className="absolute bottom-0 left-0 w-8 h-px bg-gradient-to-r from-neonGreen to-transparent"></div>
-							</h3>
-							<ul className="space-y-3">
-								{productLinks.map((link, index) => (
-									<li key={link.href}>
-										<Link
-											href={link.href}
-											className="text-gray-400 hover:text-neonGreen transition-colors duration-200 text-sm block relative group"
-											style={{ animationDelay: `${index * 50}ms` }}
-										>
-											<span className="relative z-10">{link.label}</span>
-											<div className="absolute left-0 bottom-0 w-0 h-px bg-neonGreen group-hover:w-full transition-all duration-200"></div>
-										</Link>
-									</li>
-								))}
-							</ul>
-						</div>
-						
-						<div>
-							<h3 className="text-white font-heading font-semibold mb-4 relative">
-								Company
-								<div className="absolute bottom-0 left-0 w-8 h-px bg-gradient-to-r from-neonOrange to-transparent"></div>
-							</h3>
-							<ul className="space-y-3">
-								{companyLinks.map((link, index) => (
-									<li key={link.href}>
-										<Link
-											href={link.href}
-											className="text-gray-400 hover:text-neonGreen transition-colors duration-200 text-sm block relative group"
-											style={{ animationDelay: `${index * 50}ms` }}
-										>
-											<span className="relative z-10">{link.label}</span>
-											<div className="absolute left-0 bottom-0 w-0 h-px bg-neonGreen group-hover:w-full transition-all duration-200"></div>
-										</Link>
-									</li>
-								))}
-							</ul>
-						</div>
-
-						{/* Community */}
-						<div>
-							<h3 className="text-white font-heading font-semibold mb-4 relative">
-								Community
-								<div className="absolute bottom-0 left-0 w-8 h-px bg-gradient-to-r from-neonGreen to-neonOrange"></div>
-							</h3>
-							<ul className="space-y-3">
-								{communityLinks.map((link, index) => (
-									<li key={link.href}>
-										<Link
-											href={link.href}
-											className="text-gray-400 hover:text-neonGreen transition-colors duration-200 text-sm block relative group"
-											style={{ animationDelay: `${index * 50}ms` }}
-										>
-											<span className="relative z-10">{link.label}</span>
-											<div className="absolute left-0 bottom-0 w-0 h-px bg-neonGreen group-hover:w-full transition-all duration-200"></div>
-										</Link>
-									</li>
-								))}
-							</ul>
-						</div>
-					</div>
-
-					{/* Divider */}
-					<div className="relative mb-8">
-						<div className="absolute inset-0 flex items-center">
-							<div className="w-full border-t border-dark-300"></div>
-						</div>
-						<div className="relative flex justify-center">
-							<div className="bg-black px-4">
-								<div className="w-2 h-2 bg-neonGreen rounded-full animate-pulse"></div>
-							</div>
-						</div>
-					</div>
-
-			
-					<div className="flex flex-col lg:flex-row justify-between items-center space-y-4 lg:space-y-0">
-						{/* Legal Links */}
-						<div className="flex flex-wrap items-center space-x-6">
-							{legalLinks.map((link, index) => (
-								<Link
-									key={link.href}
-									href={link.href}
-									className="text-gray-500 hover:text-gray-300 transition-colors duration-200 text-xs"
-									style={{ animationDelay: `${index * 25}ms` }}
-								>
-									{link.label}
-								</Link>
-							))}
-						</div>
-
-						{/* Copyright */}
-						<div className="text-center lg:text-right">
-							<p className="text-gray-500 text-xs">
-								© {currentYear} We are on-chain. All rights reserved.
-							</p>
-							<p className="text-gray-600 text-xs mt-1">
-								Powered by Web3 • Built on Blockchain
-							</p>
-						</div>
-					</div>
-
-					{/* Glitch Effect */}
-					<div className="absolute bottom-4 right-4 opacity-20">
-						<div className="text-neonGreen font-pixel text-xs md:animate-glitch">
-							[BLOCKCHAIN_ENABLED]
-						</div>
-					</div>
-				</div>
-			</div>
-		</footer>
-	);
-};
-
-export default Footer;-e 
-### FILE: ./src/app/components/home/ui/Header.tsx
-
-'use client';
-
-import { useState, useEffect } from 'react';
-import Link from 'next/link';
-
-const Header = () => {
-	const [isVisible, setIsVisible] = useState(true);
-	const [lastScrollY, setLastScrollY] = useState(0);
-	const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
-
-	useEffect(() => {
-		const handleScroll = () => {
-			const currentScrollY = window.scrollY;
-
-			if (currentScrollY < lastScrollY || currentScrollY < 100) {
-				setIsVisible(true);
-			} else if (currentScrollY > lastScrollY && currentScrollY > 100) {
-				setIsVisible(false);
-			}
-
-			setLastScrollY(currentScrollY);
-		};
-
-		window.addEventListener('scroll', handleScroll, { passive: true });
-		return () => window.removeEventListener('scroll', handleScroll);
-	}, [lastScrollY]);
-
-	const navLinks = [
-		{ href: '/dashboard', label: 'Shop', isHome: true },
-		{ href: '/dashboard', label: 'How to Buy' },
-		{ href: '/dashboard', label: 'White Paper' },
-	];
-
-	return (
-		<header
-			className={`fixed top-0 left-0 right-0 z-50 transition-transform duration-300 ease-out ${isVisible ? 'translate-y-0' : '-translate-y-full'
-				}`}
-		>
-			{/* Background with blur effect */}
-			<div className="absolute inset-0 bg-black/90 backdrop-blur-md border-b border-dark-300"></div>
-
-			{/* Scanline effect */}
-			<div className="absolute inset-0 overflow-hidden pointer-events-none">
-				<div className="absolute w-full h-px bg-gradient-to-r from-transparent via-neonGreen to-transparent animate-scanline opacity-30"></div>
-			</div>
-
-			<nav className="relative px-4 sm:px-6 lg:px-8">
-				<div className="flex items-center justify-between h-16 max-w-7xl mx-auto">
-					{/* Logo/Brand */}
-					<Link href="/" className="flex items-center space-x-2 group">
-						<div className="relative">
-							<div className="w-8 h-8 bg-gradient-to-br from-neonGreen to-neonOrange rounded-sm animate-pulse-fast"></div>
-							<div className="absolute inset-0 w-8 h-8 bg-gradient-to-br from-neonGreen to-neonOrange rounded-sm blur-sm opacity-50"></div>
-						</div>
-						<span className="text-xl font-heading font-bold text-white group-hover:text-neonGreen transition-colors duration-200 md:animate-glitch-slow">
-							We are on-chain
-						</span>
-					</Link>
-
-					{/* Desktop Navigation */}
-					<div className="hidden md:flex items-center space-x-8">
-						{navLinks.map((link, index) => (
-							<Link
-								key={link.href}
-								href={link.href}
-								className={`relative px-4 py-2 text-sm font-medium transition-all duration-200 group ${link.isHome
-										? 'text-neonGreen'
-										: 'text-gray-300 hover:text-white'
-									}`}
-								style={{ animationDelay: `${index * 100}ms` }}
-							>
-								<span className="relative z-10">{link.label}</span>
-
-								{/* Hover effect */}
-								<div className="absolute inset-0 bg-gradient-to-r from-neonGreen/20 to-neonOrange/20 rounded-sm transform scale-0 group-hover:scale-100 transition-transform duration-200"></div>
-
-								{/* Border animation */}
-								<div className="absolute bottom-0 left-0 w-0 h-px bg-gradient-to-r from-neonGreen to-neonOrange group-hover:w-full transition-all duration-300"></div>
-
-								{/* Glitch effect for active link */}
-								{link.isHome && (
-									<div className="absolute inset-0 bg-neonGreen/10 rounded-sm animate-glitch opacity-30"></div>
-								)}
-							</Link>
-						))}
-
-						{/* Connect Wallet Button */}
-						<button className="relative px-6 py-2 bg-gradient-to-r from-neonGreen to-neonOrange text-black font-semibold rounded-sm overflow-hidden group transition-all duration-200 hover:shadow-lg hover:shadow-neonGreen/25">
-							<span className="relative z-10 text-sm">Login</span>
-							<div className="absolute inset-0 bg-gradient-to-r from-neonOrange to-neonGreen transform scale-x-0 group-hover:scale-x-100 transition-transform duration-200 origin-left"></div>
-							<div className="absolute inset-0 animate-pulse bg-white/10 opacity-0 group-hover:opacity-100 transition-opacity duration-200"></div>
-						</button>
-					</div>
-
-					{/* Mobile menu button */}
-					<button
-						onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
-						className="md:hidden relative w-10 h-10 flex flex-col items-center justify-center space-y-1 group"
-						aria-label="Toggle mobile menu"
-					>
-						<span className={`w-6 h-0.5 bg-white transition-all duration-200 ${isMobileMenuOpen ? 'rotate-45 translate-y-1.5' : ''}`}></span>
-						<span className={`w-6 h-0.5 bg-white transition-all duration-200 ${isMobileMenuOpen ? 'opacity-0' : ''}`}></span>
-						<span className={`w-6 h-0.5 bg-white transition-all duration-200 ${isMobileMenuOpen ? '-rotate-45 -translate-y-1.5' : ''}`}></span>
-					</button>
-				</div>
-
-				<div className={`md:hidden transition-all duration-300 ease-out overflow-hidden ${isMobileMenuOpen ? 'max-h-64 opacity-100' : 'max-h-0 opacity-0'
-					}`}>
-					<div className="px-4 py-4 space-y-3 border-t border-dark-300 bg-black/50">
-						{navLinks.map((link, index) => (
-							<Link
-								key={link.href}
-								href={link.href}
-								className={`block px-4 py-3 text-base font-medium transition-all duration-200 rounded-sm ${link.isHome
-										? 'text-neonGreen bg-neonGreen/10 border border-neonGreen/20'
-										: 'text-gray-300 hover:text-white hover:bg-dark-200'
-									}`}
-								onClick={() => setIsMobileMenuOpen(false)}
-								style={{ animationDelay: `${index * 50}ms` }}
-							>
-								{link.label}
-							</Link>
-						))}
-
-						<button
-							className="w-full mt-4 px-6 py-3 bg-gradient-to-r from-neonGreen to-neonOrange text-black font-semibold rounded-sm transition-all duration-200 hover:shadow-lg hover:shadow-neonGreen/25"
-							onClick={() => setIsMobileMenuOpen(false)}
-						>
-							Login
-						</button>
-					</div>
-				</div>
-			</nav>
-		</header>
-	);
-};
-
-export default Header;-e 
-### FILE: ./src/app/components/home/ui/GlitchText.tsx
-
-// src/app/components/ui/GlitchText.tsx
-'use client';
-import React, { useState, useEffect } from 'react';
-
-interface GlitchTextProps {
-	text: string;
-	className?: string;
-	glitchIntensity?: 'low' | 'medium' | 'high';
-	color?: string;
-	isMainTitle?: boolean;
-}
-
-export const GlitchText: React.FC<GlitchTextProps> = ({
-	text,
-	className = '',
-	glitchIntensity = 'medium',
-	color = 'text-neonGreen',
-	isMainTitle = false,
-}) => {
-	const [isGlitching, setIsGlitching] = useState(false);
-	const [rgbShift, setRgbShift] = useState({ r: 0, g: 0, b: 0 });
-
-	// グリッチ効果のランダム発生
-	useEffect(() => {
-		const triggerGlitch = () => {
-			const shouldGlitch = Math.random() > (
-				glitchIntensity === 'low' ? 0.9 :
-					glitchIntensity === 'medium' ? 0.8 : 0.7
-			);
-
-			if (shouldGlitch) {
-				setIsGlitching(true);
-
-				// RGB分離エフェクト用の値を設定
-				setRgbShift({
-					r: Math.random() * 4 - 2,
-					g: Math.random() * 4 - 2,
-					b: Math.random() * 4 - 2
-				});
-
-				// 短い時間後にグリッチを終了
-				setTimeout(() => {
-					setIsGlitching(false);
-					setRgbShift({ r: 0, g: 0, b: 0 });
-				}, Math.random() * 200 + 50);
-			}
-		};
-
-		const intervalId = setInterval(triggerGlitch, Math.random() * 3000 + 2000);
-		return () => clearInterval(intervalId);
-	}, [glitchIntensity]);
-
-	const baseClasses = `relative ${color} ${className} ${isMainTitle ? 'font-heading font-bold tracking-wider' : ''}`;
-
-	const glitchClasses = isGlitching ? 'animate-glitch' : '';
-
-	const textShadow = isMainTitle
-		? `0 0 5px currentColor, 0 0 10px currentColor, 0 0 20px currentColor`
-		: `0 0 3px currentColor`;
-
-	return (
-		<div className="relative">
-			{/* RGB分離効果 */}
-			{isGlitching && (
-				<>
-					<span
-						className={`absolute ${baseClasses} opacity-50 text-red-500`}
-						style={{
-							transform: `translate(${rgbShift.r}px, 0)`,
-							textShadow: '0 0 2px currentColor',
-							left: 0,
-							top: 0,
-							filter: 'blur(0.5px)'
-						}}
-						aria-hidden="true"
-					>
-						{text}
-					</span>
-					<span
-						className={`absolute ${baseClasses} opacity-50 text-green-500`}
-						style={{
-							transform: `translate(${rgbShift.g}px, 0)`,
-							textShadow: '0 0 2px currentColor',
-							left: 0,
-							top: 0,
-							filter: 'blur(0.5px)'
-						}}
-						aria-hidden="true"
-					>
-						{text}
-					</span>
-					<span
-						className={`absolute ${baseClasses} opacity-50 text-blue-500`}
-						style={{
-							transform: `translate(${rgbShift.b}px, 0)`,
-							textShadow: '0 0 2px currentColor',
-							left: 0,
-							top: 0,
-							filter: 'blur(0.5px)'
-						}}
-						aria-hidden="true"
-					>
-						{text}
-					</span>
-				</>
-			)}
-
-			{/* メインテキスト */}
-			<span
-				className={`${baseClasses} ${glitchClasses} inline-block`}
-				style={{
-					textShadow,
-					animation: isMainTitle ? 'pulse 2s ease-in-out infinite' : undefined,
-				}}
-			>
-				{text}
-			</span>
-		</div>
-	);
-};
-
-export default GlitchText;-e 
 ### FILE: ./src/app/components/home/hero-section/GlitchEffects.tsx
 
 // src/app/components/hero-section/GlitchEffects.tsx
@@ -3885,7 +3669,7 @@ export function useGlitchEffect(
 
 // src/app/components/hero-section/HeroTitle.tsx
 import React from 'react';
-import GlitchText from '../ui/GlitchText';
+import GlitchText from '../../ui/GlitchText';
 import styles from './HeroSection.module.css';
 interface HeroTitleProps {
 	style?: React.CSSProperties;
@@ -5680,6 +5464,780 @@ const LightingSetup = () => {
 };
 
 export default LightingSetup;-e 
+### FILE: ./src/app/components/auth/AuthModal.tsx
+
+// src/components/auth/AuthModal.tsx
+'use client';
+
+import { useState } from 'react';
+import { useAuth } from '@/contexts/AuthContext';
+
+interface AuthModalProps {
+	isOpen: boolean;
+	onClose: () => void;
+}
+
+export const AuthModal = ({ isOpen, onClose }: AuthModalProps) => {
+	const [isSignUp, setIsSignUp] = useState(false);
+	const [email, setEmail] = useState('');
+	const [password, setPassword] = useState('');
+	const [error, setError] = useState('');
+	const [loading, setLoading] = useState(false);
+
+	const { signIn, signUp, signInWithGoogle } = useAuth();
+
+	const handleSubmit = async (e: React.FormEvent) => {
+		e.preventDefault();
+		setError('');
+		setLoading(true);
+
+		try {
+			if (isSignUp) {
+				await signUp(email, password);
+			} else {
+				await signIn(email, password);
+			}
+			onClose();
+			setEmail('');
+			setPassword('');
+		} catch (error: any) {
+			setError(error.message || 'エラーが発生しました');
+		} finally {
+			setLoading(false);
+		}
+	};
+
+	const handleGoogleSignIn = async () => {
+		setError('');
+		setLoading(true);
+
+		try {
+			await signInWithGoogle();
+			onClose();
+		} catch (error: any) {
+			setError(error.message || 'Googleサインインでエラーが発生しました');
+		} finally {
+			setLoading(false);
+		}
+	};
+
+	if (!isOpen) return null;
+
+	return (
+		<div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+			<div className="relative bg-black/90 backdrop-blur-md border border-neonGreen/30 rounded-lg shadow-2xl w-full max-w-md overflow-hidden">
+				{/* Scanline effect */}
+				<div className="absolute inset-0 overflow-hidden pointer-events-none">
+					<div className="absolute w-full h-px bg-gradient-to-r from-transparent via-neonGreen to-transparent animate-scanline opacity-30"></div>
+				</div>
+
+				{/* Glitch border effect */}
+				<div className="absolute inset-0 border border-neonGreen/20 rounded-lg animate-glitch-border"></div>
+
+				<div className="relative p-8">
+					{/* Header */}
+					<div className="flex justify-between items-center mb-6">
+						<div>
+							<h2 className="text-2xl font-heading font-bold text-white mb-1">
+								{isSignUp ? 'Create Account' : 'Access Terminal'}
+							</h2>
+							<p className="text-sm text-gray-400">
+								{isSignUp ? 'Join the on-chain revolution' : 'Enter the decentralized network'}
+							</p>
+						</div>
+						<button
+							onClick={onClose}
+							className="text-gray-400 hover:text-neonGreen transition-colors text-2xl font-light"
+						>
+							×
+						</button>
+					</div>
+
+					{/* Error Display */}
+					{error && (
+						<div className="bg-red-900/30 border border-red-500/50 text-red-300 px-4 py-3 rounded-sm mb-4 text-sm">
+							<div className="flex items-center">
+								<span className="text-red-500 mr-2">⚠</span>
+								{error}
+							</div>
+						</div>
+					)}
+
+					{/* Form */}
+					<form onSubmit={handleSubmit} className="space-y-4">
+						<div>
+							<label htmlFor="email" className="block text-sm font-medium text-gray-300 mb-2">
+								Email Address
+							</label>
+							<div className="relative">
+								<input
+									type="email"
+									id="email"
+									value={email}
+									onChange={(e) => setEmail(e.target.value)}
+									required
+									className="w-full px-4 py-3 bg-black/50 border border-gray-600 rounded-sm focus:outline-none focus:border-neonGreen focus:ring-1 focus:ring-neonGreen text-white placeholder-gray-500 transition-all duration-200"
+									placeholder="user@example.com"
+								/>
+								<div className="absolute inset-0 border border-neonGreen/20 rounded-sm pointer-events-none opacity-0 focus-within:opacity-100 transition-opacity duration-200"></div>
+							</div>
+						</div>
+
+						<div>
+							<label htmlFor="password" className="block text-sm font-medium text-gray-300 mb-2">
+								Password
+							</label>
+							<div className="relative">
+								<input
+									type="password"
+									id="password"
+									value={password}
+									onChange={(e) => setPassword(e.target.value)}
+									required
+									minLength={6}
+									className="w-full px-4 py-3 bg-black/50 border border-gray-600 rounded-sm focus:outline-none focus:border-neonGreen focus:ring-1 focus:ring-neonGreen text-white placeholder-gray-500 transition-all duration-200"
+									placeholder="••••••••"
+								/>
+								<div className="absolute inset-0 border border-neonGreen/20 rounded-sm pointer-events-none opacity-0 focus-within:opacity-100 transition-opacity duration-200"></div>
+							</div>
+							{isSignUp && (
+								<p className="text-xs text-gray-500 mt-1">
+									Minimum 6 characters required
+								</p>
+							)}
+						</div>
+
+						<button
+							type="submit"
+							disabled={loading}
+							className="w-full relative px-6 py-3 bg-gradient-to-r from-neonGreen to-neonOrange text-black font-semibold rounded-sm overflow-hidden group transition-all duration-200 hover:shadow-lg hover:shadow-neonGreen/25 disabled:opacity-50 disabled:cursor-not-allowed"
+						>
+							<span className="relative z-10">
+								{loading ? (
+									<div className="flex items-center justify-center">
+										<div className="w-5 h-5 border-2 border-black border-t-transparent rounded-full animate-spin mr-2"></div>
+										Processing...
+									</div>
+								) : (
+									isSignUp ? 'Initialize Account' : 'Access Network'
+								)}
+							</span>
+							<div className="absolute inset-0 bg-gradient-to-r from-neonOrange to-neonGreen transform scale-x-0 group-hover:scale-x-100 transition-transform duration-200 origin-left"></div>
+						</button>
+					</form>
+
+					{/* Divider */}
+					<div className="mt-6">
+						<div className="relative">
+							<div className="absolute inset-0 flex items-center">
+								<div className="w-full border-t border-gray-700" />
+							</div>
+							<div className="relative flex justify-center text-sm">
+								<span className="px-4 bg-black/90 text-gray-400">Alternative Access</span>
+							</div>
+						</div>
+
+						{/* Google Sign In */}
+						<button
+							onClick={handleGoogleSignIn}
+							disabled={loading}
+							className="mt-4 w-full relative px-6 py-3 bg-white/10 hover:bg-white/20 border border-gray-600 hover:border-gray-500 text-white font-medium rounded-sm transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed group"
+						>
+							<div className="flex items-center justify-center">
+								<svg className="w-5 h-5 mr-3" viewBox="0 0 24 24">
+									<path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" />
+									<path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" />
+									<path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" />
+									<path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" />
+								</svg>
+								Continue with Google
+							</div>
+							<div className="absolute inset-0 border border-neonGreen/20 rounded-sm pointer-events-none opacity-0 group-hover:opacity-100 transition-opacity duration-200"></div>
+						</button>
+					</div>
+
+					{/* Toggle Sign Up / Sign In */}
+					<div className="mt-6 text-center">
+						<button
+							onClick={() => setIsSignUp(!isSignUp)}
+							className="text-neonGreen hover:text-neonOrange transition-colors text-sm"
+						>
+							{isSignUp
+								? 'Already have an account? Sign In'
+								: 'Need an account? Create One'}
+						</button>
+					</div>
+				</div>
+			</div>
+		</div>
+	);
+};-e 
+### FILE: ./src/app/components/ui/Footer.tsx
+
+'use client';
+
+import Link from 'next/link';
+
+const Footer = () => {
+	const currentYear = new Date().getFullYear();
+
+	const productLinks = [
+		{ href: '/products/whey-protein', label: 'Whey Protein' },
+		{ href: '/products/bcaa', label: 'BCAA' },
+		{ href: '/products/pre-workout', label: 'Pre-Workout' },
+		{ href: '/products/creatine', label: 'Creatine' },
+	];
+
+	const companyLinks = [
+		{ href: '/about', label: 'About Us' },
+		{ href: '/how-to-buy', label: 'How to Buy' },
+		{ href: '/whitepaper', label: 'White Paper' },
+		{ href: '/roadmap', label: 'Roadmap' },
+	];
+
+	const communityLinks = [
+		{ href: '/discord', label: 'Discord' },
+		{ href: '/telegram', label: 'Telegram' },
+		{ href: '/twitter', label: 'Twitter' },
+		{ href: '/medium', label: 'Medium' },
+	];
+
+	const legalLinks = [
+		{ href: '/privacy', label: 'Privacy Policy' },
+		{ href: '/terms', label: 'Terms of Service' },
+		{ href: '/cookies', label: 'Cookie Policy' },
+	];
+
+	return (
+		<footer className="w-full relative bg-black border-t border-dark-300 overflow-hidden z-20">
+			{/* Background Effects */}
+			<div className="absolute inset-0 bg-gradient-to-t from-dark-100 to-black"></div>
+
+			{/* Animated scanline */}
+			<div className="absolute top-0 left-0 w-full h-px bg-gradient-to-r from-transparent via-neonGreen to-transparent animate-pulse opacity-50"></div>
+
+			{/* Grid pattern overlay */}
+			<div className="absolute inset-0 opacity-5">
+				<div className="w-full h-full" style={{
+					backgroundImage: `
+            linear-gradient(rgba(0, 255, 127, 0.1) 1px, transparent 1px),
+            linear-gradient(90deg, rgba(0, 255, 127, 0.1) 1px, transparent 1px)
+          `,
+					backgroundSize: '50px 50px'
+				}}></div>
+			</div>
+
+			<div className="relative px-4 sm:px-6 lg:px-8 py-12">
+				<div className="max-w-7xl mx-auto">
+					{/* Main Footer Content */}
+					<div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8 mb-12">
+						{/* Brand Section */}
+						<div className="lg:col-span-1">
+							<div className="flex items-center space-x-2 mb-6">
+								<div className="relative">
+									<div className="w-10 h-10 bg-gradient-to-br from-neonGreen to-neonOrange rounded-sm animate-pulse-fast"></div>
+									<div className="absolute inset-0 w-10 h-10 bg-gradient-to-br from-neonGreen to-neonOrange rounded-sm blur-md opacity-50"></div>
+								</div>
+								<span className="text-2xl font-heading font-bold text-white md:animate-glitch-slow">
+									We are on-chain
+								</span>
+							</div>
+
+							<p className="text-gray-400 text-sm leading-relaxed mb-6">
+								The first Web3-native protein brand. Premium supplements powered by blockchain technology and community governance.
+							</p>
+
+
+							{/* Connect Wallet */}
+							<button className="w-full px-6 py-3 bg-gradient-to-r from-neonGreen to-neonOrange text-black font-semibold rounded-sm transition-all duration-200 hover:shadow-lg hover:shadow-neonGreen/25 group">
+								<span className="relative z-10 text-sm">Login</span>
+							</button>
+						</div>
+
+						{/* Products */}
+						<div>
+							<h3 className="text-white font-heading font-semibold mb-4 relative">
+								Products
+								<div className="absolute bottom-0 left-0 w-8 h-px bg-gradient-to-r from-neonGreen to-transparent"></div>
+							</h3>
+							<ul className="space-y-3">
+								{productLinks.map((link, index) => (
+									<li key={link.href}>
+										<Link
+											href={link.href}
+											className="text-gray-400 hover:text-neonGreen transition-colors duration-200 text-sm block relative group"
+											style={{ animationDelay: `${index * 50}ms` }}
+										>
+											<span className="relative z-10">{link.label}</span>
+											<div className="absolute left-0 bottom-0 w-0 h-px bg-neonGreen group-hover:w-full transition-all duration-200"></div>
+										</Link>
+									</li>
+								))}
+							</ul>
+						</div>
+						
+						<div>
+							<h3 className="text-white font-heading font-semibold mb-4 relative">
+								Company
+								<div className="absolute bottom-0 left-0 w-8 h-px bg-gradient-to-r from-neonOrange to-transparent"></div>
+							</h3>
+							<ul className="space-y-3">
+								{companyLinks.map((link, index) => (
+									<li key={link.href}>
+										<Link
+											href={link.href}
+											className="text-gray-400 hover:text-neonGreen transition-colors duration-200 text-sm block relative group"
+											style={{ animationDelay: `${index * 50}ms` }}
+										>
+											<span className="relative z-10">{link.label}</span>
+											<div className="absolute left-0 bottom-0 w-0 h-px bg-neonGreen group-hover:w-full transition-all duration-200"></div>
+										</Link>
+									</li>
+								))}
+							</ul>
+						</div>
+
+						{/* Community */}
+						<div>
+							<h3 className="text-white font-heading font-semibold mb-4 relative">
+								Community
+								<div className="absolute bottom-0 left-0 w-8 h-px bg-gradient-to-r from-neonGreen to-neonOrange"></div>
+							</h3>
+							<ul className="space-y-3">
+								{communityLinks.map((link, index) => (
+									<li key={link.href}>
+										<Link
+											href={link.href}
+											className="text-gray-400 hover:text-neonGreen transition-colors duration-200 text-sm block relative group"
+											style={{ animationDelay: `${index * 50}ms` }}
+										>
+											<span className="relative z-10">{link.label}</span>
+											<div className="absolute left-0 bottom-0 w-0 h-px bg-neonGreen group-hover:w-full transition-all duration-200"></div>
+										</Link>
+									</li>
+								))}
+							</ul>
+						</div>
+					</div>
+
+					{/* Divider */}
+					<div className="relative mb-8">
+						<div className="absolute inset-0 flex items-center">
+							<div className="w-full border-t border-dark-300"></div>
+						</div>
+						<div className="relative flex justify-center">
+							<div className="bg-black px-4">
+								<div className="w-2 h-2 bg-neonGreen rounded-full animate-pulse"></div>
+							</div>
+						</div>
+					</div>
+
+			
+					<div className="flex flex-col lg:flex-row justify-between items-center space-y-4 lg:space-y-0">
+						{/* Legal Links */}
+						<div className="flex flex-wrap items-center space-x-6">
+							{legalLinks.map((link, index) => (
+								<Link
+									key={link.href}
+									href={link.href}
+									className="text-gray-500 hover:text-gray-300 transition-colors duration-200 text-xs"
+									style={{ animationDelay: `${index * 25}ms` }}
+								>
+									{link.label}
+								</Link>
+							))}
+						</div>
+
+						{/* Copyright */}
+						<div className="text-center lg:text-right">
+							<p className="text-gray-500 text-xs">
+								© {currentYear} We are on-chain. All rights reserved.
+							</p>
+							<p className="text-gray-600 text-xs mt-1">
+								Powered by Web3 • Built on Blockchain
+							</p>
+						</div>
+					</div>
+
+					{/* Glitch Effect */}
+					<div className="absolute bottom-4 right-4 opacity-20">
+						<div className="text-neonGreen font-pixel text-xs md:animate-glitch">
+							[BLOCKCHAIN_ENABLED]
+						</div>
+					</div>
+				</div>
+			</div>
+		</footer>
+	);
+};
+
+export default Footer;-e 
+### FILE: ./src/app/components/ui/Header.tsx
+
+'use client';
+
+import { useState, useEffect } from 'react';
+import Link from 'next/link';
+import { useAuth } from '@/contexts/AuthContext';
+import { AuthModal } from '../auth/AuthModal';
+
+const Header = () => {
+	const [isVisible, setIsVisible] = useState(true);
+	const [lastScrollY, setLastScrollY] = useState(0);
+	const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+	const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
+
+	const { user, logout, loading } = useAuth();
+
+	useEffect(() => {
+		// カスタムイベントリスナーを追加してプロフィールページからログインモーダルを開く
+		const handleOpenAuthModal = () => {
+			setIsAuthModalOpen(true);
+		};
+
+		window.addEventListener('openAuthModal', handleOpenAuthModal);
+
+		const handleScroll = () => {
+			const currentScrollY = window.scrollY;
+
+			if (currentScrollY < lastScrollY || currentScrollY < 100) {
+				setIsVisible(true);
+			} else if (currentScrollY > lastScrollY && currentScrollY > 100) {
+				setIsVisible(false);
+			}
+
+			setLastScrollY(currentScrollY);
+		};
+
+		window.addEventListener('scroll', handleScroll, { passive: true });
+
+		return () => {
+			window.removeEventListener('scroll', handleScroll);
+			window.removeEventListener('openAuthModal', handleOpenAuthModal);
+		};
+	}, [lastScrollY]);
+
+	const handleLogout = async () => {
+		try {
+			await logout();
+			setIsMobileMenuOpen(false);
+		} catch (error) {
+			console.error('ログアウトエラー:', error);
+		}
+	};
+
+	const handleLoginClick = () => {
+		setIsAuthModalOpen(true);
+		setIsMobileMenuOpen(false);
+	};
+
+	const navLinks = [
+		{ href: '/dashboard', label: 'Shop', isHome: true },
+		{ href: '/dashboard', label: 'How to Buy' },
+		{ href: '/dashboard', label: 'White Paper' },
+	];
+
+	return (
+		<>
+			<header
+				className={`fixed top-0 left-0 right-0 z-50 transition-transform duration-300 ease-out ${isVisible ? 'translate-y-0' : '-translate-y-full'
+					}`}
+			>
+				{/* Background with blur effect */}
+				<div className="absolute inset-0 bg-black/90 backdrop-blur-md border-b border-dark-300"></div>
+
+				{/* Scanline effect */}
+				<div className="absolute inset-0 overflow-hidden pointer-events-none">
+					<div className="absolute w-full h-px bg-gradient-to-r from-transparent via-neonGreen to-transparent animate-scanline opacity-30"></div>
+				</div>
+
+				<nav className="relative px-4 sm:px-6 lg:px-8">
+					<div className="flex items-center justify-between h-16 max-w-7xl mx-auto">
+						{/* Logo/Brand */}
+						<Link href="/" className="flex items-center space-x-2 group">
+							<div className="relative">
+								<div className="w-8 h-8 bg-gradient-to-br from-neonGreen to-neonOrange rounded-sm animate-pulse-fast"></div>
+								<div className="absolute inset-0 w-8 h-8 bg-gradient-to-br from-neonGreen to-neonOrange rounded-sm blur-sm opacity-50"></div>
+							</div>
+							<span className="text-xl font-heading font-bold text-white group-hover:text-neonGreen transition-colors duration-200 md:animate-glitch-slow">
+								We are on-chain
+							</span>
+						</Link>
+
+						{/* Desktop Navigation */}
+						<div className="hidden md:flex items-center space-x-8">
+							{navLinks.map((link, index) => (
+								<Link
+									key={link.href}
+									href={link.href}
+									className={`relative px-4 py-2 text-sm font-medium transition-all duration-200 group ${link.isHome
+											? 'text-neonGreen'
+											: 'text-gray-300 hover:text-white'
+										}`}
+									style={{ animationDelay: `${index * 100}ms` }}
+								>
+									<span className="relative z-10">{link.label}</span>
+
+									{/* Hover effect */}
+									<div className="absolute inset-0 bg-gradient-to-r from-neonGreen/20 to-neonOrange/20 rounded-sm transform scale-0 group-hover:scale-100 transition-transform duration-200"></div>
+
+									{/* Border animation */}
+									<div className="absolute bottom-0 left-0 w-0 h-px bg-gradient-to-r from-neonGreen to-neonOrange group-hover:w-full transition-all duration-300"></div>
+
+									{/* Glitch effect for active link */}
+									{link.isHome && (
+										<div className="absolute inset-0 bg-neonGreen/10 rounded-sm animate-glitch opacity-30"></div>
+									)}
+								</Link>
+							))}
+
+							{/* Authentication Section */}
+							{loading ? (
+								<div className="px-6 py-2">
+									<div className="w-6 h-6 border-2 border-neonGreen border-t-transparent rounded-full animate-spin"></div>
+								</div>
+							) : user ? (
+								<div className="flex items-center space-x-4">
+									{/* User Info */}
+									<div className="hidden lg:flex flex-col text-right">
+										<span className="text-xs text-gray-400">Welcome back</span>
+										<span className="text-sm text-white font-medium truncate max-w-32">
+											{user.displayName || user.email?.split('@')[0]}
+										</span>
+									</div>
+
+									{/* User Avatar */}
+									<div className="relative">
+										<div className="w-8 h-8 bg-gradient-to-br from-neonGreen to-neonOrange rounded-full flex items-center justify-center">
+											<span className="text-black font-bold text-sm">
+												{(user.displayName || user.email || 'U')[0].toUpperCase()}
+											</span>
+										</div>
+										<div className="absolute inset-0 w-8 h-8 bg-gradient-to-br from-neonGreen to-neonOrange rounded-full blur-sm opacity-50"></div>
+									</div>
+
+									{/* Logout Button */}
+									<button
+										onClick={handleLogout}
+										className="relative px-4 py-2 bg-red-600/80 hover:bg-red-600 text-white text-sm font-medium rounded-sm transition-all duration-200 hover:shadow-lg hover:shadow-red-500/25 group"
+									>
+										<span className="relative z-10">Logout</span>
+										<div className="absolute inset-0 bg-red-500 transform scale-x-0 group-hover:scale-x-100 transition-transform duration-200 origin-left rounded-sm"></div>
+									</button>
+								</div>
+							) : (
+								<button
+									onClick={handleLoginClick}
+									className="relative px-6 py-2 bg-gradient-to-r from-neonGreen to-neonOrange text-black font-semibold rounded-sm overflow-hidden group transition-all duration-200 hover:shadow-lg hover:shadow-neonGreen/25"
+								>
+									<span className="relative z-10 text-sm">Login</span>
+									<div className="absolute inset-0 bg-gradient-to-r from-neonOrange to-neonGreen transform scale-x-0 group-hover:scale-x-100 transition-transform duration-200 origin-left"></div>
+									<div className="absolute inset-0 animate-pulse bg-white/10 opacity-0 group-hover:opacity-100 transition-opacity duration-200"></div>
+								</button>
+							)}
+						</div>
+
+						{/* Mobile menu button */}
+						<button
+							onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
+							className="md:hidden relative w-10 h-10 flex flex-col items-center justify-center space-y-1 group"
+							aria-label="Toggle mobile menu"
+						>
+							<span className={`w-6 h-0.5 bg-white transition-all duration-200 ${isMobileMenuOpen ? 'rotate-45 translate-y-1.5' : ''}`}></span>
+							<span className={`w-6 h-0.5 bg-white transition-all duration-200 ${isMobileMenuOpen ? 'opacity-0' : ''}`}></span>
+							<span className={`w-6 h-0.5 bg-white transition-all duration-200 ${isMobileMenuOpen ? '-rotate-45 -translate-y-1.5' : ''}`}></span>
+						</button>
+					</div>
+
+					{/* Mobile Menu */}
+					<div className={`md:hidden transition-all duration-300 ease-out overflow-hidden ${isMobileMenuOpen ? 'max-h-96 opacity-100' : 'max-h-0 opacity-0'
+						}`}>
+						<div className="px-4 py-4 space-y-3 border-t border-dark-300 bg-black/50">
+							{navLinks.map((link, index) => (
+								<Link
+									key={link.href}
+									href={link.href}
+									className={`block px-4 py-3 text-base font-medium transition-all duration-200 rounded-sm ${link.isHome
+											? 'text-neonGreen bg-neonGreen/10 border border-neonGreen/20'
+											: 'text-gray-300 hover:text-white hover:bg-dark-200'
+										}`}
+									onClick={() => setIsMobileMenuOpen(false)}
+									style={{ animationDelay: `${index * 50}ms` }}
+								>
+									{link.label}
+								</Link>
+							))}
+
+							{/* Mobile Authentication Section */}
+							{loading ? (
+								<div className="flex justify-center py-4">
+									<div className="w-6 h-6 border-2 border-neonGreen border-t-transparent rounded-full animate-spin"></div>
+								</div>
+							) : user ? (
+								<div className="space-y-3 pt-4 border-t border-dark-300">
+									{/* User Info */}
+									<div className="px-4 py-2 bg-neonGreen/5 rounded-sm border border-neonGreen/20">
+										<div className="text-xs text-gray-400">Logged in as</div>
+										<div className="text-sm text-white font-medium">
+											{user.displayName || user.email}
+										</div>
+									</div>
+
+									{/* Logout Button */}
+									<button
+										onClick={handleLogout}
+										className="w-full px-6 py-3 bg-red-600/80 hover:bg-red-600 text-white font-semibold rounded-sm transition-all duration-200 hover:shadow-lg hover:shadow-red-500/25"
+									>
+										Logout
+									</button>
+								</div>
+							) : (
+								<button
+									onClick={handleLoginClick}
+									className="w-full mt-4 px-6 py-3 bg-gradient-to-r from-neonGreen to-neonOrange text-black font-semibold rounded-sm transition-all duration-200 hover:shadow-lg hover:shadow-neonGreen/25"
+								>
+									Login
+								</button>
+							)}
+						</div>
+					</div>
+				</nav>
+			</header>
+
+			{/* Auth Modal */}
+			<AuthModal
+				isOpen={isAuthModalOpen}
+				onClose={() => setIsAuthModalOpen(false)}
+			/>
+		</>
+	);
+};
+
+export default Header;-e 
+### FILE: ./src/app/components/ui/GlitchText.tsx
+
+// src/app/components/ui/GlitchText.tsx
+'use client';
+import React, { useState, useEffect } from 'react';
+
+interface GlitchTextProps {
+	text: string;
+	className?: string;
+	glitchIntensity?: 'low' | 'medium' | 'high';
+	color?: string;
+	isMainTitle?: boolean;
+}
+
+export const GlitchText: React.FC<GlitchTextProps> = ({
+	text,
+	className = '',
+	glitchIntensity = 'medium',
+	color = 'text-neonGreen',
+	isMainTitle = false,
+}) => {
+	const [isGlitching, setIsGlitching] = useState(false);
+	const [rgbShift, setRgbShift] = useState({ r: 0, g: 0, b: 0 });
+
+	// グリッチ効果のランダム発生
+	useEffect(() => {
+		const triggerGlitch = () => {
+			const shouldGlitch = Math.random() > (
+				glitchIntensity === 'low' ? 0.9 :
+					glitchIntensity === 'medium' ? 0.8 : 0.7
+			);
+
+			if (shouldGlitch) {
+				setIsGlitching(true);
+
+				// RGB分離エフェクト用の値を設定
+				setRgbShift({
+					r: Math.random() * 4 - 2,
+					g: Math.random() * 4 - 2,
+					b: Math.random() * 4 - 2
+				});
+
+				// 短い時間後にグリッチを終了
+				setTimeout(() => {
+					setIsGlitching(false);
+					setRgbShift({ r: 0, g: 0, b: 0 });
+				}, Math.random() * 200 + 50);
+			}
+		};
+
+		const intervalId = setInterval(triggerGlitch, Math.random() * 3000 + 2000);
+		return () => clearInterval(intervalId);
+	}, [glitchIntensity]);
+
+	const baseClasses = `relative ${color} ${className} ${isMainTitle ? 'font-heading font-bold tracking-wider' : ''}`;
+
+	const glitchClasses = isGlitching ? 'animate-glitch' : '';
+
+	const textShadow = isMainTitle
+		? `0 0 5px currentColor, 0 0 10px currentColor, 0 0 20px currentColor`
+		: `0 0 3px currentColor`;
+
+	return (
+		<div className="relative">
+			{/* RGB分離効果 */}
+			{isGlitching && (
+				<>
+					<span
+						className={`absolute ${baseClasses} opacity-50 text-red-500`}
+						style={{
+							transform: `translate(${rgbShift.r}px, 0)`,
+							textShadow: '0 0 2px currentColor',
+							left: 0,
+							top: 0,
+							filter: 'blur(0.5px)'
+						}}
+						aria-hidden="true"
+					>
+						{text}
+					</span>
+					<span
+						className={`absolute ${baseClasses} opacity-50 text-green-500`}
+						style={{
+							transform: `translate(${rgbShift.g}px, 0)`,
+							textShadow: '0 0 2px currentColor',
+							left: 0,
+							top: 0,
+							filter: 'blur(0.5px)'
+						}}
+						aria-hidden="true"
+					>
+						{text}
+					</span>
+					<span
+						className={`absolute ${baseClasses} opacity-50 text-blue-500`}
+						style={{
+							transform: `translate(${rgbShift.b}px, 0)`,
+							textShadow: '0 0 2px currentColor',
+							left: 0,
+							top: 0,
+							filter: 'blur(0.5px)'
+						}}
+						aria-hidden="true"
+					>
+						{text}
+					</span>
+				</>
+			)}
+
+			{/* メインテキスト */}
+			<span
+				className={`${baseClasses} ${glitchClasses} inline-block`}
+				style={{
+					textShadow,
+					animation: isMainTitle ? 'pulse 2s ease-in-out infinite' : undefined,
+				}}
+			>
+				{text}
+			</span>
+		</div>
+	);
+};
+
+export default GlitchText;-e 
 ### FILE: ./src/app/components/common/GridPattern.tsx
 
 // src/app/components/common/GridPattern.tsx
@@ -5945,6 +6503,7 @@ export default CyberButton;-e
 import { Montserrat, Space_Grotesk } from 'next/font/google';
 import './globals.css';
 import type { Metadata } from 'next';
+import { AuthProvider } from '@/contexts/AuthContext';
 // フォントの設定
 const montserrat = Montserrat({
 	subsets: ['latin'],
@@ -5972,7 +6531,9 @@ export default function RootLayout({
 	return (
 		<html lang="en" className={`${montserrat.variable} ${spaceGrotesk.variable}`}>
 			<body className="bg-black text-white min-h-screen font-sans antialiased">
-				{children}
+				<AuthProvider>
+					{children}
+				</AuthProvider>
 			</body>
 		</html>
 	);
@@ -5981,8 +6542,8 @@ export default function RootLayout({
 
 import HeroSection from './components/home/hero-section/HeroSection';
 import GlowingTextSection from './components/home/glowing-3d-text/GlowingTextSection';
-import Header from './components/home/ui/Header';
-import Footer from './components/home/ui/Footer';
+import Header from './components/ui/Header';
+import Footer from './components/ui/Footer';
 import CyberInterface from './components/home/layout/CyberInterface';
 import PepePush from './components/home/pepePush/PepePush';
 export default function Home() {

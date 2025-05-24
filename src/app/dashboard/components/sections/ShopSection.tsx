@@ -65,20 +65,12 @@ const ShopSection: React.FC = () => {
 		return cartItem ? cartItem.quantity : 0;
 	};
 
-	// 価格を通貨別に取得
-	const getPrice = () => {
-		if (selectedCurrency === 'ETH') {
-			return { value: product.price.eth, symbol: 'Ξ' };
-		} else {
-			return { value: product.price.usd, symbol: '$' };
-		}
-	};
 
 	const handleAddToCart = () => {
 		const cartItem = {
 			id: product.id,
 			name: product.name,
-			price: selectedCurrency === 'ETH' ? product.price.eth : product.price.usd,
+			price: product.price.usd,
 			quantity: quantity,
 			currency: selectedCurrency,
 		};
@@ -97,7 +89,6 @@ const ShopSection: React.FC = () => {
 	};
 
 	const currentCartQuantity = getCartQuantity();
-	const price = getPrice();
 
 	return (
 		<div className="space-y-8">
@@ -138,12 +129,12 @@ const ShopSection: React.FC = () => {
 								autoRotate={true}
 							/>
 						</div>
-        <div className="w-full flex justify-center pt-4 pb-2">
-            <div className="inline-flex items-center space-x-2 px-4 py-2 bg-neonGreen/10 border border-neonGreen/30 rounded-sm">
-                <Shield className="w-5 h-5 text-neonGreen" /> 
-                <span className="text-sm text-neonGreen font-medium">Blockchain Verified</span> 
-            </div> 
-        </div>
+						<div className="w-full flex justify-center pt-4 pb-2">
+							<div className="inline-flex items-center space-x-2 px-4 py-2 bg-neonGreen/10 border border-neonGreen/30 rounded-sm">
+								<Shield className="w-5 h-5 text-neonGreen" />
+								<span className="text-sm text-neonGreen font-medium">Blockchain Verified</span>
+							</div>
+						</div>
 					</div>
 				</CyberCard>
 
@@ -175,14 +166,9 @@ const ShopSection: React.FC = () => {
 					<div className="border border-dark-300 rounded-sm p-4 bg-dark-200/30">
 						<div className="flex items-center justify-between">
 							<div>
-								<div className="text-2xl font-bold text-neonGreen">
-									{price.symbol} {price.value}
+								<div className="text-sm text-gray-400">
+									$ {product.price.usd} USD
 								</div>
-								{selectedCurrency === 'ETH' && (
-									<div className="text-sm text-gray-400">
-										≈ ${product.price.usd} USD
-									</div>
-								)}
 							</div>
 							<div className="text-right">
 								<div className="text-xs text-gray-500">per 50g serving</div>

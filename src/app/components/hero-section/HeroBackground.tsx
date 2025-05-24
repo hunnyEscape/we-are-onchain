@@ -42,9 +42,34 @@ export const HeroBackground: React.FC<HeroBackgroundProps> = ({
 					transition: 'transform 1.5s ease-out',
 				}}
 			/>
+			{glitchState.active && glitchState.type.includes('rgb') && glitchState.intensity > 2 && (
+				<>
+					<div
+						className={styles.rgbSliceRed}
+						style={{
+							backgroundImage: `url('${process.env.NEXT_PUBLIC_CLOUDFRONT_URL}/pepe/pepe-cyberpunk.webp')`,
+							transform: `translateX(${glitchState.intensity * 1.5}px)`,
+						}}
+					/>
+					<div
+						className={styles.rgbSliceBlue}
+						style={{
+							backgroundImage: `url('${process.env.NEXT_PUBLIC_CLOUDFRONT_URL}/pepe/pepe-cyberpunk.webp')`,
+							transform: `translateX(-${glitchState.intensity * 1.5}px)`,
+						}}
+					/>
+				</>
+			)}
+			<div
+				className={styles.centerLight}
+				style={{
+					transform: midLayerTransform,
+					transition: 'transform 1.5s ease-out',
+				}}
+			/>
 
 			{/* 重いエフェクト: モバイルでは非表示 */}
-			<div className="hidden sm:block">
+			<div className="hidden sm:hidden ">
 				<div
 					className={styles.centerLight}
 					style={{

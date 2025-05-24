@@ -15,7 +15,7 @@ const GlowingTextScene: React.FC<GlowingTextSceneProps> = ({
 		<Canvas
 			className="w-full h-full"
 			gl={{ antialias: false }}
-			dpr={1}
+			dpr={0.4}
 			shadows={false}
 			frameloop="always"
 		>

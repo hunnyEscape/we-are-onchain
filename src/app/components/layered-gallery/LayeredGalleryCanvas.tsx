@@ -12,14 +12,14 @@ const CameraController: React.FC<{
 	baseY: number
 	offsetDown?: number
 }> = ({ scrollProgress, baseY, offsetDown = 5 }) => {
-	const { camera } = useThree()
-	useFrame(() => {
-		// 0〜1 の進行度に対して offsetDown だけ下げる
+	const { camera, invalidate } = useThree();      // ← useThree から一緒に取得
+	useEffect(() => {
 		camera.position.y = baseY - scrollProgress.overall * offsetDown
-		camera.updateProjectionMatrix()
-	})
-	return null
-}
+		invalidate();
+	}, [scrollProgress.overall, baseY, offsetDown, camera, invalidate]);
+
+	return null;
+};
 
 /**
  * ビューポート監視フック
@@ -141,8 +141,8 @@ const GalleryContent: React.FC<GalleryContentProps> = ({
 			// 視差効果の適用
 			const parallaxMultiplier = 1 - (imageConfig.parallax?.speed || 0.5)
 			const parallaxOffsetY = scrollOffsetY * parallaxMultiplier
-			const verticalSpreadFactor = viewport.isMobile ? 1.2 : viewport.isTablet ? 1.5 : 2
-			
+			const verticalSpreadFactor = viewport.isMobile ? 1.2 : viewport.isTablet ? 1.5 : 2.5
+
 			return {
 				id: imageConfig.id,
 				position: [
@@ -177,8 +177,8 @@ const GalleryContent: React.FC<GalleryContentProps> = ({
 	return (
 		<Canvas
 			className="w-full h-full"
-			gl={{ antialias: false }}
-			dpr={1}
+			gl={{ antialias: false, powerPreference: 'low-power' }}
+			dpr={0.75}
 			shadows={false}
 			frameloop="demand"
 		>

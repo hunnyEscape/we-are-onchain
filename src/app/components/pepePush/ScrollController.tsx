@@ -29,16 +29,6 @@ export default function ScrollController({ className = '' }: ScrollControllerPro
 				</Suspense>
 			</StickyCanvas>
 
-			{/* デバッグ情報表示（開発時のみ） */}
-			{CONFIG.DEBUG_MODE && scrollState.isInSection && (
-				<div className="fixed top-4 right-4 bg-black/80 text-white p-4 rounded-lg font-mono text-sm z-50">
-					<div>Progress: {scrollState.scrollProgress.toFixed(3)}</div>
-					<div>Position: [{modelTransform.position.map(v => v.toFixed(2)).join(', ')}]</div>
-					<div>Rotation: [{modelTransform.rotation.map(v => v.toFixed(2)).join(', ')}]</div>
-					<div>Scale: [{modelTransform.scale.map(v => v.toFixed(2)).join(', ')}]</div>
-				</div>
-			)}
-
 			{/* スクロール進行を示すインジケーター（オプション） */}
 			{scrollState.isInSection && (
 				<div className="fixed top-8 left-1/2 transform -translate-x-1/2 z-40">

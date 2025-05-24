@@ -2,7 +2,7 @@
 'use client';
 
 import React, { createContext, useContext, useReducer, useEffect } from 'react';
-import { DashboardState, CartItem, UserProfile } from '../../../../types/dashboard';
+import { DashboardState, CartItem, UserProfile, SectionType } from '../../../../types/dashboard';
 
 // Actions
 type DashboardAction =
@@ -11,7 +11,9 @@ type DashboardAction =
 	| { type: 'REMOVE_FROM_CART'; payload: string }
 	| { type: 'UPDATE_CART_QUANTITY'; payload: { id: string; quantity: number } }
 	| { type: 'CLEAR_CART' }
-	| { type: 'LOAD_FROM_STORAGE'; payload: Partial<DashboardState> };
+	| { type: 'LOAD_FROM_STORAGE'; payload: Partial<DashboardState> }
+	| { type: 'SET_ACTIVE_SECTION'; payload: SectionType | null }
+	| { type: 'SET_SLIDE_OPEN'; payload: boolean };
 
 // Initial state
 const initialState: DashboardState = {
@@ -19,7 +21,7 @@ const initialState: DashboardState = {
 	isSlideOpen: false,
 	cartItems: [],
 	userProfile: null,
-	walletConnected: false, // Optional field for fuFture wallet integration
+	walletConnected: false,
 };
 
 // Reducer
@@ -67,6 +69,12 @@ function dashboardReducer(state: DashboardState, action: DashboardAction): Dashb
 
 		case 'LOAD_FROM_STORAGE':
 			return { ...state, ...action.payload };
+
+		case 'SET_ACTIVE_SECTION':
+			return { ...state, activeSection: action.payload };
+
+		case 'SET_SLIDE_OPEN':
+			return { ...state, isSlideOpen: action.payload };
 
 		default:
 			return state;
@@ -123,6 +131,31 @@ export function useDashboard() {
 		throw new Error('useDashboard must be used within a DashboardProvider');
 	}
 	return context;
+}
+
+// Panel management hook
+export function usePanel() {
+	const { state, dispatch } = useDashboard();
+
+	const openPanel = (section: SectionType) => {
+		dispatch({ type: 'SET_ACTIVE_SECTION', payload: section });
+		dispatch({ type: 'SET_SLIDE_OPEN', payload: true });
+	};
+
+	const closePanel = () => {
+		dispatch({ type: 'SET_SLIDE_OPEN', payload: false });
+		// アニメーション完了後にactiveSectionをクリア
+		setTimeout(() => {
+			dispatch({ type: 'SET_ACTIVE_SECTION', payload: null });
+		}, 300);
+	};
+
+	return {
+		activeSection: state.activeSection,
+		isSlideOpen: state.isSlideOpen,
+		openPanel,
+		closePanel,
+	};
 }
 
 // Cart management hook
@@ -182,7 +215,6 @@ export function useProfile() {
 export function useWallet() {
 	const { state } = useDashboard();
 
-	// Mock implementation - can be extended later if wallet integration is needed
 	const connectWallet = () => {
 		console.log('Wallet connection not required for invoice payments');
 	};
@@ -192,7 +224,7 @@ export function useWallet() {
 	};
 
 	return {
-		walletConnected: false, // Always false for invoice-based payments
+		walletConnected: false,
 		userProfile: state.userProfile,
 		connectWallet,
 		disconnectWallet,

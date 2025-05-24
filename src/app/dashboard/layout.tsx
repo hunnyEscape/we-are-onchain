@@ -4,10 +4,66 @@
 import Header from '../components/home/ui/Header';
 import Footer from '../components/home/ui/Footer';
 import GridPattern from '../components/common/GridPattern';
-import { DashboardProvider } from './context/DashboardContext';
+import SlideInPanel from './components/SlideInPanel';
+import { DashboardProvider, usePanel } from './context/DashboardContext';
+
+// セクションコンポーネントのインポート
+import ShopSection from './components/sections/ShopSection';
+import HowToBuySection from './components/sections/HowToBuySection';
+import PurchaseScanSection from './components/sections/PurchaseScanSection';
+import WhitepaperSection from './components/sections/WhitepaperSection';
+import ProfileSection from './components/sections/ProfileSection';
+import CartSection from './components/sections/CartSection';
+import { SectionType } from '../../../types/dashboard';
 
 interface DashboardLayoutProps {
 	children: React.ReactNode;
+}
+
+// パネル管理コンポーネント
+function DashboardPanelManager() {
+	const { activeSection, isSlideOpen, closePanel } = usePanel();
+
+	const renderSectionContent = () => {
+		switch (activeSection) {
+			case 'shop':
+				return <ShopSection />;
+			case 'how-to-buy':
+				return <HowToBuySection />;
+			case 'purchase-scan':
+				return <PurchaseScanSection />;
+			case 'whitepaper':
+				return <WhitepaperSection />;
+			case 'profile':
+				return <ProfileSection />;
+			case 'cart':
+				return <CartSection />;
+			default:
+				return <div className="text-white">Loading...</div>;
+		}
+	};
+
+	const getSectionTitle = (section: SectionType | null): string => {
+		const titles = {
+			'shop': 'Shop',
+			'how-to-buy': 'How to Buy',
+			'purchase-scan': 'Purchase Scan',
+			'whitepaper': 'Whitepaper',
+			'profile': 'Profile',
+			'cart': 'Cart'
+		};
+		return section ? titles[section] : '';
+	};
+
+	return (
+		<SlideInPanel
+			isOpen={isSlideOpen}
+			onClose={closePanel}
+			title={getSectionTitle(activeSection)}
+		>
+			{renderSectionContent()}
+		</SlideInPanel>
+	);
 }
 
 export default function DashboardLayout({ children }: DashboardLayoutProps) {
@@ -17,7 +73,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
 				{/* Header */}
 				<Header />
 
-				{/* Background Effects - 軽微なグリッドのみ */}
+				{/* Background Effects */}
 				<div className="fixed inset-0 z-0">
 					<div className="absolute inset-0 bg-gradient-to-b from-black via-dark-100 to-black opacity-80" />
 					<GridPattern
@@ -36,6 +92,9 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
 
 				{/* Footer */}
 				<Footer />
+
+				{/* SlideInPanel - 最前面に配置 */}
+				<DashboardPanelManager />
 			</div>
 		</DashboardProvider>
 	);

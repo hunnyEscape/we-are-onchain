@@ -3,7 +3,7 @@
 
 import React from 'react';
 import DashboardCard from './DashboardCard';
-import { SectionType } from '../../../types/dashboard';
+import { SectionType } from '../../../../types/dashboard';
 import { useCart } from '../context/DashboardContext';
 import { 
   ShoppingBag, 

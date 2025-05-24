@@ -51,7 +51,6 @@
 │       │   │   ├── HeroSection.tsx
 │       │   │   └── HeroTitle.tsx
 │       │   ├── layered-gallery
-│       │   │   ├── ImagePlane.tsx
 │       │   │   ├── LayeredGalleryCanvas.tsx
 │       │   │   ├── LayeredGallerySection.tsx
 │       │   │   ├── constants.ts
@@ -135,4 +134,4 @@
 └── types
     └── react-three-fiber.d.ts
 
-33 directories, 102 files
+33 directories, 101 files

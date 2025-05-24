@@ -3,9 +3,23 @@
 import React, { useRef, useEffect, useState, useMemo, useCallback } from 'react'
 import { LAYERED_IMAGES } from './constants'
 import { calculateAllPositions, getViewportInfo, getResponsiveGridConfig } from './utils/positionCalculator'
+import { useFrame, useThree } from '@react-three/fiber'
 
 export interface LayeredGalleryCanvasProps {
 	className?: string
+}
+const CameraController: React.FC<{
+	scrollProgress: { overall: number }
+	baseY: number
+	offsetDown?: number
+}> = ({ scrollProgress, baseY, offsetDown = 5 }) => {
+	const { camera } = useThree()
+	useFrame(() => {
+		// 0〜1 の進行度に対して offsetDown だけ下げる
+		camera.position.y = baseY - scrollProgress.overall * offsetDown
+		camera.updateProjectionMatrix()
+	})
+	return null
 }
 
 /**
@@ -154,30 +168,27 @@ const GalleryContent: React.FC<GalleryContentProps> = ({
 
 	// カメラ設定（レスポンシブ対応）
 	const cameraConfig = useMemo(() => {
-		const fov = viewport.isMobile ? 70 : viewport.isTablet ? 65 : 60
-		const position: [number, number, number] = [0, 0, viewport.isMobile ? 12 : viewport.isTablet ? 14 : 15]
+		const fov = viewport.isMobile ? 70 : viewport.isTablet ? 65 : 100
+		const position: [number, number, number] = [0, 30, viewport.isMobile ? 12 : viewport.isTablet ? 14 : 15]
 
 		return { fov, position }
 	}, [viewport])
 
 	return (
 		<Canvas
-			style={{
-				width: '100%',
-				height: '100%',
-				background: 'transparent',
-				// イベント制御：Canvas上でのユーザーインタラクションを無効化
-				pointerEvents: 'none',
-				touchAction: 'pan-y', // 縦スクロールのみ許可
-			}}
-			camera={{ position: cameraConfig.position, fov: cameraConfig.fov }}
-			// Three.js の内部コントロールも無効化
-			gl={{
-				antialias: viewport.isDesktop, // モバイルではアンチエイリアスオフ
-				alpha: true,
-				powerPreference: viewport.isMobile ? 'low-power' : 'high-performance'
-			}}
+			className="w-full h-full"
+			gl={{ antialias: false }}
+			dpr={1}
+			shadows={false}
+			frameloop="demand"
 		>
+
+			<CameraController
+				scrollProgress={scrollProgress}
+				baseY={cameraConfig.position[1]}
+				offsetDown={viewport.isMobile ? 8 : 100}
+			/>
+
 			{/* 35枚の画像（レスポンシブ配置） */}
 			{sceneReady && imagePositions.map((item) => (
 				<ImagePlane

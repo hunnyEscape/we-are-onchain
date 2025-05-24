@@ -1705,7 +1705,7 @@ const CDN_URL = process.env.NEXT_PUBLIC_CLOUDFRONT_URL || ""
  * 画像パスを生成する関数（floating-images-fixと同じロジック）
  */
 const generateImagePath = (filename: string): string => {
-	const folder = isMobile() ? 'gallery-small' : 'pepe'
+	const folder = isMobile() ? 'pepe/gallery-small' : 'pepe'
 	return `${CDN_URL}/${folder}/${filename}`
 }
 
@@ -1817,7 +1817,7 @@ const BASE_SCALES = {
 } as const
 
 /**
- * 拡張画像設定を生成
+ * 拡張画像設定を生成（最適化版）
  * 実行時に正しいパスで画像設定を作成
  */
 export const layeredImageConfigs: LayeredImageConfig[] = (() => {
@@ -1929,48 +1929,50 @@ export const customizeImageConfig = (configs: LayeredImageConfig[]): LayeredImag
 export const LAYERED_IMAGES = customizeImageConfig(layeredImageConfigs)
 
 /**
- * デバッグ用設定
+ * デバッグ用設定（本番環境向けに最適化）
  */
 export const DEBUG_CONFIG = {
-	showBoundingBoxes: true,     // 境界ボックス表示
-	showScrollRanges: true,      // スクロール範囲表示
-	showPositionLabels: true,    // 位置ラベル表示
-	logAnimationStates: true,    // アニメーション状態ログ
-	logImagePaths: true,         // 画像パス確認ログ
-	showTestImage: true,         // テスト画像表示
+	showBoundingBoxes: false,        // 境界ボックス表示 - 本番では false
+	showScrollRanges: true,          // スクロール範囲表示
+	showPositionLabels: false,       // 位置ラベル表示 - 本番では false
+	logAnimationStates: false,       // アニメーション状態ログ - 本番では false に設定
+	logImagePaths: true,             // 画像パス確認ログ
+	showTestImage: true,             // テスト画像表示
 }
 
 /**
- * テスト用：画像パスの確認
+ * テスト用：画像パスの確認（ログ制限付き）
  */
+let pathsLogged = false // 一度だけログ出力
 export const logImagePaths = () => {
-	if (DEBUG_CONFIG.logImagePaths) {
+	if (DEBUG_CONFIG.logImagePaths && !pathsLogged) {
+		pathsLogged = true
 		const testPaths = generateRuntimeImageFiles().slice(0, 5) // 最初の5枚をテスト
 		console.log('[LayeredGallery] Image paths test:', {
 			CDN_URL,
 			envVariable: process.env.NEXT_PUBLIC_CLOUDFRONT_URL,
 			isMobile: isMobile(),
-			folder: isMobile() ? 'gallery-small' : 'pepe',
+			folder: isMobile() ? 'pepe/gallery-small' : 'pepe',
 			samplePaths: testPaths.map(img => ({
 				filename: img.filename,
 				path: img.path,
-				fullURL: `${CDN_URL}/${isMobile() ? 'gallery-small' : 'pepe'}/${img.filename}`
+				fullURL: `${CDN_URL}/${isMobile() ? 'pepe/gallery-small' : 'pepe'}/${img.filename}`
 			}))
 		})
 	}
 }
 
 /**
- * アニメーション設定
+ * アニメーション設定（最適化）
  */
 export const ANIMATION_CONFIG = {
 	// スクロール制御
-	scrollDamping: 0.1,
-	scrollThreshold: 0.001,
+	scrollDamping: 0.05,           // より軽いダンピング
+	scrollThreshold: 0.005,        // より大きな閾値で更新頻度を下げる
 
 	// フレームレート制御
 	targetFPS: 60,
-	animationTolerance: 0.001,
+	animationTolerance: 0.005,     // より大きな許容値
 
 	// イージング設定
 	easingStiffness: 0.1,
@@ -1978,21 +1980,35 @@ export const ANIMATION_CONFIG = {
 }
 
 /**
- * 現在の設定を取得（レスポンシブ対応）
+ * 現在の設定を取得（レスポンシブ対応・キャッシュ付き）
  */
+let cachedConfig: any = null
+let lastWindowWidth = 0
+
 export const getCurrentConfig = () => {
+	// キャッシュチェック
+	if (typeof window !== 'undefined') {
+		const currentWidth = window.innerWidth
+		if (cachedConfig && lastWindowWidth === currentWidth) {
+			return cachedConfig
+		}
+		lastWindowWidth = currentWidth
+	}
+
 	const mobile = isMobile()
 
-	// デバッグ：画像パスの確認
+	// デバッグ：画像パスの確認（一度だけ）
 	logImagePaths()
 
-	return {
+	cachedConfig = {
 		images: LAYERED_IMAGES,
 		section: SECTION_CONFIG,
 		responsive: mobile ? RESPONSIVE_CONFIG.mobile : RESPONSIVE_CONFIG.desktop,
 		animation: ANIMATION_CONFIG,
 		debug: DEBUG_CONFIG,
 	}
+
+	return cachedConfig
 }-e 
 ### FILE: ./src/app/components/layered-gallery/types/index.ts
 
@@ -2011,6 +2027,9 @@ declare global {
 			boxGeometry: any
 			axesHelper: any
 			gridHelper: any
+			ringGeometry: any
+			ambientLight: any
+			directionalLight: any
 		}
 	}
 }
@@ -2167,340 +2186,198 @@ export interface LayeredGallerySectionConfig {
 ### FILE: ./src/app/components/layered-gallery/LayeredGallerySection.tsx
 
 // src/app/components/layered-gallery/LayeredGallerySection.tsx
-
 'use client'
-
-import React, { useRef, useEffect, useState } from 'react'
-import dynamic from 'next/dynamic'
+import React, { useRef, useEffect, useState, useMemo } from 'react'
 import { SECTION_CONFIG, getCurrentConfig, DEBUG_CONFIG } from './constants'
+import LayeredGalleryCanvas from './LayeredGalleryCanvas';
 
-// LayeredGalleryCanvasを動的インポートでSSR回避
-const LayeredGalleryCanvas = dynamic(() => import('./LayeredGalleryCanvas'), {
-  ssr: false,
-  loading: () => (
-    <div
-      style={{
-        position: 'absolute',
-        top: '50%',
-        left: '50%',
-        transform: 'translate(-50%, -50%)',
-        color: '#666',
-        fontSize: '18px',
-        textAlign: 'center',
-      }}
-    >
-      <div>Loading 3D Gallery...</div>
-      <div style={{ fontSize: '12px', marginTop: '5px', opacity: 0.7 }}>
-        Initializing Three.js Scene
-      </div>
-    </div>
-  )
-})
 
 export interface LayeredGallerySectionProps {
-  className?: string
-  id?: string
+	className?: string
+	id?: string
 }
 
 /**
- * レイヤードギャラリーのメインセクションコンテナ
- * スクロール可能エリアの定義と基本レイアウトを提供
+ * レスポンシブビューポート監視フック
+ */
+const useResponsiveViewport = () => {
+	const [viewport, setViewport] = useState({
+		width: typeof window !== 'undefined' ? window.innerWidth : 1920,
+		height: typeof window !== 'undefined' ? window.innerHeight : 1080,
+		isMobile: typeof window !== 'undefined' ? window.innerWidth <= 768 : false,
+		isTablet: typeof window !== 'undefined' ? window.innerWidth > 768 && window.innerWidth <= 1024 : false,
+	})
+
+	useEffect(() => {
+		const handleResize = () => {
+			const width = window.innerWidth
+			const height = window.innerHeight
+			setViewport({
+				width,
+				height,
+				isMobile: width <= 768,
+				isTablet: width > 768 && width <= 1024,
+			})
+		}
+
+		window.addEventListener('resize', handleResize, { passive: true })
+		return () => window.removeEventListener('resize', handleResize)
+	}, [])
+
+	return viewport
+}
+
+/**
+ * セクション内スクロール進行度監視フック
+ */
+const useSectionScrollProgress = (sectionRef: React.RefObject<HTMLElement>) => {
+	const [scrollProgress, setScrollProgress] = useState({
+		overall: 0,        // セクション全体での進行度 (0-1)
+		visible: 0,        // 可視部分での進行度 (0-1)
+		isInView: false,   // セクションが画面内にあるか
+		direction: 'down' as 'up' | 'down'
+	})
+
+	const lastScrollY = useRef(0)
+
+	useEffect(() => {
+		if (!sectionRef.current) return
+
+		const handleScroll = () => {
+			const element = sectionRef.current
+			if (!element) return
+
+			const rect = element.getBoundingClientRect()
+			const viewportHeight = window.innerHeight
+			const elementHeight = rect.height
+
+			// セクションが画面内にあるかの判定
+			const isInView = rect.bottom > 0 && rect.top < viewportHeight
+
+			// セクション全体での進行度計算
+			const totalScrollableHeight = elementHeight + viewportHeight
+			const scrolled = viewportHeight - rect.top
+			const overall = Math.max(0, Math.min(1, scrolled / totalScrollableHeight))
+
+			// 可視部分での進行度計算
+			const visibleTop = Math.max(0, -rect.top)
+			const visibleBottom = Math.min(elementHeight, viewportHeight - rect.top)
+			const visibleHeight = Math.max(0, visibleBottom - visibleTop)
+			const visible = elementHeight > 0 ? visibleHeight / elementHeight : 0
+
+			// スクロール方向の判定
+			const currentScrollY = window.scrollY
+			const direction = currentScrollY >= lastScrollY.current ? 'down' : 'up'
+			lastScrollY.current = currentScrollY
+
+			setScrollProgress({
+				overall,
+				visible,
+				isInView,
+				direction
+			})
+		}
+
+		// 初期計算
+		handleScroll()
+
+		// スクロールイベントリスナー（パッシブ、スロットル付き）
+		let ticking = false
+		const throttledHandleScroll = () => {
+			if (!ticking) {
+				requestAnimationFrame(() => {
+					handleScroll()
+					ticking = false
+				})
+				ticking = true
+			}
+		}
+
+		window.addEventListener('scroll', throttledHandleScroll, { passive: true })
+		window.addEventListener('resize', handleScroll, { passive: true })
+
+		return () => {
+			window.removeEventListener('scroll', throttledHandleScroll)
+			window.removeEventListener('resize', handleScroll)
+		}
+	}, [sectionRef])
+
+	return scrollProgress
+}
+
+/**
+ * レイヤードギャラリーのメインセクションコンテナ（改良版）
  */
 export const LayeredGallerySection: React.FC<LayeredGallerySectionProps> = ({
-  className = '',
-  id = 'layered-gallery-section'
+	className = '',
+	id = 'layered-gallery-section'
 }) => {
-  const sectionRef = useRef<HTMLElement>(null)
-  const [sectionHeight, setSectionHeight] = useState<number>(0)
-  const [isClient, setIsClient] = useState(false)
+	const sectionRef = useRef<HTMLElement>(null)
+	const [isClient, setIsClient] = useState(false)
+	const viewport = useResponsiveViewport()
+	const sectionScrollProgress = useSectionScrollProgress(sectionRef)
 
-  // クライアントサイドでのみ実行
-  useEffect(() => {
-    setIsClient(true)
-  }, [])
+	// クライアントサイドでのみ実行
+	useEffect(() => {
+		setIsClient(true)
+	}, [])
 
-  // セクション高さの計算
-  useEffect(() => {
-    if (!isClient) return
+	// セクション高さの計算（レスポンシブ対応）
+	const sectionHeight = useMemo(() => {
+		if (!isClient) return '400vh'
 
-    const calculateHeight = () => {
-      const viewportHeight = window.innerHeight
-      const calculatedHeight = viewportHeight * SECTION_CONFIG.sectionHeight
-      setSectionHeight(calculatedHeight)
-      
-      if (DEBUG_CONFIG.logAnimationStates) {
-        console.log('[LayeredGallerySection] Height calculated:', {
-          viewportHeight,
-          multiplier: SECTION_CONFIG.sectionHeight,
-          totalHeight: calculatedHeight,
-        })
-      }
-    }
+		const multiplier = viewport.isMobile ? 3.5 : viewport.isTablet ? 4.2 : SECTION_CONFIG.sectionHeight
+		return `${multiplier * 100}vh`
+	}, [isClient, viewport.isMobile, viewport.isTablet])
 
-    calculateHeight()
+	// レスポンシブ設定の取得
+	const config = getCurrentConfig()
 
-    // リサイズ対応
-    const handleResize = () => {
-      calculateHeight()
-    }
+	// デバッグログ（開発環境のみ）
+	useEffect(() => {
+		if (DEBUG_CONFIG.logAnimationStates && process.env.NODE_ENV === 'development') {
+			console.log('[LayeredGallerySection] Scroll progress:', {
+				overall: sectionScrollProgress.overall.toFixed(3),
+				visible: sectionScrollProgress.visible.toFixed(3),
+				isInView: sectionScrollProgress.isInView,
+				direction: sectionScrollProgress.direction,
+			})
+		}
+	}, [sectionScrollProgress])
 
-    window.addEventListener('resize', handleResize)
-    return () => window.removeEventListener('resize', handleResize)
-  }, [isClient])
+	if (!isClient) {
+		// SSR時は基本的なプレースホルダーを返す
+		return (
+			<section
+				id={id}
+				className={`layered-gallery-section ${className} `}
 
-  // セクション要素の監視（デバッグ用）
-  useEffect(() => {
-    if (!DEBUG_CONFIG.logAnimationStates || !sectionRef.current) return
+			>
+				<div
+					style={{
+						position: 'absolute',
+						top: '50%',
+						left: '50%',
+						transform: 'translate(-50%, -50%)',
+						color: '#666',
+						fontSize: '18px',
+					}}
+				>
+					Loading Gallery...
+				</div>
+			</section>
+		)
+	}
 
-    const observer = new IntersectionObserver(
-      (entries) => {
-        entries.forEach((entry) => {
-          console.log('[LayeredGallerySection] Intersection changed:', {
-            isIntersecting: entry.isIntersecting,
-            intersectionRatio: entry.intersectionRatio,
-            boundingClientRect: entry.boundingClientRect,
-          })
-        })
-      },
-      {
-        threshold: [0, 0.1, 0.25, 0.5, 0.75, 1.0],
-        rootMargin: '100px',
-      }
-    )
-
-    observer.observe(sectionRef.current)
-
-    return () => observer.disconnect()
-  }, [])
-
-  // レスポンシブ設定の取得
-  const config = getCurrentConfig()
-
-  if (!isClient) {
-    // SSR時は基本的なプレースホルダーを返す
-    return (
-      <section
-        id={id}
-        className={`layered-gallery-section ${className}`}
-        style={{
-          minHeight: '400vh',
-          position: 'relative',
-          overflow: 'hidden',
-        }}
-      >
-        <div 
-          style={{
-            position: 'absolute',
-            top: '50%',
-            left: '50%',
-            transform: 'translate(-50%, -50%)',
-            color: '#666',
-            fontSize: '18px',
-          }}
-        >
-          Loading Gallery...
-        </div>
-      </section>
-    )
-  }
-
-  return (
-    <section
-      ref={sectionRef}
-      id={id}
-      className={`layered-gallery-section ${className}`}
-      style={{
-        height: sectionHeight,
-        position: 'relative',
-        overflow: 'hidden',
-        paddingTop: SECTION_CONFIG.padding.top,
-        paddingBottom: SECTION_CONFIG.padding.bottom,
-        width: '100%', // セクション自体も幅を確保
-        minWidth: '100vw', // 最小幅を保証
-      }}
-    >
-      {/* Three.js Canvas */}
-      <div
-        className="layered-gallery-canvas-container"
-        style={{
-          position: 'sticky',
-          top: 0,
-          left: 0,
-          width: '100vw', // ビューポート全体の幅
-          height: '100vh',
-          zIndex: 1,
-          backgroundColor: 'rgba(255, 0, 0, 0.1)', // 赤い背景で確認用
-          border: '2px solid red', // 境界を見やすく
-          boxSizing: 'border-box',
-        }}
-      >
-        {/* デバッグ表示 */}
-        <div
-          style={{
-            position: 'absolute',
-            top: '20px',
-            left: '20px',
-            background: 'rgba(0, 0, 0, 0.8)',
-            color: 'white',
-            padding: '10px',
-            borderRadius: '5px',
-            fontSize: '14px',
-            zIndex: 10,
-          }}
-        >
-          <div>✅ LayeredGallerySection is working!</div>
-          <div>Section Height: {Math.round(sectionHeight)}px</div>
-          <div>Is Client: {isClient ? 'Yes' : 'No'}</div>
-          <div>Images Count: {getCurrentConfig().images.length}</div>
-          <div>Container Width: 100vw</div>
-          <div>Container Height: 100vh</div>
-        </div>
-
-        <LayeredGalleryCanvas />
-      </div>
-
-      {/* スクロール進行度インジケーター（デバッグ用） */}
-      {DEBUG_CONFIG.showScrollRanges && (
-        <div
-          style={{
-            position: 'fixed',
-            top: '20px',
-            right: '20px',
-            background: 'rgba(0, 0, 0, 0.8)',
-            color: 'white',
-            padding: '10px',
-            borderRadius: '5px',
-            fontSize: '12px',
-            fontFamily: 'monospace',
-            zIndex: 1000,
-          }}
-        >
-          <div>Section Config:</div>
-          <div>Height Multiplier: {SECTION_CONFIG.sectionHeight}x</div>
-          <div>Total Height: {Math.round(sectionHeight)}px</div>
-          <div>Images: {config.images.length}</div>
-          <div>Mobile: {config.responsive === config.section.responsive.mobile ? 'Yes' : 'No'}</div>
-        </div>
-      )}
-
-      {/* スクロール可能エリアの可視化（デバッグ用） */}
-      {DEBUG_CONFIG.showBoundingBoxes && (
-        <div
-          style={{
-            position: 'absolute',
-            top: 0,
-            left: 0,
-            width: '100%',
-            height: '100%',
-            border: '2px dashed #ff0000',
-            pointerEvents: 'none',
-            zIndex: 100,
-          }}
-        >
-          <div
-            style={{
-              position: 'absolute',
-              top: '10px',
-              left: '10px',
-              background: 'rgba(255, 0, 0, 0.8)',
-              color: 'white',
-              padding: '5px',
-              fontSize: '12px',
-            }}
-          >
-            Layered Gallery Section Bounds
-          </div>
-        </div>
-      )}
-
-      {/* 次のステップで実装予定のコンポーネント */}
-      {/* <LayeredGalleryCanvas /> */}
-      {/* <ScrollController /> */}
-
-      {/* テスト用画像表示 */}
-      {DEBUG_CONFIG.showTestImage && <TestImageDisplay />}
-    </section>
-  )
+	return (
+		<section ref={sectionRef} id={id} className={`h-[800vh] w-full`}>
+			<div className="sticky top-0 left-0 h-screen w-full z-10">
+				<LayeredGalleryCanvas />
+			</div>
+		</section>
+	)
 }
 
-/**
- * テスト用：CDN画像の表示確認
- */
-const TestImageDisplay: React.FC = () => {
-  const [testImageLoaded, setTestImageLoaded] = useState<boolean>(false)
-  const [testImageError, setTestImageError] = useState<string | null>(null)
-  const [isClient, setIsClient] = useState(false)
-
-  useEffect(() => {
-    setIsClient(true)
-  }, [])
-  
-  if (!isClient) return null
-
-  const config = getCurrentConfig()
-  const testImage = config.images[0] // 最初の画像でテスト
-  
-  if (!testImage) return null
-
-  return (
-    <div
-      style={{
-        position: 'fixed',
-        bottom: '20px',
-        right: '20px',
-        width: '200px',
-        background: 'rgba(0, 0, 0, 0.8)',
-        color: 'white',
-        padding: '10px',
-        borderRadius: '5px',
-        fontSize: '12px',
-        zIndex: 1000,
-      }}
-    >
-      <div style={{ marginBottom: '10px' }}>
-        <strong>Test Image:</strong><br />
-        {testImage.filename}
-      </div>
-      
-      <div style={{ marginBottom: '10px' }}>
-        <strong>Path:</strong><br />
-        <div style={{ 
-          wordBreak: 'break-all', 
-          fontSize: '10px', 
-          opacity: 0.8 
-        }}>
-          {testImage.path}
-        </div>
-      </div>
-
-      <div style={{ marginBottom: '10px' }}>
-        <img
-          src={testImage.path}
-          alt={testImage.filename}
-          style={{
-            width: '100%',
-            height: 'auto',
-            border: testImageError ? '2px solid red' : '1px solid #333'
-          }}
-          onLoad={() => {
-            setTestImageLoaded(true)
-            setTestImageError(null)
-            console.log(`[TestImage] Successfully loaded: ${testImage.filename}`)
-          }}
-          onError={(e) => {
-            setTestImageLoaded(false)
-            setTestImageError('Failed to load')
-            console.error(`[TestImage] Failed to load: ${testImage.filename}`, e)
-          }}
-        />
-      </div>
-
-      <div style={{ fontSize: '10px' }}>
-        Status: {testImageLoaded ? '✅ Loaded' : testImageError ? '❌ Error' : '⏳ Loading'}
-      </div>
-    </div>
-  )
-}
 export default LayeredGallerySection-e 
 ### FILE: ./src/app/components/layered-gallery/hooks/useScrollProgress.ts
 
@@ -2508,225 +2385,425 @@ export default LayeredGallerySection-e
 
 'use client'
 
-import { useState, useEffect, useCallback, useRef } from 'react'
+import { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import { ScrollProgress } from '../types'
 import { ANIMATION_CONFIG, DEBUG_CONFIG } from '../constants'
 
 /**
- * スクロール進行度を計算・管理するカスタムフック
+ * スクロール進行度を計算・管理するカスタムフック（セクション相対対応・最適化版）
  */
 export const useScrollProgress = (
 	sectionId: string = 'layered-gallery-section'
 ): ScrollProgress | null => {
 	const [scrollProgress, setScrollProgress] = useState<ScrollProgress | null>(null)
+	
+	// パフォーマンス最適化のための参照とキャッシュ
 	const lastScrollY = useRef<number>(0)
 	const lastTimestamp = useRef<number>(0)
 	const velocityHistory = useRef<number[]>([])
+	const isCalculating = useRef<boolean>(false)
+	const rafId = useRef<number>()
+	const lastProgressValues = useRef<{ overall: number; section: number }>({ overall: -1, section: -1 })
+	const intersectionRatio = useRef<number>(0)
 
-	// スクロール進行度の計算
-	const calculateProgress = useCallback((element: HTMLElement): ScrollProgress => {
-		const rect = element.getBoundingClientRect()
-		const viewportHeight = window.innerHeight
-		const elementHeight = rect.height
-		const elementTop = rect.top
+	// セクション要素の参照をキャッシュ
+	const sectionElementRef = useRef<HTMLElement | null>(null)
+	const lastElementCheck = useRef<number>(0)
 
-		// セクション全体の進行度（0-1）
-		// 要素が画面下端に入った時を0、画面上端を出た時を1とする
-		const totalScrollRange = elementHeight + viewportHeight
-		const scrolled = viewportHeight - elementTop
-		const overallProgress = Math.max(0, Math.min(1, scrolled / totalScrollRange))
-
-		// セクション内での進行度（0-1）
-		// セクションが完全に画面内にある部分での進行度
-		const visibleStart = Math.max(0, -elementTop)
-		const visibleEnd = Math.min(elementHeight, viewportHeight - elementTop)
-		const visibleRange = Math.max(0, visibleEnd - visibleStart)
-		const sectionProgress = elementHeight > 0 ? visibleRange / elementHeight : 0
-
-		// スクロール方向の判定
-		const currentScrollY = window.scrollY
-		const direction = currentScrollY >= lastScrollY.current ? 'down' : 'up'
-		lastScrollY.current = currentScrollY
-
-		// スクロール速度の計算
-		const currentTime = performance.now()
-		const timeDelta = currentTime - lastTimestamp.current
-		const scrollDelta = Math.abs(currentScrollY - lastScrollY.current)
-		const instantVelocity = timeDelta > 0 ? scrollDelta / timeDelta : 0
-
-		// 速度履歴を更新（過去5フレーム分の平均を取る）
-		velocityHistory.current.push(instantVelocity)
-		if (velocityHistory.current.length > 5) {
-			velocityHistory.current.shift()
+	// 要素取得の最適化（キャッシュ付き）
+	const getSectionElement = useCallback((): HTMLElement | null => {
+		const now = performance.now()
+		
+		// 100ms間隔でのみ要素を再取得（パフォーマンス最適化）
+		if (now - lastElementCheck.current > 100 || !sectionElementRef.current) {
+			sectionElementRef.current = document.getElementById(sectionId)
+			lastElementCheck.current = now
 		}
+		
+		return sectionElementRef.current
+	}, [sectionId])
 
-		const averageVelocity = velocityHistory.current.length > 0
-			? velocityHistory.current.reduce((sum, v) => sum + v, 0) / velocityHistory.current.length
-			: 0
-
-		lastTimestamp.current = currentTime
-
-		return {
-			overall: overallProgress,
-			section: sectionProgress,
-			direction,
-			velocity: averageVelocity,
+	// ビューポート情報のキャッシュ
+	const viewportInfo = useRef<{ width: number; height: number }>({ width: 0, height: 0 })
+	
+	const updateViewportInfo = useCallback(() => {
+		if (typeof window !== 'undefined') {
+			viewportInfo.current = {
+				width: window.innerWidth,
+				height: window.innerHeight
+			}
 		}
 	}, [])
 
-	// スクロールイベントハンドラー
-	const handleScroll = useCallback(() => {
-		const element = document.getElementById(sectionId)
-		if (!element) return
-
-		const newProgress = calculateProgress(element)
-
-		// 微細な変化は無視（パフォーマンス最適化）
-		if (scrollProgress &&
-			Math.abs(newProgress.overall - scrollProgress.overall) < ANIMATION_CONFIG.scrollThreshold &&
-			Math.abs(newProgress.section - scrollProgress.section) < ANIMATION_CONFIG.scrollThreshold) {
-			return
-		}
-
-		setScrollProgress(newProgress)
-
-		// デバッグログ
-		if (DEBUG_CONFIG.logAnimationStates) {
-			console.log('[useScrollProgress] Progress updated:', {
-				overall: newProgress.overall.toFixed(3),
-				section: newProgress.section.toFixed(3),
-				direction: newProgress.direction,
-				velocity: newProgress.velocity.toFixed(3),
-			})
-		}
-	}, [sectionId, calculateProgress, scrollProgress])
-
-	// デバウンス処理付きスクロールハンドラー
-	const debouncedHandleScroll = useCallback(() => {
-		const debounceMs = ANIMATION_CONFIG.scrollDamping * 1000
-
-		if (debounceMs <= 0) {
-			handleScroll()
-			return
-		}
-
-		// requestAnimationFrame を使用してスムーズな更新
-		requestAnimationFrame(handleScroll)
-	}, [handleScroll])
-
-	// Intersection Observer による要素の可視性監視
-	const [isElementVisible, setIsElementVisible] = useState<boolean>(false)
-
+	// 初回ビューポート情報の設定
 	useEffect(() => {
-		const element = document.getElementById(sectionId)
+		updateViewportInfo()
+	}, [updateViewportInfo])
+
+	// セクション相対スクロール進行度の計算（最適化版）
+	const calculateSectionProgress = useCallback((element: HTMLElement): ScrollProgress | null => {
+		if (isCalculating.current || !element) {
+			return null
+		}
+
+		isCalculating.current = true
+
+		try {
+			const rect = element.getBoundingClientRect()
+			const viewport = viewportInfo.current
+			const elementHeight = rect.height
+			const elementTop = rect.top
+
+			// セクション全体の進行度計算（0-1）
+			// セクションが画面に入り始めてから完全に通り過ぎるまでの進行度
+			const totalScrollRange = elementHeight + viewport.height
+			const scrolled = viewport.height - elementTop
+			const overallProgress = Math.max(0, Math.min(1, scrolled / totalScrollRange))
+
+			// セクション内での相対進行度計算（0-1）
+			// セクションが画面内にある間の進行度
+			const visibleStart = Math.max(0, -elementTop)
+			const visibleEnd = Math.min(elementHeight, viewport.height - elementTop)
+			const visibleRange = Math.max(0, visibleEnd - visibleStart)
+			const sectionProgress = elementHeight > 0 ? 
+				Math.max(0, Math.min(1, (visibleStart + visibleRange / 2) / elementHeight)) : 0
+
+			// 変化の閾値チェック（無駄な更新を防ぐ）
+			const progressDiff = Math.abs(overallProgress - lastProgressValues.current.overall)
+			const sectionDiff = Math.abs(sectionProgress - lastProgressValues.current.section)
+
+			if (progressDiff < ANIMATION_CONFIG.scrollThreshold && 
+				sectionDiff < ANIMATION_CONFIG.scrollThreshold) {
+				return null // 変化が小さすぎる場合は更新しない
+			}
+
+			// 値を更新
+			lastProgressValues.current = { overall: overallProgress, section: sectionProgress }
+
+			// スクロール方向の判定（最適化）
+			const currentScrollY = window.scrollY
+			const direction = currentScrollY >= lastScrollY.current ? 'down' : 'up'
+			lastScrollY.current = currentScrollY
+
+			// スクロール速度の計算（フレーム間隔考慮）
+			const currentTime = performance.now()
+			const timeDelta = currentTime - lastTimestamp.current
+			const scrollDelta = Math.abs(currentScrollY - lastScrollY.current)
+			
+			// 60FPS基準でスクロール速度を正規化
+			const instantVelocity = timeDelta > 16 ? (scrollDelta / timeDelta) * 16 : 0
+
+			// 速度履歴を更新（最大5フレーム分）
+			velocityHistory.current.push(instantVelocity)
+			if (velocityHistory.current.length > 5) {
+				velocityHistory.current.shift()
+			}
+
+			// 平均速度の計算
+			const averageVelocity = velocityHistory.current.length > 0
+				? velocityHistory.current.reduce((sum, v) => sum + v, 0) / velocityHistory.current.length
+				: 0
+
+			lastTimestamp.current = currentTime
+
+			return {
+				overall: overallProgress,
+				section: sectionProgress,
+				direction,
+				velocity: Math.min(averageVelocity, 10), // 速度の上限を設定
+			}
+		} catch (error) {
+			console.error('[useScrollProgress] Calculation error:', error)
+			return null
+		} finally {
+			isCalculating.current = false
+		}
+	}, [])
+
+	// Intersection Observerによる効率的な可視性監視
+	const [isElementVisible, setIsElementVisible] = useState<boolean>(false)
+	const observerRef = useRef<IntersectionObserver | null>(null)
+
+	// 可視性監視の設定（最適化版）
+	useEffect(() => {
+		const element = getSectionElement()
 		if (!element) return
 
-		const observer = new IntersectionObserver(
+		// 既存のオブザーバーがある場合は削除
+		if (observerRef.current) {
+			observerRef.current.disconnect()
+		}
+
+		observerRef.current = new IntersectionObserver(
 			(entries) => {
 				const [entry] = entries
-				setIsElementVisible(entry.isIntersecting)
+				const isVisible = entry.isIntersecting
+				intersectionRatio.current = entry.intersectionRatio
 
-				if (DEBUG_CONFIG.logAnimationStates) {
-					console.log('[useScrollProgress] Element visibility changed:', {
-						isIntersecting: entry.isIntersecting,
-						intersectionRatio: entry.intersectionRatio,
-					})
-				}
+				setIsElementVisible(prev => {
+					if (prev !== isVisible) {
+						if (DEBUG_CONFIG.logAnimationStates) {
+							console.log('[useScrollProgress] Visibility changed:', isVisible, 
+								'Ratio:', entry.intersectionRatio.toFixed(3))
+						}
+						return isVisible
+					}
+					return prev
+				})
 			},
 			{
-				threshold: [0, 0.1, 0.5, 1.0],
-				rootMargin: '100px', // 要素に近づいた時点で検知開始
+				threshold: [0, 0.1, 0.25, 0.5, 0.75, 1.0], // 詳細な閾値設定
+				rootMargin: '50px', // 余裕を持った検出範囲
 			}
 		)
 
-		observer.observe(element)
+		observerRef.current.observe(element)
 
-		return () => observer.disconnect()
-	}, [sectionId])
+		return () => {
+			if (observerRef.current) {
+				observerRef.current.disconnect()
+				observerRef.current = null
+			}
+		}
+	}, [getSectionElement])
 
-	// スクロールイベントの登録
+	// メインのスクロールイベントハンドラー（RAF + スロットリング）
+	const handleScroll = useCallback(() => {
+		// 要素が見えていない場合はスキップ
+		if (!isElementVisible) return
+
+		// RAF が既にスケジュールされている場合はキャンセル
+		if (rafId.current) {
+			cancelAnimationFrame(rafId.current)
+		}
+
+		rafId.current = requestAnimationFrame(() => {
+			try {
+				const element = getSectionElement()
+				if (!element || isCalculating.current) return
+
+				const newProgress = calculateSectionProgress(element)
+
+				if (!newProgress) return // 変化がない場合はスキップ
+
+				setScrollProgress(prev => {
+					// 前回の値と比較してスムージング
+					if (prev) {
+						const smoothingFactor = 0.85 // より滑らかな補間
+						const smoothedProgress = {
+							overall: prev.overall * smoothingFactor + newProgress.overall * (1 - smoothingFactor),
+							section: prev.section * smoothingFactor + newProgress.section * (1 - smoothingFactor),
+							direction: newProgress.direction,
+							velocity: prev.velocity * 0.8 + newProgress.velocity * 0.2,
+						}
+
+						// 微細な変化をフィルター
+						const overallDiff = Math.abs(smoothedProgress.overall - prev.overall)
+						const sectionDiff = Math.abs(smoothedProgress.section - prev.section)
+						
+						if (overallDiff < ANIMATION_CONFIG.scrollThreshold && 
+							sectionDiff < ANIMATION_CONFIG.scrollThreshold) {
+							return prev
+						}
+
+						return smoothedProgress
+					}
+
+					return newProgress
+				})
+
+			} catch (error) {
+				console.error('[useScrollProgress] Handle scroll error:', error)
+			}
+		})
+	}, [isElementVisible, getSectionElement, calculateSectionProgress])
+
+	// スクロールイベントの登録（最適化版）
 	useEffect(() => {
 		if (!isElementVisible) {
 			// 要素が見えていない時は進行度をnullにリセット
 			setScrollProgress(null)
+			lastProgressValues.current = { overall: -1, section: -1 }
+			velocityHistory.current = []
 			return
 		}
 
 		// 初期値の計算
-		const element = document.getElementById(sectionId)
-		if (element) {
-			const initialProgress = calculateProgress(element)
-			setScrollProgress(initialProgress)
-		}
-
-		// スクロールイベントリスナーの登録
-		const handleScrollWithPassive = () => debouncedHandleScroll()
-
-		window.addEventListener('scroll', handleScrollWithPassive, { passive: true })
-		window.addEventListener('resize', handleScrollWithPassive, { passive: true })
-
-		return () => {
-			window.removeEventListener('scroll', handleScrollWithPassive)
-			window.removeEventListener('resize', handleScrollWithPassive)
-		}
-	}, [sectionId, isElementVisible, calculateProgress, debouncedHandleScroll])
-
-	// パフォーマンス監視（開発時のみ）
-	useEffect(() => {
-		if (!DEBUG_CONFIG.logAnimationStates || !scrollProgress) return
-
-		const startTime = performance.now()
-
-		return () => {
-			const endTime = performance.now()
-			const duration = endTime - startTime
-
-			if (duration > 16) { // 60FPSを下回る場合
-				console.warn('[useScrollProgress] Performance warning:', {
-					duration: `${duration.toFixed(2)}ms`,
-					progress: scrollProgress,
-				})
+		const element = getSectionElement()
+		if (element && !scrollProgress) {
+			const initialProgress = calculateSectionProgress(element)
+			if (initialProgress) {
+				setScrollProgress(initialProgress)
 			}
 		}
-	}, [scrollProgress])
+
+		// パッシブリスナーでスクロールイベントを監視
+		const throttledHandleScroll = (() => {
+			let lastCall = 0
+			return () => {
+				const now = performance.now()
+				if (now - lastCall >= 16) { // 60FPS制限
+					lastCall = now
+					handleScroll()
+				}
+			}
+		})()
+
+		window.addEventListener('scroll', throttledHandleScroll, { passive: true })
+		window.addEventListener('resize', () => {
+			updateViewportInfo()
+			handleScroll()
+		}, { passive: true })
+
+		return () => {
+			window.removeEventListener('scroll', throttledHandleScroll)
+			window.removeEventListener('resize', handleScroll)
+
+			// RAF のクリーンアップ
+			if (rafId.current) {
+				cancelAnimationFrame(rafId.current)
+				rafId.current = undefined
+			}
+		}
+	}, [isElementVisible, getSectionElement, calculateSectionProgress, handleScroll, scrollProgress, updateViewportInfo])
+
+	// メモリリーク防止のクリーンアップ
+	useEffect(() => {
+		return () => {
+			if (rafId.current) {
+				cancelAnimationFrame(rafId.current)
+			}
+			if (observerRef.current) {
+				observerRef.current.disconnect()
+			}
+			// 状態をリセット
+			isCalculating.current = false
+			lastProgressValues.current = { overall: -1, section: -1 }
+			velocityHistory.current = []
+		}
+	}, [])
 
 	return scrollProgress
 }
 
 /**
- * 特定の画像のスクロール範囲内にいるかどうかを判定するヘルパーフック
+ * 特定画像のスクロール範囲内判定フック（最適化版）
  */
 export const useImageScrollRange = (
 	imageScrollRange: { start: number; end: number; peak: number },
 	globalProgress: ScrollProgress | null
 ) => {
-	const [isInRange, setIsInRange] = useState<boolean>(false)
-	const [localProgress, setLocalProgress] = useState<number>(0)
+	const [rangeState, setRangeState] = useState({
+		isInRange: false,
+		localProgress: 0,
+		distanceFromPeak: 1
+	})
+
+	// 前回の値をキャッシュして無駄な更新を防ぐ
+	const lastGlobalProgress = useRef<number>(-1)
+	const lastRangeState = useRef(rangeState)
+
+	// メモ化された計算関数
+	const calculateRangeState = useMemo(() => {
+		return (progress: number) => {
+			const { start, end, peak } = imageScrollRange
+			const inRange = progress >= start && progress <= end
+
+			let localProgress = 0
+			let distanceFromPeak = 1
+
+			if (inRange) {
+				// 画像のスクロール範囲内での相対進行度を計算（0-1）
+				localProgress = (progress - start) / (end - start)
+				// ピークからの距離を計算（0が最も近い）
+				distanceFromPeak = Math.abs(progress - peak) / ((end - start) / 2)
+			} else {
+				// 範囲外の場合
+				localProgress = progress < start ? 0 : 1
+				distanceFromPeak = progress < start ? 
+					(start - progress) / (start || 0.1) : 
+					(progress - end) / (1 - end || 0.1)
+			}
+
+			return {
+				isInRange: inRange,
+				localProgress: Math.max(0, Math.min(1, localProgress)),
+				distanceFromPeak: Math.max(0, Math.min(2, distanceFromPeak))
+			}
+		}
+	}, [imageScrollRange.start, imageScrollRange.end, imageScrollRange.peak])
 
 	useEffect(() => {
 		if (!globalProgress) {
-			setIsInRange(false)
-			setLocalProgress(0)
+			const newState = { isInRange: false, localProgress: 0, distanceFromPeak: 1 }
+			if (JSON.stringify(newState) !== JSON.stringify(lastRangeState.current)) {
+				setRangeState(newState)
+				lastRangeState.current = newState
+			}
 			return
 		}
 
-		const { start, end } = imageScrollRange
 		const progress = globalProgress.overall
 
-		const inRange = progress >= start && progress <= end
-		setIsInRange(inRange)
-
-		if (inRange) {
-			// 画像のスクロール範囲内での相対進行度を計算（0-1）
-			const rangeProgress = (progress - start) / (end - start)
-			setLocalProgress(Math.max(0, Math.min(1, rangeProgress)))
-		} else {
-			setLocalProgress(progress < start ? 0 : 1)
+		// 進行度が変化していない場合はスキップ
+		if (Math.abs(progress - lastGlobalProgress.current) < ANIMATION_CONFIG.scrollThreshold) {
+			return
 		}
 
-	}, [globalProgress, imageScrollRange])
+		lastGlobalProgress.current = progress
 
-	return { isInRange, localProgress }
+		const newState = calculateRangeState(progress)
+
+		// 状態が変化した場合のみ更新
+		const stateChanged = 
+			newState.isInRange !== lastRangeState.current.isInRange ||
+			Math.abs(newState.localProgress - lastRangeState.current.localProgress) > ANIMATION_CONFIG.animationTolerance ||
+			Math.abs(newState.distanceFromPeak - lastRangeState.current.distanceFromPeak) > ANIMATION_CONFIG.animationTolerance
+
+		if (stateChanged) {
+			setRangeState(newState)
+			lastRangeState.current = newState
+		}
+
+	}, [globalProgress?.overall, calculateRangeState])
+
+	return rangeState
+}
+
+/**
+ * マルチセクション対応のスクロール進行度フック
+ */
+export const useMultiSectionScrollProgress = (sectionIds: string[]) => {
+	const [sectionsProgress, setSectionsProgress] = useState<Record<string, ScrollProgress | null>>({})
+
+	// 各セクションの進行度を個別計算
+	const sectionProgresses = useMemo(() => {
+		return sectionIds.reduce((acc, sectionId) => {
+			acc[sectionId] = useScrollProgress(sectionId)
+			return acc
+		}, {} as Record<string, ScrollProgress | null>)
+	}, [sectionIds])
+
+	// アクティブセクションの判定
+	const activeSection = useMemo(() => {
+		let maxProgress = -1
+		let activeSectionId = ''
+
+		Object.entries(sectionProgresses).forEach(([sectionId, progress]) => {
+			if (progress && progress.section > maxProgress) {
+				maxProgress = progress.section
+				activeSectionId = sectionId
+			}
+		})
+
+		return activeSectionId || null
+	}, [sectionProgresses])
+
+	return {
+		sectionsProgress: sectionProgresses,
+		activeSection,
+		isAnyActive: Object.values(sectionProgresses).some(p => p !== null)
+	}
 }
 
 export default useScrollProgress-e 
@@ -3318,20 +3395,181 @@ import { LayeredImageConfig, ScrollProgress, ImageAnimationState } from '../type
 import { getCurrentConfig } from '../constants'
 
 /**
- * 3D位置計算のユーティリティ関数群
+ * 3D位置計算のユーティリティ関数群（レスポンシブ対応版）
  */
 
 /**
- * ランダムオフセットを適用した最終位置を計算
+ * ビューポートサイズに基づく画面情報
+ */
+interface ViewportInfo {
+	width: number
+	height: number
+	aspectRatio: number
+	isMobile: boolean
+	isTablet: boolean
+	isDesktop: boolean
+}
+
+/**
+ * 現在のビューポート情報を取得
+ */
+export const getViewportInfo = (): ViewportInfo => {
+	if (typeof window === 'undefined') {
+		return {
+			width: 1920,
+			height: 1080,
+			aspectRatio: 16/9,
+			isMobile: false,
+			isTablet: false,
+			isDesktop: true
+		}
+	}
+
+	const width = window.innerWidth
+	const height = window.innerHeight
+	const aspectRatio = width / height
+
+	return {
+		width,
+		height,
+		aspectRatio,
+		isMobile: width <= 768,
+		isTablet: width > 768 && width <= 1024,
+		isDesktop: width > 1024
+	}
+}
+
+/**
+ * レスポンシブグリッド設定
+ */
+interface GridConfig {
+	columns: number
+	maxWidth: number
+	spacing: {
+		x: number
+		y: number
+	}
+	bounds: {
+		minX: number
+		maxX: number
+		minY: number
+		maxY: number
+	}
+}
+
+/**
+ * ビューポートに応じたグリッド設定を取得
+ */
+export const getResponsiveGridConfig = (viewport: ViewportInfo): GridConfig => {
+	if (viewport.isMobile) {
+		return {
+			columns: 3,
+			maxWidth: 0.9, // ビューポート幅の90%
+			spacing: { x: 2.5, y: 4 },
+			bounds: { minX: -4, maxX: 4, minY: -15, maxY: 15 }
+		}
+	}
+	
+	if (viewport.isTablet) {
+		return {
+			columns: 5,
+			maxWidth: 0.85, // ビューポート幅の85%
+			spacing: { x: 3.0, y: 4.5 },
+			bounds: { minX: -6, maxX: 6, minY: -20, maxY: 20 }
+		}
+	}
+
+	// Desktop
+	return {
+		columns: 7,
+		maxWidth: 0.8, // ビューポート幅の80%
+		spacing: { x: 3.5, y: 5 },
+		bounds: { minX: -10, maxX: 10, minY: -25, maxY: 25 }
+	}
+}
+
+/**
+ * 相対位置に基づく3D座標計算
+ */
+export const calculateRelativePosition = (
+	imageConfig: LayeredImageConfig,
+	index: number,
+	totalImages: number,
+	seed?: number
+): { x: number; y: number; z: number } => {
+	const viewport = getViewportInfo()
+	const gridConfig = getResponsiveGridConfig(viewport)
+	const config = getCurrentConfig()
+
+	// グリッド位置の計算
+	const { columns } = gridConfig
+	const col = index % columns
+	const row = Math.floor(index / columns)
+
+	// 中央揃えのためのオフセット
+	const centerOffset = (columns - 1) / 2
+
+	// 基本X位置（相対値で計算）
+	const relativeX = (col - centerOffset) / centerOffset // -1 to 1
+	const baseX = relativeX * gridConfig.bounds.maxX * gridConfig.maxWidth
+
+	// 基本Y位置（縦方向の分散）
+	const baseY = -row * gridConfig.spacing.y + (totalImages / columns) * gridConfig.spacing.y * 0.5
+
+	// Z位置（サイズに応じた奥行き）
+	const baseZ = imageConfig.size === 'L' ? 0 :
+		imageConfig.size === 'M' ? -3 : -6
+
+	// 擬似ランダムオフセット（一貫性のため）
+	const pseudoRandom = (index: number): number => {
+		const seedValue = seed || imageConfig.id
+		const x = Math.sin(seedValue * index) * 10000
+		return x - Math.floor(x)
+	}
+
+	let finalX = baseX
+	let finalY = baseY
+	let finalZ = baseZ
+
+	// ランダムオフセットの適用（ビューポートに応じて調整）
+	if (imageConfig.randomOffset) {
+		const offsetMultiplier = viewport.isMobile ? 0.5 : viewport.isTablet ? 0.75 : 1.0
+		const offsetX = (pseudoRandom(1) - 0.5) * 2 * imageConfig.randomOffset.x * offsetMultiplier
+		const offsetY = (pseudoRandom(2) - 0.5) * 2 * imageConfig.randomOffset.y * offsetMultiplier
+
+		finalX += offsetX
+		finalY += offsetY
+	}
+
+	// 境界制限の適用
+	finalX = Math.max(gridConfig.bounds.minX, Math.min(gridConfig.bounds.maxX, finalX))
+	finalY = Math.max(gridConfig.bounds.minY, Math.min(gridConfig.bounds.maxY, finalY))
+
+	// レスポンシブ調整の適用
+	finalX *= config.responsive.positionMultiplier
+	finalY *= config.responsive.positionMultiplier
+
+	return { x: finalX, y: finalY, z: finalZ }
+}
+
+/**
+ * ランダムオフセットを適用した最終位置を計算（レスポンシブ対応版）
  */
 export const calculateFinalPosition = (
 	imageConfig: LayeredImageConfig,
-	seed?: number
+	seed?: number,
+	totalImages?: number,
+	index?: number
 ): { x: number; y: number; z: number } => {
+	// 新しい相対位置計算を使用
+	if (typeof index === 'number' && typeof totalImages === 'number') {
+		return calculateRelativePosition(imageConfig, index, totalImages, seed)
+	}
+
+	// フォールバック：従来の固定位置計算
 	const config = getCurrentConfig()
 	const { position, randomOffset } = imageConfig
 
-	// シード値を使った擬似ランダム生成（一貫性のため）
 	const pseudoRandom = (index: number): number => {
 		const seedValue = seed || imageConfig.id
 		const x = Math.sin(seedValue * index) * 10000
@@ -3342,7 +3580,6 @@ export const calculateFinalPosition = (
 	let finalY = position.y
 	let finalZ = position.z
 
-	// ランダムオフセットの適用
 	if (randomOffset) {
 		const offsetX = (pseudoRandom(1) - 0.5) * 2 * randomOffset.x
 		const offsetY = (pseudoRandom(2) - 0.5) * 2 * randomOffset.y
@@ -3351,7 +3588,6 @@ export const calculateFinalPosition = (
 		finalY += offsetY
 	}
 
-	// レスポンシブ調整の適用
 	finalX *= config.responsive.positionMultiplier
 	finalY *= config.responsive.positionMultiplier
 
@@ -3359,7 +3595,7 @@ export const calculateFinalPosition = (
 }
 
 /**
- * スクロール進行度に基づく動的位置を計算
+ * スクロール進行度に基づく動的位置を計算（改良版）
  */
 export const calculateScrollBasedPosition = (
 	basePosition: { x: number; y: number; z: number },
@@ -3368,19 +3604,24 @@ export const calculateScrollBasedPosition = (
 ): { x: number; y: number; z: number } => {
 	const { parallax } = imageConfig
 	const { overall } = scrollProgress
+	const viewport = getViewportInfo()
 
-	// 視差効果による位置調整
-	const parallaxOffset = overall * 20 * (1 - parallax.speed) // 視差速度に基づくオフセット
+	// ビューポートに応じた視差効果の調整
+	const parallaxMultiplier = viewport.isMobile ? 15 : viewport.isTablet ? 18 : 20
+	const parallaxOffset = overall * parallaxMultiplier * (1 - parallax.speed)
+
+	// X軸方向の微細な揺れ（オプション）
+	const lateralOffset = Math.sin(overall * Math.PI * 2) * 0.5 * (1 - parallax.speed)
 
 	return {
-		x: basePosition.x,
+		x: basePosition.x + lateralOffset,
 		y: basePosition.y - parallaxOffset, // Y軸方向に視差効果を適用
 		z: basePosition.z,
 	}
 }
 
 /**
- * 画像間の衝突検出
+ * 画像間の衝突検出（レスポンシブ対応版）
  */
 export const checkCollision = (
 	pos1: { x: number; y: number; z: number },
@@ -3389,18 +3630,91 @@ export const checkCollision = (
 	size2: number,
 	threshold: number = 0.5
 ): boolean => {
+	const viewport = getViewportInfo()
+	
+	// ビューポートに応じた衝突判定の調整
+	const adjustedThreshold = viewport.isMobile ? threshold * 0.8 : threshold
+
 	const distance = Math.sqrt(
 		Math.pow(pos1.x - pos2.x, 2) +
 		Math.pow(pos1.y - pos2.y, 2) +
 		Math.pow(pos1.z - pos2.z, 2)
 	)
 
-	const combinedRadius = (size1 + size2) * threshold
+	const combinedRadius = (size1 + size2) * adjustedThreshold
 	return distance < combinedRadius
 }
 
 /**
- * 衝突を回避する位置を計算
+ * レスポンシブ境界内での位置制限
+ */
+export const constrainToResponsiveBounds = (
+	position: { x: number; y: number; z: number },
+	margin: number = 1
+): { x: number; y: number; z: number } => {
+	const viewport = getViewportInfo()
+	const gridConfig = getResponsiveGridConfig(viewport)
+
+	return {
+		x: Math.max(
+			gridConfig.bounds.minX + margin, 
+			Math.min(gridConfig.bounds.maxX - margin, position.x)
+		),
+		y: Math.max(
+			gridConfig.bounds.minY + margin, 
+			Math.min(gridConfig.bounds.maxY - margin, position.y)
+		),
+		z: position.z,
+	}
+}
+
+/**
+ * 複数画像の位置を一括計算（レスポンシブ対応版）
+ */
+export const calculateAllPositions = (
+	imageConfigs: LayeredImageConfig[],
+	scrollProgress: ScrollProgress | null,
+	options: {
+		resolveCollisions?: boolean
+		constrainToBounds?: boolean
+		useRelativePositioning?: boolean
+	} = {}
+): Array<{ x: number; y: number; z: number }> => {
+	const { useRelativePositioning = true } = options
+
+	// 基本位置の計算
+	const basePositions = imageConfigs.map((config, index) => ({
+		config,
+		position: useRelativePositioning 
+			? calculateRelativePosition(config, index, imageConfigs.length, config.id)
+			: calculateFinalPosition(config, config.id + index)
+	}))
+
+	// スクロール効果の適用
+	let finalPositions = basePositions.map(({ config, position }) => {
+		if (scrollProgress) {
+			return calculateScrollBasedPosition(position, config, scrollProgress)
+		}
+		return position
+	})
+
+	// 衝突解決
+	if (options.resolveCollisions) {
+		finalPositions = resolveCollisions(basePositions)
+	}
+
+	// レスポンシブ境界制限
+	if (options.constrainToBounds) {
+		finalPositions = finalPositions.map(position =>
+			constrainToResponsiveBounds(position)
+		)
+	}
+
+	return finalPositions
+}
+
+/**
+ * 衝突を回避する位置を計算（既存関数・変更なし）
  */
 export const resolveCollisions = (
 	positions: Array<{ config: LayeredImageConfig; position: { x: number; y: number; z: number } }>,
@@ -3459,81 +3773,7 @@ export const resolveCollisions = (
 }
 
 /**
- * 画面境界内での位置制限
- */
-export const constrainToBounds = (
-	position: { x: number; y: number; z: number },
-	bounds: { minX: number; maxX: number; minY: number; maxY: number },
-	margin: number = 1
-): { x: number; y: number; z: number } => {
-	return {
-		x: Math.max(bounds.minX + margin, Math.min(bounds.maxX - margin, position.x)),
-		y: Math.max(bounds.minY + margin, Math.min(bounds.maxY - margin, position.y)),
-		z: position.z,
-	}
-}
-
-/**
- * 複数画像の位置を一括計算
- */
-export const calculateAllPositions = (
-	imageConfigs: LayeredImageConfig[],
-	scrollProgress: ScrollProgress | null,
-	options: {
-		resolveCollisions?: boolean
-		constrainToBounds?: boolean
-		bounds?: { minX: number; maxX: number; minY: number; maxY: number }
-	} = {}
-): Array<{ x: number; y: number; z: number }> => {
-	// 基本位置の計算
-	const basePositions = imageConfigs.map((config, index) => ({
-		config,
-		position: calculateFinalPosition(config, config.id + index)
-	}))
-
-	// スクロール効果の適用
-	let finalPositions = basePositions.map(({ config, position }) => {
-		if (scrollProgress) {
-			return calculateScrollBasedPosition(position, config, scrollProgress)
-		}
-		return position
-	})
-
-	// 衝突解決
-	if (options.resolveCollisions) {
-		finalPositions = resolveCollisions(basePositions)
-	}
-
-	// 境界制限
-	if (options.constrainToBounds && options.bounds) {
-		finalPositions = finalPositions.map(position =>
-			constrainToBounds(position, options.bounds!)
-		)
-	}
-
-	return finalPositions
-}
-
-/**
- * デバッグ用：位置情報の可視化データを生成
- */
-export const generatePositionDebugData = (
-	imageConfigs: LayeredImageConfig[],
-	positions: Array<{ x: number; y: number; z: number }>
-) => {
-	return imageConfigs.map((config, index) => ({
-		id: config.id,
-		filename: config.filename,
-		size: config.size,
-		originalPosition: config.position,
-		finalPosition: positions[index],
-		scrollRange: config.scrollRange,
-		zoomRange: config.zoom,
-	}))
-}
-
-/**
- * カメラからの距離を計算
+ * カメラからの距離を計算（既存関数・変更なし）
  */
 export const calculateDistanceFromCamera = (
 	position: { x: number; y: number; z: number },
@@ -3547,7 +3787,7 @@ export const calculateDistanceFromCamera = (
 }
 
 /**
- * 視野角内にあるかどうかを判定
+ * 視野角内にあるかどうかを判定（既存関数・変更なし）
  */
 export const isInViewFrustum = (
 	position: { x: number; y: number; z: number },
@@ -3572,753 +3812,469 @@ export const isInViewFrustum = (
 	const halfWidth = halfHeight * aspect
 
 	return dx <= halfWidth && dy <= halfHeight
+}
+
+/**
+ * デバッグ用：位置情報の可視化データを生成（レスポンシブ情報追加）
+ */
+export const generatePositionDebugData = (
+	imageConfigs: LayeredImageConfig[],
+	positions: Array<{ x: number; y: number; z: number }>
+) => {
+	const viewport = getViewportInfo()
+	const gridConfig = getResponsiveGridConfig(viewport)
+
+	return {
+		viewport,
+		gridConfig,
+		images: imageConfigs.map((config, index) => ({
+			id: config.id,
+			filename: config.filename,
+			size: config.size,
+			originalPosition: config.position,
+			finalPosition: positions[index],
+			scrollRange: config.scrollRange,
+			zoomRange: config.zoom,
+		}))
+	}
 }-e 
 ### FILE: ./src/app/components/layered-gallery/LayeredGalleryCanvas.tsx
 
 'use client'
 
-import React, { Suspense, useRef, useEffect, useState } from 'react'
-import dynamic from 'next/dynamic'
-import { SECTION_CONFIG, LAYERED_IMAGES, DEBUG_CONFIG, getCurrentConfig } from './constants'
+import React, { useRef, useEffect, useState, useMemo, useCallback } from 'react'
+import { LAYERED_IMAGES } from './constants'
+import { calculateAllPositions, getViewportInfo, getResponsiveGridConfig } from './utils/positionCalculator'
 
 export interface LayeredGalleryCanvasProps {
-  className?: string
+	className?: string
 }
 
 /**
- * Three.jsシーンコンポーネント（簡易版から開始）
+ * ビューポート監視フック
  */
-const ThreeScene: React.FC = () => {
-  const [Canvas, setCanvas] = useState<any>(null)
-  const [drei, setDrei] = useState<any>(null)
-  const [useScrollProgress, setUseScrollProgress] = useState<any>(null)
-  const [sceneReady, setSceneReady] = useState<boolean>(false)
+const useViewportSize = () => {
+	const [viewport, setViewport] = useState(() => getViewportInfo())
 
-  // 動的インポートでThree.js関連を読み込み
-  useEffect(() => {
-    const loadThreeJS = async () => {
-      try {
-        console.log('[ThreeScene] Loading Three.js modules...')
-        const [fiberModule, dreiModule, scrollModule] = await Promise.all([
-          import('@react-three/fiber'),
-          import('@react-three/drei'),
-          import('./hooks/useScrollProgress'),
-        ])
-
-        setCanvas(() => fiberModule.Canvas)
-        setDrei({
-          OrbitControls: dreiModule.OrbitControls,
-          PerspectiveCamera: dreiModule.PerspectiveCamera
-        })
-        setUseScrollProgress(() => scrollModule.useScrollProgress)
-        
-        console.log('[ThreeScene] Three.js modules loaded successfully')
-        setSceneReady(true) // 即座にシーン準備完了にする
-        
-        // デバッグログ
-        setTimeout(() => {
-          console.log('[ThreeScene] Scene should be ready now')
-        }, 100)
-      } catch (error) {
-        console.error('[ThreeScene] Failed to load Three.js modules:', error)
-      }
-    }
-
-    loadThreeJS()
-  }, [])
-
-  // まだロード中の場合
-  if (!Canvas || !drei || !useScrollProgress) {
-    return (
-      <div
-        style={{
-          position: 'absolute',
-          top: '50%',
-          left: '50%',
-          transform: 'translate(-50%, -50%)',
-          color: '#333',
-          fontSize: '18px',
-          textAlign: 'center',
-          background: 'rgba(255, 255, 255, 0.9)',
-          padding: '20px',
-          borderRadius: '10px',
-        }}
-      >
-        <div>⏳ Loading Three.js modules...</div>
-        <div style={{ fontSize: '12px', marginTop: '5px', opacity: 0.7 }}>
-          Downloading React Three Fiber components
-        </div>
-      </div>
-    )
-  }
-
-  return <BasicThreeContent 
-    Canvas={Canvas} 
-    drei={drei} 
-    useScrollProgress={useScrollProgress}
-    sceneReady={sceneReady}
-  />
-}
-
-/**
- * 基本的なThree.jsコンテンツ（画像なし版）
- */
-interface BasicThreeContentProps {
-  Canvas: any
-  drei: any
-  useScrollProgress: any
-  sceneReady: boolean
-}
-
-const BasicThreeContent: React.FC<BasicThreeContentProps> = ({ 
-  Canvas, 
-  drei: { OrbitControls, PerspectiveCamera }, 
-  useScrollProgress,
-  sceneReady
-}) => {
-  const scrollProgress = useScrollProgress()
-
-  useEffect(() => {
-    if (DEBUG_CONFIG.logAnimationStates && scrollProgress) {
-      console.log('[BasicThreeContent] Scroll progress:', scrollProgress)
-    }
-  }, [scrollProgress])
-
-  const BasicScene: React.FC = () => (
-    <>
-      {/* カメラ設定 */}
-      <PerspectiveCamera
-        makeDefault
-        fov={SECTION_CONFIG.camera.fov}
-        near={SECTION_CONFIG.camera.near}
-        far={SECTION_CONFIG.camera.far}
-        position={[
-          SECTION_CONFIG.camera.position.x,
-          SECTION_CONFIG.camera.position.y,
-          SECTION_CONFIG.camera.position.z
-        ]}
-      />
-
-      {/* ライティング */}
-      {/* @ts-expect-error React Three Fiber JSX elements */}
-      <ambientLight intensity={0.6} />
-      {/* @ts-expect-error React Three Fiber JSX elements */}
-      <directionalLight position={[10, 10, 5]} intensity={1} />
-
-      {/* テスト用の基本オブジェクト */}
-      {sceneReady && (
-        <>
-          {/* テスト用の画像プレーン（簡易版） */}
-          {LAYERED_IMAGES.slice(0, 5).map((imageConfig, index) => (
-            <SimpleImagePlane
-              key={imageConfig.id}
-              imageConfig={imageConfig}
-              scrollProgress={scrollProgress}
-              index={index}
-            />
-          ))}
-
-          {/* テスト用の基本オブジェクト */}
-          {/* 中央のテストキューブ */}
-          {/* @ts-expect-error React Three Fiber JSX elements */}
-          <mesh position={[0, 0, 0]}>
-            {/* @ts-expect-error React Three Fiber JSX elements */}
-            <boxGeometry args={[1, 1, 1]} />
-            {/* @ts-expect-error React Three Fiber JSX elements */}
-            <meshStandardMaterial color="hotpink" opacity={0.5} transparent />
-          </mesh>
-
-          {/* スクロール進行度に応じて移動するキューブ */}
-          {scrollProgress && (
-            /* @ts-expect-error React Three Fiber JSX elements */
-            <mesh position={[scrollProgress.overall * 10 - 5, 2, 0]}>
-              {/* @ts-expect-error React Three Fiber JSX elements */}
-              <boxGeometry args={[1, 1, 1]} />
-              {/* @ts-expect-error React Three Fiber JSX elements */}
-              <meshStandardMaterial color="lime" />
-            </mesh>
-          )}
-
-          {/* 位置確認用のグリッド */}
-          {DEBUG_CONFIG.showBoundingBoxes && (
-            <>
-              {/* @ts-expect-error React Three Fiber JSX elements */}
-              <gridHelper args={[20, 20]} position={[0, -3, 0]} />
-              {/* @ts-expect-error React Three Fiber JSX elements */}
-              <axesHelper args={[5]} />
-            </>
-          )}
-        </>
-      )}
-
-      {/* OrbitControls（デバッグ時のみ） */}
-      {DEBUG_CONFIG.showBoundingBoxes && (
-        <OrbitControls 
-          enablePan={true}
-          enableZoom={true}
-          enableRotate={true}
-          maxDistance={50}
-          minDistance={5}
-        />
-      )}
-    </>
-  )
-
-  return (
-    <Canvas
-      style={{
-        width: '100%',
-        height: '100%',
-        background: 'transparent',
-      }}
-      dpr={[1, 2]}
-      frameloop="always"
-      linear={true}
-      flat={true}
-    >
-      <BasicScene />
-    </Canvas>
-  )
-}
-
-/**
- * LayeredGalleryCanvas - メインコンポーネント（段階的復活版）
- */
-export const LayeredGalleryCanvas: React.FC<LayeredGalleryCanvasProps> = ({
-  className = ''
-}) => {
-  const [isClient, setIsClient] = useState(false)
-  const [loadingStage, setLoadingStage] = useState<string>('initializing')
-  const [showThreeJS, setShowThreeJS] = useState(false)
-
-  // クライアントサイドでのみ表示
-  useEffect(() => {
-    setLoadingStage('setting-client')
-    setIsClient(true)
-    console.log('[LayeredGalleryCanvas] Component initialized')
-    
-    // 3秒後にThree.jsを有効化（段階的テスト）
-    setTimeout(() => {
-      setLoadingStage('enabling-threejs')
-      setShowThreeJS(true)
-      console.log('[LayeredGalleryCanvas] Three.js enabled')
-    }, 3000)
-  }, [])
-
-  if (!isClient) {
-    return (
-      <div
-        className={`layered-gallery-canvas ${className}`}
-        style={{
-          width: '100%',
-          height: '100%',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          background: 'rgba(0, 0, 255, 0.1)',
-          border: '2px solid blue',
-        }}
-      >
-        <div
-          style={{
-            color: '#333',
-            fontSize: '18px',
-            textAlign: 'center',
-            background: 'rgba(255, 255, 255, 0.9)',
-            padding: '20px',
-            borderRadius: '10px',
-          }}
-        >
-          <div>🔄 Server Side Rendering</div>
-          <div style={{ fontSize: '12px', marginTop: '5px', opacity: 0.7 }}>
-            Waiting for client hydration...
-          </div>
-        </div>
-      </div>
-    )
-  }
-
-  return (
-    <div 
-      className={`layered-gallery-canvas ${className}`}
-      style={{
-        width: '100%',
-        height: '100%',
-        minWidth: '100vw', // 最小幅を強制
-        minHeight: '100vh', // 最小高さを強制
-        background: showThreeJS ? 'rgba(0, 255, 255, 0.1)' : 'rgba(0, 255, 0, 0.1)',
-        border: showThreeJS ? '2px solid cyan' : '2px solid green',
-        position: 'absolute', // relativeからabsoluteに変更
-        top: 0,
-        left: 0,
-        boxSizing: 'border-box',
-      }}
-    >
-      {/* 段階的表示 */}
-      {!showThreeJS ? (
-        <div
-          style={{
-            position: 'absolute',
-            top: '50%',
-            left: '50%',
-            transform: 'translate(-50%, -50%)',
-            background: 'rgba(255, 255, 255, 0.9)',
-            padding: '20px',
-            borderRadius: '10px',
-            textAlign: 'center',
-            zIndex: 5,
-          }}
-        >
-          <div style={{ fontSize: '24px', marginBottom: '10px' }}>✅ Client Side Active</div>
-          <div style={{ fontSize: '14px', color: '#666' }}>
-            LayeredGalleryCanvas is working
-          </div>
-          <div style={{ fontSize: '12px', marginTop: '10px', opacity: 0.7 }}>
-            Loading Three.js in 3 seconds...
-          </div>
-        </div>
-      ) : null /* オーバーレイメッセージを削除 */}
-
-      {/* Three.jsコンポーネント（段階的有効化） */}
-      {showThreeJS && <ThreeScene />}
-
-      {/* デバッグ情報表示 */}
-      {DEBUG_CONFIG.showScrollRanges && (
-        <div
-          style={{
-            position: 'absolute',
-            bottom: '20px',
-            left: '20px',
-            background: 'rgba(0, 0, 0, 0.8)',
-            color: 'white',
-            padding: '10px',
-            borderRadius: '5px',
-            fontSize: '12px',
-            fontFamily: 'monospace',
-            maxWidth: '200px',
-          }}
-        >
-          <div>Canvas Debug Info:</div>
-          <div>Images: {LAYERED_IMAGES.length}</div>
-          <div>Stage: {loadingStage}</div>
-          <div>Client: {isClient ? 'Ready' : 'Loading'}</div>
-          <div>Three.js: {showThreeJS ? 'Active' : 'Waiting'}</div>
-        </div>
-      )}
-    </div>
-  )
-}
-
-/**
- * 簡易版画像プレーン（複雑なアニメーションなし）
- */
-interface SimpleImagePlaneProps {
-  imageConfig: any
-  scrollProgress: any
-  index: number
-}
-
-const SimpleImagePlane: React.FC<SimpleImagePlaneProps> = ({
-  imageConfig,
-  scrollProgress,
-  index
-}) => {
-  const [texture, setTexture] = useState<any>(null)
-  const [textureError, setTextureError] = useState<boolean>(false)
-  const [loading, setLoading] = useState<boolean>(false)
-  const hasStartedLoading = useRef<boolean>(false) // refで読み込み状態を管理
-
-  // テクスチャの読み込み（一度だけ実行）
-  useEffect(() => {
-    // 既に開始している場合はスキップ
-    if (hasStartedLoading.current) return
-
-    hasStartedLoading.current = true // 即座にフラグを立てる
-    setLoading(true)
-
-    const loadTexture = async () => {
-      try {
-        const THREE = await import('three')
-        const loader = new THREE.TextureLoader()
-        
-        console.log(`[SimpleImagePlane] Loading: ${imageConfig.filename}`)
-        
-        loader.load(
-          imageConfig.path,
-          (loadedTexture) => {
-            console.log(`[SimpleImagePlane] Loaded successfully: ${imageConfig.filename}`)
-            setTexture(loadedTexture)
-            setTextureError(false)
-            setLoading(false)
-          },
-          undefined,
-          (error) => {
-            console.error(`[SimpleImagePlane] Failed to load: ${imageConfig.filename}`, error)
-            setTextureError(true)
-            setLoading(false)
-          }
-        )
-      } catch (error) {
-        console.error(`[SimpleImagePlane] Module load error:`, error)
-        setTextureError(true)
-        setLoading(false)
-      }
-    }
-
-    loadTexture()
-  }, []) // 空の依存配列で一度だけ実行
-
-  // 基本位置の計算
-  const baseX = (index - 2) * 3 // -6, -3, 0, 3, 6
-  const baseY = imageConfig.size === 'L' ? 2 : imageConfig.size === 'M' ? 0 : -2
-  const baseZ = imageConfig.size === 'L' ? 0 : imageConfig.size === 'M' ? -3 : -6
-
-  // スケール計算
-  const scale = imageConfig.size === 'L' ? 2 : imageConfig.size === 'M' ? 1.5 : 1
-
-  if (textureError) {
-    // エラー時は色付きプレーン表示
-    return (
-      /* @ts-expect-error React Three Fiber JSX elements */
-      <mesh position={[baseX, baseY, baseZ]}>
-        {/* @ts-expect-error React Three Fiber JSX elements */}
-        <planeGeometry args={[scale * 2, scale * 2]} />
-        {/* @ts-expect-error React Three Fiber JSX elements */}
-        <meshBasicMaterial 
-          color="red" 
-          opacity={0.7} 
-          transparent 
-          side={2} // DoubleSide
-        />
-      </mesh>
-    )
-  }
-
-  if (!texture || loading) {
-    // ローディング中はグレープレーン表示
-    return (
-      /* @ts-expect-error React Three Fiber JSX elements */
-      <mesh position={[baseX, baseY, baseZ]}>
-        {/* @ts-expect-error React Three Fiber JSX elements */}
-        <planeGeometry args={[scale * 2, scale * 2]} />
-        {/* @ts-expect-error React Three Fiber JSX elements */}
-        <meshBasicMaterial 
-          color="gray" 
-          opacity={0.5} 
-          transparent 
-          side={2} // DoubleSide
-        />
-      </mesh>
-    )
-  }
-
-  // 実際の画像テクスチャ表示
-  return (
-    /* @ts-expect-error React Three Fiber JSX elements */
-    <mesh position={[baseX, baseY, baseZ]}>
-      {/* @ts-expect-error React Three Fiber JSX elements */}
-      <planeGeometry args={[scale * 2, scale * 2]} />
-      {/* @ts-expect-error React Three Fiber JSX elements */}
-      <meshBasicMaterial 
-        map={texture}
-        transparent 
-        opacity={0.8}
-        side={2} // DoubleSide
-      />
-    </mesh>
-  )
-}
-
-export default LayeredGalleryCanvas-e 
-### FILE: ./src/app/components/layered-gallery/ImagePlane.tsx
-
-// src/app/components/layered-gallery/ImagePlane.tsx
-
-'use client'
-
-import React, { useRef, useMemo, useEffect, useState } from 'react'
-import { LayeredImageConfig, ScrollProgress } from './types'
-import { calculateFinalPosition } from './utils/positionCalculator'
-import { DEBUG_CONFIG, getCurrentConfig } from './constants'
-
-export interface ImagePlaneProps {
-	imageConfig: LayeredImageConfig
-	scrollProgress: ScrollProgress | null
-	index: number
-}
-
-/**
- * 個別画像プレーンコンポーネント（クライアントサイドのみ）
- */
-export const ImagePlane: React.FC<ImagePlaneProps> = ({
-	imageConfig,
-	scrollProgress,
-	index
-}) => {
-	const [modules, setModules] = useState<any>(null)
-	const meshRef = useRef<any>(null)
-	const materialRef = useRef<any>(null)
-
-	// Three.js関連モジュールの動的読み込み
 	useEffect(() => {
-		const loadModules = async () => {
-			try {
-				const [fiberModule, threeModule, animationModule] = await Promise.all([
-					import('@react-three/fiber'),
-					import('three'),
-					import('./hooks/useImageAnimation')
-				])
-
-				setModules({
-					useFrame: fiberModule.useFrame,
-					useLoader: fiberModule.useLoader,
-					TextureLoader: threeModule.TextureLoader,
-					THREE: threeModule.default,
-					useImageAnimation: animationModule.useImageAnimation
-				})
-			} catch (error) {
-				console.error('[ImagePlane] Failed to load modules:', error)
-			}
+		const handleResize = () => {
+			setViewport(getViewportInfo())
 		}
 
-		loadModules()
+		window.addEventListener('resize', handleResize, { passive: true })
+		return () => window.removeEventListener('resize', handleResize)
 	}, [])
 
-	// まだロード中の場合
-	if (!modules) {
-		return null // または簡単なプレースホルダー
-	}
-
-	return <ImagePlaneContent
-		imageConfig={imageConfig}
-		scrollProgress={scrollProgress}
-		index={index}
-		modules={modules}
-		meshRef={meshRef}
-		materialRef={materialRef}
-	/>
+	return viewport
 }
 
 /**
- * 実際の画像プレーンコンテンツ
+ * フルギャラリーThree.jsシーン（改良版）
  */
-interface ImagePlaneContentProps {
-	imageConfig: LayeredImageConfig
-	scrollProgress: ScrollProgress | null
-	index: number
-	modules: any
-	meshRef: React.RefObject<any>
-	materialRef: React.RefObject<any>
-}
+const FullGalleryScene: React.FC<{ viewport: ReturnType<typeof useViewportSize> }> = ({ viewport }) => {
+	const [Canvas, setCanvas] = useState<any>(null)
+	const [useScrollProgress, setUseScrollProgress] = useState<any>(null)
+	const [sceneReady, setSceneReady] = useState<boolean>(false)
 
-const ImagePlaneContent: React.FC<ImagePlaneContentProps> = ({
-	imageConfig,
-	scrollProgress,
-	index,
-	modules,
-	meshRef,
-	materialRef
-}) => {
-	const { useFrame, useLoader, TextureLoader, THREE, useImageAnimation } = modules
+	useEffect(() => {
+		const loadThreeJS = async () => {
+			try {
+				console.log('[FullGalleryScene] Loading modules...')
+				const [fiberModule, scrollModule] = await Promise.all([
+					import('@react-three/fiber'),
+					import('./hooks/useScrollProgress'),
+				])
 
-	// 画像アニメーション状態の管理
-	const animationState = useImageAnimation(imageConfig, scrollProgress)
+				setCanvas(() => fiberModule.Canvas)
+				setUseScrollProgress(() => scrollModule.useScrollProgress)
+				setSceneReady(true)
 
-	// 設定の取得
-	const config = getCurrentConfig()
-
-	// テクスチャの読み込み
-	const texture = useLoader(TextureLoader, imageConfig.path)
-
-	// テクスチャ設定の最適化
-	useMemo(() => {
-		if (texture) {
-			texture.minFilter = THREE.LinearFilter
-			texture.magFilter = THREE.LinearFilter
-			texture.wrapS = THREE.ClampToEdgeWrapping
-			texture.wrapT = THREE.ClampToEdgeWrapping
-			texture.generateMipmaps = false
-
-			if (DEBUG_CONFIG.logAnimationStates) {
-				console.log(`[ImagePlane] Texture loaded for ${imageConfig.filename}:`, {
-					size: `${texture.image.width}x${texture.image.height}`,
-					format: texture.format,
-				})
+				console.log('[FullGalleryScene] ✅ All modules loaded, ready to display 35 images')
+			} catch (error) {
+				console.error('[FullGalleryScene] ❌ Failed to load:', error)
 			}
 		}
-	}, [texture, imageConfig.filename, THREE])
 
-	// 基本位置の計算（一度だけ）
-	const basePosition = useMemo(() => {
-		return calculateFinalPosition(imageConfig, imageConfig.id + index)
-	}, [imageConfig, index])
+		loadThreeJS()
+	}, [])
 
-	// プレーンのサイズ計算
-	const planeSize = useMemo(() => {
-		if (!texture) return [2, 2]
-
-		const aspect = texture.image.width / texture.image.height
-		const baseScale = config.responsive.scaleMultiplier
-
-		// サイズに応じた基本スケール
-		let sizeMultiplier = 1
-		switch (imageConfig.size) {
-			case 'L':
-				sizeMultiplier = 1.2
-				break
-			case 'M':
-				sizeMultiplier = 1.0
-				break
-			case 'S':
-				sizeMultiplier = 0.8
-				break
-		}
-
-		const width = 3 * aspect * baseScale * sizeMultiplier
-		const height = 3 * baseScale * sizeMultiplier
-
-		return [width, height]
-	}, [texture, config.responsive.scaleMultiplier, imageConfig.size])
-
-	// フレーム更新でアニメーション適用
-	useFrame(() => {
-		if (!meshRef.current || !materialRef.current || !animationState) return
-
-		const mesh = meshRef.current
-		const material = materialRef.current
-
-		// 位置の更新
-		mesh.position.set(
-			animationState.position.x,
-			animationState.position.y,
-			animationState.position.z
-		)
-
-		// スケールの更新
-		mesh.scale.setScalar(animationState.scale)
-
-		// 透明度の更新
-		material.opacity = animationState.opacity
-
-		// 回転の更新
-		if (imageConfig.rotation) {
-			mesh.rotation.set(
-				animationState.rotation.x,
-				animationState.rotation.y,
-				animationState.rotation.z
-			)
-		}
-
-		// Z軸ソート用の更新
-		mesh.renderOrder = -animationState.position.z
-	})
-
-	// デバッグ情報の表示
-	useEffect(() => {
-		if (DEBUG_CONFIG.logAnimationStates && animationState?.isAnimating) {
-			console.log(`[ImagePlane] Animation state for ${imageConfig.filename}:`, {
-				position: animationState.position,
-				scale: animationState.scale,
-				opacity: animationState.opacity,
-				isVisible: animationState.isVisible,
-			})
-		}
-	}, [animationState, imageConfig.filename])
-
-	// エラーハンドリング
-	const handleTextureError = (error: Error) => {
-		console.error(`[ImagePlane] Failed to load texture for ${imageConfig.filename}:`, error)
-	}
-
-	// テクスチャがロードされていない場合のフォールバック
-	if (!texture) {
+	if (!Canvas || !useScrollProgress) {
 		return (
-			/* @ts-expect-error React Three Fiber JSX elements */
-			<mesh
-				ref={meshRef}
-				position={[basePosition.x, basePosition.y, basePosition.z]}
-			>
-				{/* @ts-expect-error React Three Fiber JSX elements */}
-				<planeGeometry args={planeSize} />
-				{/* @ts-expect-error React Three Fiber JSX elements */}
-				<meshBasicMaterial
-					color={
-						imageConfig.size === 'L' ? '#ff6b6b' :
-							imageConfig.size === 'M' ? '#4ecdc4' : '#45b7d1'
-					}
-					opacity={0.3}
-					transparent
-				/>
-			</mesh>
+			<div style={{
+				position: 'absolute',
+				top: '50%',
+				left: '50%',
+				transform: 'translate(-50%, -50%)',
+				color: 'white',
+				background: 'rgba(0, 0, 0, 0.8)',
+				padding: '20px',
+				borderRadius: '10px',
+			}}>
+				⏳ Loading Full Gallery...
+			</div>
 		)
 	}
 
 	return (
-		/* @ts-expect-error React Three Fiber JSX elements */
-		<group>
-			{/* メイン画像プレーン */}
-			{/* @ts-expect-error React Three Fiber JSX elements */}
-			<mesh
-				ref={meshRef}
-				position={[basePosition.x, basePosition.y, basePosition.z]}
-			>
-				{/* @ts-expect-error React Three Fiber JSX elements */}
-				<planeGeometry args={planeSize} />
-				{/* @ts-expect-error React Three Fiber JSX elements */}
+		<GalleryContent
+			Canvas={Canvas}
+			useScrollProgress={useScrollProgress}
+			sceneReady={sceneReady}
+			viewport={viewport}
+		/>
+	)
+}
+
+/**
+ * ギャラリーコンテンツ（レスポンシブ対応版）
+ */
+interface GalleryContentProps {
+	Canvas: any
+	useScrollProgress: any
+	sceneReady: boolean
+	viewport: ReturnType<typeof useViewportSize>
+}
+
+const GalleryContent: React.FC<GalleryContentProps> = ({
+	Canvas,
+	useScrollProgress,
+	sceneReady,
+	viewport
+}) => {
+	const scrollProgress = useScrollProgress()
+	const gridConfig = useMemo(() => getResponsiveGridConfig(viewport), [viewport])
+
+	// 画像配置の計算（レスポンシブ対応・最適化版）
+	const imagePositions = useMemo(() => {
+		// スクロール進行度を丸めて無駄な再計算を防ぐ
+		const roundedProgress = scrollProgress ? Math.round(scrollProgress.overall * 50) / 50 : 0
+
+		// 新しい相対位置計算システムを使用
+		const basePositions = calculateAllPositions(
+			LAYERED_IMAGES,
+			null, // スクロール効果は後で適用
+			{
+				useRelativePositioning: true,
+				constrainToBounds: true,
+				resolveCollisions: false // パフォーマンス優先
+			}
+		)
+
+		return LAYERED_IMAGES.map((imageConfig, index) => {
+			const basePosition = basePositions[index]
+
+			// スクロールオフセット（ビューポート対応）
+			const scrollMultiplier = viewport.isMobile ? 30 : viewport.isTablet ? 35 : 40
+			const scrollOffsetY = roundedProgress * scrollMultiplier
+
+			// 視差効果の適用
+			const parallaxMultiplier = 1 - (imageConfig.parallax?.speed || 0.5)
+			const parallaxOffsetY = scrollOffsetY * parallaxMultiplier
+
+			return {
+				id: imageConfig.id,
+				position: [
+					basePosition.x,
+					basePosition.y + parallaxOffsetY,
+					basePosition.z
+				] as [number, number, number],
+				config: imageConfig,
+				index,
+				basePosition
+			}
+		})
+	}, [scrollProgress?.overall, viewport]) // viewport も依存関係に追加
+
+	// スクロール進行度の変化をログ（制限付き）
+	const lastLoggedProgress = useRef<number>(-1)
+	useEffect(() => {
+		if (scrollProgress && Math.abs(scrollProgress.overall - lastLoggedProgress.current) > 0.1) {
+			console.log('[GalleryContent] Scroll progress changed:', scrollProgress.overall.toFixed(2))
+			lastLoggedProgress.current = scrollProgress.overall
+		}
+	}, [scrollProgress?.overall])
+
+	// カメラ設定（レスポンシブ対応）
+	const cameraConfig = useMemo(() => {
+		const fov = viewport.isMobile ? 70 : viewport.isTablet ? 65 : 60
+		const position: [number, number, number] = [0, 0, viewport.isMobile ? 12 : viewport.isTablet ? 14 : 15]
+
+		return { fov, position }
+	}, [viewport])
+
+	return (
+		<Canvas
+			style={{
+				width: '100%',
+				height: '100%',
+				background: 'transparent',
+				// イベント制御：Canvas上でのユーザーインタラクションを無効化
+				pointerEvents: 'none',
+				touchAction: 'pan-y', // 縦スクロールのみ許可
+			}}
+			camera={{ position: cameraConfig.position, fov: cameraConfig.fov }}
+			// Three.js の内部コントロールも無効化
+			gl={{
+				antialias: viewport.isDesktop, // モバイルではアンチエイリアスオフ
+				alpha: true,
+				powerPreference: viewport.isMobile ? 'low-power' : 'high-performance'
+			}}
+		>
+			{/* 35枚の画像（レスポンシブ配置） */}
+			{sceneReady && imagePositions.map((item) => (
+				<ImagePlane
+					key={`gallery-image-${item.id}`}
+					imageConfig={item.config}
+					position={item.position}
+					index={item.index}
+					scrollProgress={scrollProgress}
+					viewport={viewport}
+				/>
+			))}
+
+			{/* スクロール進行度表示キューブ（レスポンシブサイズ） */}
+			{scrollProgress && (
+				<mesh position={[0, 8, 0]}>
+					<boxGeometry args={[
+						scrollProgress.overall * (viewport.isMobile ? 6 : 10),
+						0.3,
+						0.3
+					]} />
+					<meshBasicMaterial color="yellow" />
+				</mesh>
+			)}
+		</Canvas>
+	)
+}
+
+/**
+ * 個別画像プレーン（レスポンシブ対応版）
+ */
+interface ImagePlaneProps {
+	imageConfig: any
+	position: [number, number, number]
+	index: number
+	scrollProgress: any
+	viewport: ReturnType<typeof useViewportSize>
+}
+
+const ImagePlane: React.FC<ImagePlaneProps> = ({
+	imageConfig,
+	position,
+	index,
+	scrollProgress,
+	viewport
+}) => {
+	const [texture, setTexture] = useState<any>(null)
+	const [loading, setLoading] = useState<boolean>(true)
+	const [error, setError] = useState<boolean>(false)
+
+	const loadingStarted = useRef<boolean>(false)
+	const mounted = useRef<boolean>(true)
+
+	useEffect(() => {
+		return () => {
+			mounted.current = false
+		}
+	}, [])
+
+	// 画像サイズに応じたスケール（レスポンシブ対応）
+	const scale = useMemo(() => {
+		// ベーススケール（ビューポート対応）
+		let baseScale = imageConfig.size === 'L' ? 4.0 :
+			imageConfig.size === 'M' ? 3 : 2
+
+		// ビューポートに応じた調整
+		if (viewport.isMobile) {
+			baseScale *= 0.7
+		} else if (viewport.isTablet) {
+			baseScale *= 0.85
+		}
+
+		// スクロールに応じた微細な変化
+		let scrollScale = 1
+		if (scrollProgress) {
+			const phase = (index * 0.1 + scrollProgress.overall) * Math.PI * 2
+			scrollScale = 1 + Math.sin(phase) * (viewport.isMobile ? 0.03 : 0.05)
+		}
+
+		return baseScale * scrollScale
+	}, [imageConfig.size, scrollProgress, index, viewport])
+
+	// テクスチャ読み込み（段階的読み込み・エラーハンドリング強化）
+	useEffect(() => {
+		if (loadingStarted.current) return
+		loadingStarted.current = true
+
+		const loadTexture = async () => {
+			try {
+				const THREE = await import('three')
+				const loader = new THREE.TextureLoader()
+				loader.crossOrigin = 'anonymous'
+
+				// インデックスに応じて段階的に読み込み（パフォーマンス向上）
+				const delay = viewport.isMobile ? index * 150 : index * 100
+				await new Promise(resolve => setTimeout(resolve, delay))
+
+				if (!mounted.current) return
+
+				loader.load(
+					imageConfig.path,
+					(loadedTexture) => {
+						if (mounted.current) {
+							// テクスチャ最適化（ビューポート対応）
+							loadedTexture.minFilter = THREE.LinearFilter
+							loadedTexture.magFilter = THREE.LinearFilter
+							loadedTexture.wrapS = THREE.ClampToEdgeWrapping
+							loadedTexture.wrapT = THREE.ClampToEdgeWrapping
+							loadedTexture.generateMipmaps = !viewport.isMobile // モバイルではミップマップ無効
+
+							setTexture(loadedTexture)
+							setLoading(false)
+							console.log(`[ImagePlane] ✅ Loaded ${index + 1}/35: ${imageConfig.filename}`)
+						}
+					},
+					undefined,
+					(err) => {
+						if (mounted.current) {
+							console.error(`[ImagePlane] ❌ Failed ${index + 1}/35: ${imageConfig.filename}`, err)
+							setError(true)
+							setLoading(false)
+						}
+					}
+				)
+			} catch (err) {
+				if (mounted.current) {
+					console.error(`[ImagePlane] Module error:`, err)
+					setError(true)
+					setLoading(false)
+				}
+			}
+		}
+
+		loadTexture()
+	}, [imageConfig.path, imageConfig.filename, index, viewport.isMobile])
+
+	// エラー時の表示
+	if (error) {
+		return (
+			<mesh position={position} scale={[scale, scale, scale]}>
+				<planeGeometry args={[2, 3]} />
 				<meshBasicMaterial
-					ref={materialRef}
-					map={texture}
-					transparent
+					color="#ff4757"
 					opacity={0.7}
-					side={THREE.DoubleSide}
-					onError={handleTextureError}
+					transparent
+					side={2}
 				/>
 			</mesh>
+		)
+	}
 
-			{/* デバッグ用境界ボックス */}
-			{DEBUG_CONFIG.showBoundingBoxes && (
-				/* @ts-expect-error React Three Fiber JSX elements */
-				<mesh position={[basePosition.x, basePosition.y, basePosition.z + 0.1]}>
-					{/* @ts-expect-error React Three Fiber JSX elements */}
-					<planeGeometry args={[planeSize[0] * 1.1, planeSize[1] * 1.1]} />
-					{/* @ts-expect-error React Three Fiber JSX elements */}
-					<meshBasicMaterial
-						color="yellow"
-						wireframe
-						opacity={0.5}
-						transparent
-					/>
-				</mesh>
-			)}
+	// ローディング中の表示（ビューポート対応色）
+	if (loading || !texture) {
+		const colors = {
+			L: viewport.isMobile ? '#5352ed' : '#3742fa', // モバイルで少し明るく
+			M: viewport.isMobile ? '#26de81' : '#2ed573', // 緑
+			S: viewport.isMobile ? '#fd9644' : '#ffa502'  // オレンジ
+		}
 
-			{/* デバッグ用ラベル */}
-			{DEBUG_CONFIG.showPositionLabels && (
-				/* @ts-expect-error React Three Fiber JSX elements */
-				<mesh position={[basePosition.x, basePosition.y + planeSize[1] * 0.6, basePosition.z + 0.1]}>
-					{/* @ts-expect-error React Three Fiber JSX elements */}
-					<planeGeometry args={[1.5, 0.3]} />
-					{/* @ts-expect-error React Three Fiber JSX elements */}
-					<meshBasicMaterial color="black" opacity={0.8} transparent />
-				</mesh>
-			)}
+		return (
+			<mesh position={position} scale={[scale, scale, scale]}>
+				<planeGeometry args={[2, 3]} />
+				<meshBasicMaterial
+					color={colors[imageConfig.size]}
+					opacity={0.7}
+					transparent
+					side={2}
+				/>
+			</mesh>
+		)
+	}
 
-			{/* スクロール範囲の可視化 */}
-			{DEBUG_CONFIG.showScrollRanges && animationState?.isVisible && (
-				/* @ts-expect-error React Three Fiber JSX elements */
-				<mesh position={[basePosition.x + planeSize[0] * 0.6, basePosition.y, basePosition.z + 0.1]}>
-					{/* @ts-expect-error React Three Fiber JSX elements */}
-					<planeGeometry args={[0.2, planeSize[1]]} />
-					{/* @ts-expect-error React Three Fiber JSX elements */}
-					<meshBasicMaterial
-						color={animationState.isAnimating ? "green" : "orange"}
-						opacity={0.6}
-						transparent
-					/>
-				</mesh>
-			)}
-		</group>
+	// 実際の画像表示（レスポンシブ透明度対応）
+	return (
+		<mesh position={position} scale={[scale, scale, scale]}>
+			<planeGeometry args={[2, 3]} />
+			<meshBasicMaterial
+				map={texture}
+				transparent
+				opacity={0.7}
+				side={2}
+			/>
+		</mesh>
 	)
-}-e 
+}
+
+/**
+ * メインコンポーネント（改良版）
+ */
+export const LayeredGalleryCanvas: React.FC<LayeredGalleryCanvasProps> = ({
+	className = ''
+}) => {
+	const [isClient, setIsClient] = useState(false)
+	const [showGallery, setShowGallery] = useState(false)
+	const [loadedCount, setLoadedCount] = useState(0)
+	const viewport = useViewportSize()
+
+	useEffect(() => {
+		setIsClient(true)
+
+		setTimeout(() => {
+			setShowGallery(true)
+			console.log('[LayeredGalleryCanvas] 🎨 Starting to load 35 images...')
+		}, 1000)
+	}, [])
+
+	// 読み込み進行状況の監視
+	useEffect(() => {
+		if (!showGallery) return
+
+		const interval = setInterval(() => {
+			const images = document.querySelectorAll('canvas')
+			if (images.length > 0) {
+				setLoadedCount(prev => Math.min(prev + 1, LAYERED_IMAGES.length))
+			}
+		}, 500)
+
+		return () => clearInterval(interval)
+	}, [showGallery])
+
+	// レスポンシブ情報の表示
+	const responsiveInfo = useMemo(() => {
+		const gridConfig = getResponsiveGridConfig(viewport)
+		return {
+			device: viewport.isMobile ? 'Mobile' : viewport.isTablet ? 'Tablet' : 'Desktop',
+			columns: gridConfig.columns,
+			maxWidth: `${gridConfig.maxWidth * 100}%`,
+			spacing: `${gridConfig.spacing.x} × ${gridConfig.spacing.y}`,
+		}
+	}, [viewport])
+
+	if (!isClient) {
+		return (
+			<div style={{
+				width: '100%',
+				height: '100%',
+				background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+				display: 'flex',
+				alignItems: 'center',
+				justifyContent: 'center',
+				color: 'white',
+				fontSize: '18px'
+			}}>
+				Initializing Gallery...
+			</div>
+		)
+	}
+
+	return (
+		<>
+			{showGallery && <FullGalleryScene viewport={viewport} />}
+		</>
+	)
+}
+
+export default LayeredGalleryCanvas-e 
 ### FILE: ./src/app/components/layout/constants.ts
 
 // src/app/components/floating-images-fix/cyber-scroll-messages/constants.ts
@@ -10231,7 +10187,10 @@ import LayeredGallerySection from './components/layered-gallery/LayeredGallerySe
 export default function Home() {
 	return (
 		<main className="relative flex flex-col items-center w-full">
+
 			<LayeredGallerySection />
+			<HeroSection />
+
 		</main>
 	);
 }

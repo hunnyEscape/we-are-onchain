@@ -1,4 +1,5 @@
 // src/app/components/layered-gallery/LayeredGallerySection.tsx
+
 'use client'
 import React, { useRef, useEffect, useState, useMemo } from 'react'
 import { SECTION_CONFIG, getCurrentConfig, DEBUG_CONFIG } from './constants'

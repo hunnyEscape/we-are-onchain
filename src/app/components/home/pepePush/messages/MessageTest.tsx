@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { ScrollMessages } from './';
+import { ScrollMessages } from '.';
 
 /**
  * メッセージ表示機能のテスト用コンポーネント

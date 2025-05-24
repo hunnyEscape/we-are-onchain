@@ -1,6 +1,7 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+@import './styles/cyber-components.css';
 
 :root {
 	--foreground-rgb: 255, 255, 255;
@@ -8,9 +9,11 @@
 	--neon-green: 0, 255, 127;
 	--neon-orange: 255, 109, 0;
 }
+
 html {
-  scroll-behavior: smooth;
+	scroll-behavior: smooth;
 }
+
 @keyframes flicker {
 
 	0%,
@@ -228,55 +231,101 @@ body {
 
 /* ペペスクロールセクションのための補助スタイル */
 .pepe-glow {
-  filter: drop-shadow(0 0 15px rgba(0, 255, 127, 0.5));
+	filter: drop-shadow(0 0 15px rgba(0, 255, 127, 0.5));
 }
 
 .cyber-text {
-  text-shadow: 0 0 5px rgba(0, 255, 127, 0.7), 0 0 10px rgba(0, 255, 127, 0.5);
+	text-shadow: 0 0 5px rgba(0, 255, 127, 0.7), 0 0 10px rgba(0, 255, 127, 0.5);
 }
 
 .bg-cyber-dark {
-  background-color: rgba(17, 17, 17, 0.8);
-  backdrop-filter: blur(5px);
+	background-color: rgba(17, 17, 17, 0.8);
+	backdrop-filter: blur(5px);
 }
 
 /* スクロールバーのカスタマイズ */
 body::-webkit-scrollbar {
-  width: 8px;
+	width: 8px;
 }
 
 body::-webkit-scrollbar-track {
-  background: #111;
+	background: #111;
 }
 
 body::-webkit-scrollbar-thumb {
-  background: rgba(0, 255, 127, 0.5);
-  border-radius: 4px;
+	background: rgba(0, 255, 127, 0.5);
+	border-radius: 4px;
 }
 
 body::-webkit-scrollbar-thumb:hover {
-  background: rgba(0, 255, 127, 0.7);
+	background: rgba(0, 255, 127, 0.7);
 }
 
 /* スマートフォン向け最適化 */
 @media (max-width: 768px) {
-  .mobile-optimize-pepe {
-    transform: scale(0.8);
-  }
+	.mobile-optimize-pepe {
+		transform: scale(0.8);
+	}
 }
 
 /* 斜めトランジション用のカスタムスタイル */
 .diagonal-clip {
-  clip-path: polygon(100% 0, 100% 100%, 0 100%, 45% 0);
+	clip-path: polygon(100% 0, 100% 100%, 0 100%, 45% 0);
 }
 
 @media (max-width: 768px) {
-  .diagonal-clip {
-    clip-path: polygon(100% 0, 100% 100%, 0 100%, 35% 0);
-  }
+	.diagonal-clip {
+		clip-path: polygon(100% 0, 100% 100%, 0 100%, 35% 0);
+	}
 }
 
 /* サイバーパンクっぽいテキストグロー */
 .cyber-text-glow {
-  text-shadow: 0 0 5px #00ff00, 0 0 10px #00ff00;
+	text-shadow: 0 0 5px #00ff00, 0 0 10px #00ff00;
+}
+
+/* Custom scrollbar for dashboard */
+.dashboard-scrollbar {
+	scrollbar-width: thin;
+	scrollbar-color: #00FF7F #111111;
+}
+
+.dashboard-scrollbar::-webkit-scrollbar {
+	width: 8px;
+}
+
+.dashboard-scrollbar::-webkit-scrollbar-track {
+	background: #111111;
+	border-radius: 4px;
+}
+
+.dashboard-scrollbar::-webkit-scrollbar-thumb {
+	background: linear-gradient(to bottom, #00FF7F, #FF6D00);
+	border-radius: 4px;
+}
+
+.dashboard-scrollbar::-webkit-scrollbar-thumb:hover {
+	background: linear-gradient(to bottom, #FF6D00, #00FF7F);
+}
+
+/* Smooth transitions for all interactive elements */
+button,
+a,
+[role="button"] {
+	transition: all 0.2s ease;
+}
+
+/* Focus styles for accessibility */
+button:focus-visible,
+a:focus-visible {
+	outline: 2px solid #00FF7F;
+	outline-offset: 2px;
+}
+
+/* Disable text selection on interactive elements */
+.no-select {
+	-webkit-user-select: none;
+	-moz-user-select: none;
+	-ms-user-select: none;
+	user-select: none;
 }

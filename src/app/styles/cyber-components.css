@@ -1,0 +1,202 @@
+/* styles/cyber-components.css */
+
+/* サイバーパンク共通スタイル */
+:root {
+  --neon-green: #00FF7F;
+  --neon-orange: #FF6D00;
+  --dark-100: #111111;
+  --dark-200: #222222;
+  --dark-300: #333333;
+  --dark-400: #444444;
+  --dark-500: #555555;
+}
+
+/* 共通ベース */
+.cyber-base {
+  background: linear-gradient(to top, var(--dark-100), black);
+  border: 1px solid var(--dark-300);
+  position: relative;
+  overflow: hidden;
+}
+
+/* グリッドパターン */
+.cyber-grid {
+  position: absolute;
+  inset: 0;
+  opacity: 0.05;
+  background-image: 
+    linear-gradient(rgba(0, 255, 127, 0.1) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(0, 255, 127, 0.1) 1px, transparent 1px);
+  background-size: 50px 50px;
+  pointer-events: none;
+}
+
+/* スキャンライン */
+.cyber-scanline {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 1px;
+  background: linear-gradient(to right, transparent, var(--neon-green), transparent);
+  animation: scanline 8s linear infinite;
+  opacity: 0.5;
+}
+
+@keyframes scanline {
+  0% { transform: translateY(-100%); }
+  100% { transform: translateY(100vh); }
+}
+
+/* ネオングロー効果 */
+.cyber-glow {
+  box-shadow: 
+    0 0 10px rgba(0, 255, 127, 0.2),
+    inset 0 0 10px rgba(0, 255, 127, 0.1);
+}
+
+.cyber-glow-hover:hover {
+  box-shadow: 
+    0 0 20px rgba(0, 255, 127, 0.4),
+    inset 0 0 20px rgba(0, 255, 127, 0.2);
+  transform: scale(1.02);
+}
+
+/* グリッチエフェクト */
+@keyframes cyber-glitch {
+  0%, 100% { transform: translate(0); }
+  20% { transform: translate(-2px, 2px); }
+  40% { transform: translate(-2px, -2px); }
+  60% { transform: translate(2px, 2px); }
+  80% { transform: translate(2px, -2px); }
+}
+
+.cyber-glitch {
+  animation: cyber-glitch 0.2s ease-in-out infinite;
+}
+
+.cyber-glitch-hover:hover {
+  animation: cyber-glitch 0.1s ease-in-out infinite;
+}
+
+/* ボタンスタイル */
+.cyber-button {
+  @apply relative px-6 py-3 font-semibold rounded-sm transition-all duration-200;
+  background: linear-gradient(to right, var(--neon-green), var(--neon-orange));
+  color: black;
+  border: none;
+  overflow: hidden;
+}
+
+.cyber-button:hover {
+  box-shadow: 0 0 20px rgba(0, 255, 127, 0.25);
+}
+
+.cyber-button:before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(to right, var(--neon-orange), var(--neon-green));
+  transform: scaleX(0);
+  transition: transform 0.2s ease;
+  transform-origin: left;
+}
+
+.cyber-button:hover:before {
+  transform: scaleX(1);
+}
+
+.cyber-button span {
+  position: relative;
+  z-index: 10;
+}
+
+/* カードスタイル */
+.cyber-card {
+  @apply cyber-base cyber-glow-hover;
+  padding: 1.5rem;
+  transition: all 0.3s ease;
+  cursor: pointer;
+  border-radius: 0.125rem;
+}
+
+.cyber-card:hover {
+  border-color: var(--neon-green);
+}
+
+.cyber-card-header {
+  @apply flex items-center justify-between mb-4;
+}
+
+.cyber-card-title {
+  @apply text-white font-heading font-semibold text-lg;
+  text-shadow: 0 0 10px rgba(0, 255, 127, 0.3);
+}
+
+.cyber-card-description {
+  @apply text-gray-400 text-sm mb-4;
+}
+
+.cyber-card-stats {
+  @apply text-xs text-gray-500;
+}
+
+.cyber-card-badge {
+  @apply inline-block px-2 py-1 text-xs rounded-sm;
+  background: rgba(0, 255, 127, 0.1);
+  color: var(--neon-green);
+  border: 1px solid rgba(0, 255, 127, 0.3);
+}
+
+/* テキストスタイル */
+.cyber-text-primary {
+  color: var(--neon-green);
+  text-shadow: 0 0 10px rgba(0, 255, 127, 0.3);
+}
+
+.cyber-text-secondary {
+  color: var(--neon-orange);
+  text-shadow: 0 0 10px rgba(255, 109, 0, 0.3);
+}
+
+.cyber-text-glitch {
+  @apply cyber-glitch-hover;
+}
+
+/* スライドパネル */
+.slide-panel-enter {
+  transform: translateX(100%);
+  opacity: 0;
+}
+
+.slide-panel-enter-active {
+  transform: translateX(0);
+  opacity: 1;
+  transition: all 300ms ease-out;
+}
+
+.slide-panel-exit {
+  transform: translateX(0);
+  opacity: 1;
+}
+
+.slide-panel-exit-active {
+  transform: translateX(100%);
+  opacity: 0;
+  transition: all 250ms ease-in;
+}
+
+/* レスポンシブ調整 */
+@media (max-width: 768px) {
+  .cyber-card {
+    padding: 1rem;
+  }
+  
+  .cyber-card-title {
+    font-size: 1rem;
+  }
+  
+  .cyber-grid {
+    background-size: 25px 25px;
+  }
+}

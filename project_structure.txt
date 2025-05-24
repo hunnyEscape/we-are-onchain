@@ -24,18 +24,6 @@
 ├── src
 │   └── app
 │       ├── components
-│       │   ├── floating-images-fix
-│       │   │   ├── FloatingImageFix.tsx
-│       │   │   ├── FloatingImagesFixCanvas.tsx
-│       │   │   ├── FloatingImagesFixSection.tsx
-│       │   │   ├── constants.ts
-│       │   │   ├── cyber-scroll-messages
-│       │   │   │   ├── CyberScrollMessages.tsx
-│       │   │   │   ├── MessageDisplay.tsx
-│       │   │   │   ├── constants.ts
-│       │   │   │   ├── index.tsx
-│       │   │   │   └── styles.module.css
-│       │   │   └── useResponsiveImages.ts
 │       │   ├── glowing-3d-text
 │       │   │   ├── GlowingText.module.css
 │       │   │   ├── GlowingTextScene.tsx
@@ -50,88 +38,45 @@
 │       │   │   ├── HeroSection.module.css
 │       │   │   ├── HeroSection.tsx
 │       │   │   └── HeroTitle.tsx
-│       │   ├── layered-gallery
-│       │   │   ├── LayeredGalleryCanvas.tsx
-│       │   │   ├── LayeredGallerySection.tsx
-│       │   │   ├── constants.ts
-│       │   │   ├── hooks
-│       │   │   │   ├── useImageAnimation.ts
-│       │   │   │   └── useScrollProgress.ts
-│       │   │   ├── types
-│       │   │   │   └── index.ts
-│       │   │   └── utils
-│       │   │       ├── positionCalculator.ts
-│       │   │       └── zoomCalculator.ts
 │       │   ├── layout
 │       │   │   ├── CyberInterface.tsx
 │       │   │   ├── PulsatingComponent.tsx
 │       │   │   ├── ScanlineEffect.tsx
 │       │   │   ├── constants.ts
 │       │   │   └── styles.module.css
-│       │   ├── pepe-gallery
-│       │   │   ├── GalleryTypography.tsx
-│       │   │   ├── ImageItem.tsx
-│       │   │   ├── ScrollableImages.tsx
-│       │   │   ├── styles
-│       │   │   │   └── GalleryEffects.module.css
-│       │   │   └── utils
-│       │   │       ├── constants.ts
-│       │   │       ├── imageLoader.ts
-│       │   │       └── scrollAnimation.ts
-│       │   ├── pepe3d
-│       │   │   ├── PepeModel3D.tsx
-│       │   │   ├── PepeStyles.module.css
-│       │   │   ├── PepeTop.tsx
-│       │   │   ├── ScrollMessage.tsx
-│       │   │   ├── config
-│       │   │   │   ├── animationConfig.ts
-│       │   │   │   └── messageControlPoints.ts
-│       │   │   ├── hooks
-│       │   │   │   └── useMessageVisibility.ts
-│       │   │   ├── types
-│       │   │   │   └── messageTypes.ts
-│       │   │   └── types.d.ts
 │       │   ├── pepePush
 │       │   │   ├── PepeModel3D.tsx
 │       │   │   ├── PepePush.tsx
-│       │   │   ├── ScrollController.tsx
 │       │   │   ├── StickyCanvas.tsx
 │       │   │   ├── config
 │       │   │   │   ├── animations.ts
 │       │   │   │   └── controlPoints.ts
 │       │   │   ├── hooks
 │       │   │   │   ├── useModelPosition.ts
+│       │   │   │   ├── useScrollMessages.ts
 │       │   │   │   └── useScrollProgress.ts
+│       │   │   ├── messages
+│       │   │   │   ├── MessageTest.tsx
+│       │   │   │   ├── MessageText.tsx
+│       │   │   │   ├── ScrollMessages.tsx
+│       │   │   │   ├── constants.ts
+│       │   │   │   ├── effects.module.css
+│       │   │   │   ├── index.ts
+│       │   │   │   └── types.ts
 │       │   │   └── types
 │       │   │       └── index.ts
-│       │   ├── sphere
-│       │   │   ├── MessageOverlay.tsx
-│       │   │   ├── SmoothRotation.tsx
-│       │   │   ├── Sphere.module.css
-│       │   │   ├── Sphere.tsx
-│       │   │   └── SphereTop.tsx
 │       │   └── ui
 │       │       ├── Footer.tsx
 │       │       ├── GlitchText.tsx
 │       │       ├── Header.tsx
 │       │       └── ScanlineEffect.module.css
-│       ├── config
-│       │   └── visibilityConfig.ts
 │       ├── favicon.ico
 │       ├── globals.css
-│       ├── hooks
-│       │   ├── useCanvasControl.ts
-│       │   ├── useIntersectionObserver.ts
-│       │   └── useVisibilityControl.ts
 │       ├── layout.tsx
-│       ├── page.tsx
-│       ├── types
-│       │   └── visibility.ts
-│       └── utils
-│           └── visibilityManager.ts
+│       └── page.tsx
 ├── tailwind.config.js
 ├── tsconfig.json
 └── types
     └── react-three-fiber.d.ts
 
-33 directories, 101 files
+16 directories, 63 files

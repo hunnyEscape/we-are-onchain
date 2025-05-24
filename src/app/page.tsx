@@ -12,6 +12,9 @@ import LayeredGallerySection from './components/layered-gallery/LayeredGallerySe
 export default function Home() {
 	return (
 		<main className="relative flex flex-col items-center w-full">
+			<Header/>
+			<CyberInterface />
+			<HeroSection />
 			<GlowingTextSection />
 			<PepePush />
 			<Footer />

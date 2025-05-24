@@ -53,21 +53,21 @@ export const getResponsiveControlPoints = (): ControlPoint[] => {
 		},
 		{
 			scrollProgress: 0.25,
-			position: [0, 0, 0],
-			rotation: [0, 0, 0],
+			position: [-3, -0.5, 0],
+			rotation: [0, Math.PI / 8, 0],
 			scale: [1.2, 1.2, 1.2]
 		},
 		{
 			scrollProgress: 0.5,
-			position: [2, 1, -1],
-			rotation: [0, Math.PI / 3, 0],
-			scale: [1, 1, 1]
+			position: [-3, 3, -1],
+			rotation: [0, Math.PI / 3, Math.PI / 3],
+			scale: [1.1, 1.1, 1.1]
 		},
 		{
 			scrollProgress: 0.75,
-			position: [0, -1, 2],
-			rotation: [0, Math.PI, 0],
-			scale: [0.8, 0.8, 0.8]
+			position: [1.5, 0, 0.8],
+			rotation: [0, Math.PI, Math.PI / 10],
+			scale: [1.1, 1.1, 1.1]
 		},
 		{
 			scrollProgress: 1,

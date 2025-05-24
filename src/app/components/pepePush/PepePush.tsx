@@ -16,7 +16,7 @@ export default function PepePush({}: ScrollControllerProps) {
 	const { scrollState, sectionRef } = useScrollProgress();
 	const modelTransform = useModelPosition(scrollState.scrollProgress);
 	return (
-		<div ref={sectionRef} className={`relative w-full h-[400vh]`}>
+		<div ref={sectionRef} className={`relative w-full h-[400vh] bg-black`}>
 			<StickyCanvas>
 				<Suspense fallback={null}>
 					<PepeModel3D transform={modelTransform} />

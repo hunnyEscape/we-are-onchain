@@ -1,31 +1,15 @@
 // src/app/dashboard/components/sections/ShopSection.tsx
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import CyberCard from '../../../components/common/CyberCard';
 import CyberButton from '../../../components/common/CyberButton';
 import ProteinModel from '../../../components/home/glowing-3d-text/ProteinModel';
 import { useCart } from '../../context/DashboardContext';
-import { ShoppingCart, Star, Shield, Zap, Check, AlertTriangle, Clock } from 'lucide-react';
-
-interface Product {
-	id: string;
-	name: string;
-	description: string;
-	price: {
-		usd: number;
-	};
-	inStock: number;
-	rating: number;
-	features: string[];
-	nutritionFacts: {
-		protein: string;
-		fat: string;
-		carbs: string;
-		minerals: string;
-		allergen: string;
-	};
-}
+import { ShoppingCart, Star, Shield, Zap, Check, AlertTriangle, Clock, Loader2 } from 'lucide-react';
+import { ProductDetails } from '../../../../../types/product';
+import { getProductDetails, subscribeToProduct } from '@/lib/firestore/products';
+import { checkStockAvailability, reserveStock, generateSessionId } from '@/lib/firestore/inventory';
 
 const ShopSection: React.FC = () => {
 	const [quantity, setQuantity] = useState(1);
@@ -33,105 +17,231 @@ const ShopSection: React.FC = () => {
 	const [showSuccessMessage, setShowSuccessMessage] = useState(false);
 	const [showStockWarning, setShowStockWarning] = useState(false);
 	const [stockWarningMessage, setStockWarningMessage] = useState('');
+	const [loading, setLoading] = useState(true);
+	const [product, setProduct] = useState<ProductDetails | null>(null);
+	const [sessionId] = useState(() => generateSessionId());
+	const [isAddingToCart, setIsAddingToCart] = useState(false);
 
-	const { addToCart, cartItems, checkStock } = useCart();
+	const { addToCart, cartItems } = useCart();
 
-	// 商品データ
-	const product: Product = {
-		id: 'pepe-protein-1',
-		name: 'Pepe Flavor Protein 1kg',
-		description: 'Premium whey protein with the legendary Pepe flavor. Built for the blockchain generation.',
-		price: {
-			usd: 27.8
-		},
-		inStock: 45,
-		rating: 4.9,
-		features: [
-			'Blockchain Verified Quality',
-			'Community Approved Formula',
-			'Meme-Powered Gains',
-			'Web3 Native Nutrition'
-		],
-		nutritionFacts: {
-			protein: '25g',
-			fat: '1.5g',
-			carbs: '2g',
-			minerals: '1g',
-			allergen: 'Milk'
-		}
-	};
+	// 固定の商品ID（実際のアプリでは動的に決定）
+	const PRODUCT_ID = 'pepe-protein-1';
+
+	// 商品データをリアルタイムで取得
+	useEffect(() => {
+		let unsubscribe: (() => void) | null = null;
+
+		const loadProduct = async () => {
+			try {
+				setLoading(true);
+
+				// 初回データ取得
+				const productData = await getProductDetails(PRODUCT_ID);
+				if (productData) {
+					setProduct(productData);
+				}
+
+				// リアルタイム監視を開始
+				unsubscribe = subscribeToProduct(PRODUCT_ID, (firestoreProduct) => {
+					if (firestoreProduct) {
+						// FirestoreProductをProductDetailsに変換
+						const getStockLevel = (available: number, total: number): 'high' | 'medium' | 'low' | 'out' => {
+							if (available === 0) return 'out';
+							const ratio = available / total;
+							if (ratio > 0.5) return 'high';
+							if (ratio > 0.2) return 'medium';
+							return 'low';
+						};
+
+						const productDetails: ProductDetails = {
+							id: firestoreProduct.id,
+							name: firestoreProduct.name,
+							description: firestoreProduct.description,
+							price: {
+								usd: firestoreProduct.price.usd,
+								formatted: `$${firestoreProduct.price.usd.toFixed(2)}`
+							},
+							inventory: {
+								inStock: firestoreProduct.inventory.availableStock,
+								isAvailable: firestoreProduct.inventory.availableStock > 0,
+								stockLevel: getStockLevel(firestoreProduct.inventory.availableStock, firestoreProduct.inventory.totalStock)
+							},
+							metadata: firestoreProduct.metadata,
+							settings: firestoreProduct.settings,
+							timestamps: {
+								createdAt: firestoreProduct.timestamps.createdAt.toDate(),
+								updatedAt: firestoreProduct.timestamps.updatedAt.toDate()
+							}
+						};
+
+						setProduct(productDetails);
+					} else {
+						setProduct(null);
+					}
+				});
+
+			} catch (error) {
+				console.error('Error loading product:', error);
+				setProduct(null);
+			} finally {
+				setLoading(false);
+			}
+		};
+
+		loadProduct();
+
+		return () => {
+			if (unsubscribe) {
+				unsubscribe();
+			}
+		};
+	}, [PRODUCT_ID]);
 
 	// カート内の商品数量を取得
 	const getCartQuantity = () => {
-		const cartItem = cartItems.find(item => item.id === product.id);
+		const cartItem = cartItems.find(item => item.id === PRODUCT_ID);
 		return cartItem ? cartItem.quantity : 0;
 	};
 
 	// 数量変更時のバリデーション
-	const handleQuantityChange = (newQuantity: number) => {
-		const stockCheck = checkStock(product.id, newQuantity - quantity, product.inStock);
-		
+	const handleQuantityChange = async (newQuantity: number) => {
+		if (!product) return;
+
 		if (newQuantity < 1) {
 			setQuantity(1);
 			return;
 		}
 
-		if (!stockCheck.canAdd && newQuantity > quantity) {
-			if (stockCheck.willExceedStock) {
-				setStockWarningMessage(`Only ${product.inStock - getCartQuantity()} items available in stock`);
-			} else if (stockCheck.willExceedLimit) {
-				setStockWarningMessage('Maximum 10 items per order');
+		// リアルタイム在庫チェック
+		const stockCheck = await checkStockAvailability(PRODUCT_ID, newQuantity, undefined, sessionId);
+
+		if (!stockCheck.canReserve && newQuantity > quantity) {
+			if (stockCheck.limitReasons.exceedsStock) {
+				setStockWarningMessage(`Only ${stockCheck.maxCanReserve} items available`);
+			} else if (stockCheck.limitReasons.exceedsOrderLimit) {
+				setStockWarningMessage(`Maximum ${product.settings.maxOrderQuantity} items per order`);
+			} else if (stockCheck.limitReasons.productInactive) {
+				setStockWarningMessage('Product is currently unavailable');
 			}
 			setShowStockWarning(true);
 			setTimeout(() => setShowStockWarning(false), 3000);
 			return;
 		}
 
-		setQuantity(Math.min(newQuantity, 10));
+		setQuantity(Math.min(newQuantity, stockCheck.maxCanReserve || product.settings.maxOrderQuantity));
 	};
 
-	const handleAddToCart = () => {
-		const stockCheck = checkStock(product.id, quantity, product.inStock);
-		
-		if (!stockCheck.canAdd) {
-			if (stockCheck.willExceedStock) {
-				setStockWarningMessage(`Only ${stockCheck.maxCanAdd} more items can be added (stock limit)`);
-			} else if (stockCheck.willExceedLimit) {
-				setStockWarningMessage(`Only ${stockCheck.maxCanAdd} more items can be added (order limit: 10)`);
+	const handleAddToCart = async () => {
+		if (!product || isAddingToCart) return;
+
+		try {
+			setIsAddingToCart(true);
+
+			// 1. 在庫確認
+			const stockCheck = await checkStockAvailability(PRODUCT_ID, quantity, undefined, sessionId);
+
+			if (!stockCheck.canReserve) {
+				if (stockCheck.limitReasons.exceedsStock) {
+					setStockWarningMessage(`Only ${stockCheck.maxCanReserve} items available`);
+				} else if (stockCheck.limitReasons.exceedsOrderLimit) {
+					setStockWarningMessage(`Maximum ${product.settings.maxOrderQuantity} items per order`);
+				} else if (stockCheck.limitReasons.productInactive) {
+					setStockWarningMessage('Product is currently unavailable');
+				}
+				setShowStockWarning(true);
+				setTimeout(() => setShowStockWarning(false), 3000);
+				return;
 			}
+
+			// 2. Firestore在庫予約
+			const reservationResult = await reserveStock(PRODUCT_ID, quantity, undefined, sessionId);
+
+			if (!reservationResult.success) {
+				setStockWarningMessage(reservationResult.error?.message || 'Failed to reserve stock');
+				setShowStockWarning(true);
+				setTimeout(() => setShowStockWarning(false), 3000);
+				return;
+			}
+
+			// 3. ローカルカートに追加
+			const cartItem = {
+				id: product.id,
+				name: product.name,
+				price: product.price.usd,
+				quantity: quantity,
+				currency: selectedCurrency,
+			};
+
+			addToCart(cartItem, product.inventory.inStock);
+			setShowSuccessMessage(true);
+
+			setTimeout(() => {
+				setShowSuccessMessage(false);
+			}, 3000);
+
+			// 追加後は数量を1にリセット
+			setQuantity(1);
+
+		} catch (error) {
+			console.error('Error adding to cart:', error);
+			setStockWarningMessage('An error occurred. Please try again.');
 			setShowStockWarning(true);
 			setTimeout(() => setShowStockWarning(false), 3000);
-			return;
+		} finally {
+			setIsAddingToCart(false);
 		}
-
-		const cartItem = {
-			id: product.id,
-			name: product.name,
-			price: product.price.usd,
-			quantity: quantity,
-			currency: selectedCurrency,
-		};
-
-		addToCart(cartItem, product.inStock);
-		setShowSuccessMessage(true);
-
-		setTimeout(() => {
-			setShowSuccessMessage(false);
-		}, 3000);
-
-		// 追加後は数量を1にリセット
-		setQuantity(1);
 	};
 
 	const handleBuyNow = () => {
 		handleAddToCart();
-		console.log(`Generate invoice for: ${quantity}x ${product.name}`);
+		console.log(`Generate invoice for: ${quantity}x ${product?.name}`);
 	};
 
+	// ローディング状態
+	if (loading) {
+		return (
+			<div className="space-y-8">
+				<div className="text-center">
+					<h2 className="text-3xl font-heading font-bold text-white mb-2">
+						Premium Protein Store
+					</h2>
+					<p className="text-gray-400">
+						Loading product information...
+					</p>
+				</div>
+
+				<div className="flex justify-center items-center h-64">
+					<Loader2 className="w-8 h-8 text-neonGreen animate-spin" />
+				</div>
+			</div>
+		);
+	}
+
+	// 商品が見つからない場合
+	if (!product) {
+		return (
+			<div className="space-y-8">
+				<div className="text-center">
+					<h2 className="text-3xl font-heading font-bold text-white mb-2">
+						Premium Protein Store
+					</h2>
+					<p className="text-gray-400">
+						Product not found or currently unavailable
+					</p>
+				</div>
+
+				<CyberCard showEffects={false} className="text-center py-12">
+					<AlertTriangle className="w-16 h-16 text-yellow-400 mx-auto mb-4" />
+					<h3 className="text-xl font-semibold text-white mb-2">Product Unavailable</h3>
+					<p className="text-gray-400 mb-6">This product is currently not available</p>
+				</CyberCard>
+			</div>
+		);
+	}
+
 	const currentCartQuantity = getCartQuantity();
-	const availableToAdd = Math.min(product.inStock - currentCartQuantity, 10 - currentCartQuantity);
-	const isOutOfStock = product.inStock <= currentCartQuantity;
-	const isAtLimit = currentCartQuantity >= 10;
+	const isOutOfStock = !product.inventory.isAvailable;
+	const isAtOrderLimit = currentCartQuantity >= product.settings.maxOrderQuantity;
 
 	return (
 		<div className="space-y-8">
@@ -201,13 +311,22 @@ const ShopSection: React.FC = () => {
 								{[...Array(5)].map((_, i) => (
 									<Star
 										key={i}
-										className={`w-4 h-4 ${i < Math.floor(product.rating) ? 'text-neonOrange fill-current' : 'text-gray-400'}`}
+										className={`w-4 h-4 ${i < Math.floor(product.metadata.rating) ? 'text-neonOrange fill-current' : 'text-gray-400'}`}
 									/>
 								))}
-								<span className="text-sm text-gray-400 ml-2">({product.rating})</span>
+								<span className="text-sm text-gray-400 ml-2">({product.metadata.rating})</span>
+								{product.metadata.reviewCount > 0 && (
+									<span className="text-sm text-gray-400">• {product.metadata.reviewCount} reviews</span>
+								)}
 							</div>
-							<span className={`text-sm ${product.inStock > 10 ? 'text-neonGreen' : product.inStock > 0 ? 'text-yellow-400' : 'text-red-400'}`}>
-								{product.inStock > 0 ? `${product.inStock} in stock` : 'Out of stock'}
+							<span className={`text-sm ${product.inventory.stockLevel === 'high' ? 'text-neonGreen' :
+									product.inventory.stockLevel === 'medium' ? 'text-yellow-400' :
+										product.inventory.stockLevel === 'low' ? 'text-orange-400' : 'text-red-400'
+								}`}>
+								{product.inventory.isAvailable ?
+									`${product.inventory.inStock} in stock` :
+									'Out of stock'
+								}
 							</span>
 						</div>
 						<p className="text-gray-400 leading-relaxed">
@@ -220,7 +339,7 @@ const ShopSection: React.FC = () => {
 						<div className="flex items-center justify-between">
 							<div>
 								<div className="text-sm text-gray-400">
-									$ {product.price.usd} USD
+									{product.price.formatted}
 								</div>
 							</div>
 							<div className="text-right">
@@ -246,6 +365,27 @@ const ShopSection: React.FC = () => {
 						</div>
 					)}
 
+					{/* Stock Level Indicator */}
+					{product.inventory.isAvailable && (
+						<div className={`flex items-center space-x-2 p-2 rounded-sm ${product.inventory.stockLevel === 'high' ? 'bg-neonGreen/5 border border-neonGreen/20' :
+								product.inventory.stockLevel === 'medium' ? 'bg-yellow-400/5 border border-yellow-400/20' :
+									'bg-orange-400/5 border border-orange-400/20'
+							}`}>
+							<div className={`w-2 h-2 rounded-full ${product.inventory.stockLevel === 'high' ? 'bg-neonGreen' :
+									product.inventory.stockLevel === 'medium' ? 'bg-yellow-400' :
+										'bg-orange-400'
+								}`}></div>
+							<span className={`text-xs ${product.inventory.stockLevel === 'high' ? 'text-neonGreen' :
+									product.inventory.stockLevel === 'medium' ? 'text-yellow-400' :
+										'text-orange-400'
+								}`}>
+								{product.inventory.stockLevel === 'high' ? 'In Stock' :
+									product.inventory.stockLevel === 'medium' ? 'Limited Stock' :
+										'Low Stock'}
+							</span>
+						</div>
+					)}
+
 					{/* Quantity Selector */}
 					<div className="flex items-center space-x-4">
 						<label className="text-sm font-medium text-white">Quantity:</label>
@@ -253,7 +393,7 @@ const ShopSection: React.FC = () => {
 							<button
 								onClick={() => handleQuantityChange(quantity - 1)}
 								className="px-3 py-2 text-white hover:bg-dark-200 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-								disabled={quantity <= 1}
+								disabled={quantity <= 1 || isAddingToCart}
 							>
 								-
 							</button>
@@ -263,25 +403,25 @@ const ShopSection: React.FC = () => {
 							<button
 								onClick={() => handleQuantityChange(quantity + 1)}
 								className="px-3 py-2 text-white hover:bg-dark-200 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-								disabled={quantity >= availableToAdd || isOutOfStock || isAtLimit}
+								disabled={quantity >= product.settings.maxOrderQuantity || isOutOfStock || isAtOrderLimit || isAddingToCart}
 							>
 								+
 							</button>
 						</div>
 						<div className="text-xs text-gray-400">
-							{isOutOfStock ? 'Out of stock' : 
-							 isAtLimit ? 'Max limit reached' :
-							 `Max ${availableToAdd} more`}
+							{isOutOfStock ? 'Out of stock' :
+								isAtOrderLimit ? 'Max limit reached' :
+									`Max ${product.settings.maxOrderQuantity}`}
 						</div>
 					</div>
 
-					{/* Stock Warnings */}
-					{(isOutOfStock || isAtLimit) && (
+					{/* Stock/Order Warnings */}
+					{(isOutOfStock || isAtOrderLimit) && (
 						<div className="flex items-start space-x-2 p-3 border border-yellow-600/30 rounded-sm bg-yellow-600/5">
 							<AlertTriangle className="w-4 h-4 text-yellow-400 flex-shrink-0 mt-0.5" />
 							<div className="text-xs text-gray-300">
 								{isOutOfStock ? 'This item is currently out of stock.' :
-								 'Maximum order limit (10 items) reached for this product.'}
+									`Maximum order limit (${product.settings.maxOrderQuantity} items) reached for this product.`}
 							</div>
 						</div>
 					)}
@@ -291,10 +431,14 @@ const ShopSection: React.FC = () => {
 							variant="outline"
 							className="w-full flex items-center justify-center space-x-2"
 							onClick={handleAddToCart}
-							disabled={isOutOfStock || isAtLimit}
+							disabled={isOutOfStock || isAtOrderLimit || isAddingToCart}
 						>
-							<ShoppingCart className="w-4 h-4" />
-							<span>Add to Cart</span>
+							{isAddingToCart ? (
+								<Loader2 className="w-4 h-4 animate-spin" />
+							) : (
+								<ShoppingCart className="w-4 h-4" />
+							)}
+							<span>{isAddingToCart ? 'Adding...' : 'Add to Cart'}</span>
 						</CyberButton>
 					</div>
 
@@ -302,7 +446,7 @@ const ShopSection: React.FC = () => {
 					<div className="space-y-3">
 						<h4 className="text-lg font-semibold text-white">Key Features</h4>
 						<div className="grid grid-cols-1 gap-2">
-							{product.features.map((feature, index) => (
+							{product.metadata.features.map((feature, index) => (
 								<div key={index} className="flex items-center space-x-2">
 									<div className="w-2 h-2 bg-neonGreen rounded-full"></div>
 									<span className="text-sm text-gray-300">{feature}</span>
@@ -310,6 +454,23 @@ const ShopSection: React.FC = () => {
 							))}
 						</div>
 					</div>
+
+					{/* Tags */}
+					{product.metadata.tags.length > 0 && (
+						<div className="space-y-3">
+							<h4 className="text-lg font-semibold text-white">Tags</h4>
+							<div className="flex flex-wrap gap-2">
+								{product.metadata.tags.map((tag, index) => (
+									<span
+										key={index}
+										className="px-2 py-1 text-xs bg-dark-200 text-neonGreen border border-neonGreen/30 rounded-sm"
+									>
+										{tag}
+									</span>
+								))}
+							</div>
+						</div>
+					)}
 				</div>
 			</div>
 
@@ -320,7 +481,7 @@ const ShopSection: React.FC = () => {
 				showEffects={false}
 			>
 				<div className="grid grid-cols-2 md:grid-cols-5 gap-4">
-					{Object.entries(product.nutritionFacts).map(([key, value]) => (
+					{Object.entries(product.metadata.nutritionFacts).map(([key, value]) => (
 						<div key={key} className="text-center">
 							<div className="text-lg font-bold text-neonGreen">{value}</div>
 							<div className="text-xs text-gray-400 capitalize">{key}</div>
@@ -328,6 +489,60 @@ const ShopSection: React.FC = () => {
 					))}
 				</div>
 			</CyberCard>
+
+			{/* Product Info */}
+			<div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+				<CyberCard
+					title="Product Information"
+					showEffects={false}
+				>
+					<div className="space-y-4">
+						<div className="flex justify-between">
+							<span className="text-gray-400">SKU:</span>
+							<span className="text-white">{product.id}</span>
+						</div>
+						<div className="flex justify-between">
+							<span className="text-gray-400">Category:</span>
+							<span className="text-white capitalize">{product.settings.category || 'Protein'}</span>
+						</div>
+						<div className="flex justify-between">
+							<span className="text-gray-400">Min Order:</span>
+							<span className="text-white">{product.settings.minOrderQuantity}</span>
+						</div>
+						<div className="flex justify-between">
+							<span className="text-gray-400">Max Order:</span>
+							<span className="text-white">{product.settings.maxOrderQuantity}</span>
+						</div>
+						<div className="flex justify-between">
+							<span className="text-gray-400">Updated:</span>
+							<span className="text-white">{product.timestamps.updatedAt.toLocaleDateString()}</span>
+						</div>
+					</div>
+				</CyberCard>
+
+				<CyberCard
+					title="Shipping & Returns"
+					showEffects={false}
+				>
+					<div className="space-y-4 text-sm text-gray-300">
+						<div className="flex items-center space-x-2">
+							<Zap className="w-4 h-4 text-neonGreen" />
+							<span>Fast shipping worldwide</span>
+						</div>
+						<div className="flex items-center space-x-2">
+							<Shield className="w-4 h-4 text-neonGreen" />
+							<span>30-day return guarantee</span>
+						</div>
+						<div className="flex items-center space-x-2">
+							<Check className="w-4 h-4 text-neonGreen" />
+							<span>Quality assured</span>
+						</div>
+						<p className="text-xs text-gray-400 mt-4">
+							All products are verified on the blockchain for authenticity and quality assurance.
+						</p>
+					</div>
+				</CyberCard>
+			</div>
 		</div>
 	);
 };

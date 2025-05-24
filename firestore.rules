@@ -1,0 +1,26 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+  
+      // 商品コレクションは誰でも読み取り可能、管理者のみ書き込み可能
+    match /products/{productId} {
+      allow read: if true;
+      allow write: if true; // 一時的に誰でも書き込み可能（後で変更）
+    }
+    
+    // カート予約は認証ユーザーのみ
+    match /cart_reservations/{reservationId} {
+      allow read, write: if request.auth != null;
+    }
+  
+    // ユーザーは自分のドキュメントのみアクセス可能
+    match /users/{userId} {
+      allow read, write: if request.auth != null && request.auth.uid == userId;
+      
+      // ユーザーの注文履歴
+      match /orders/{orderId} {
+        allow read, write: if request.auth != null && request.auth.uid == userId;
+      }
+    }
+  }
+}

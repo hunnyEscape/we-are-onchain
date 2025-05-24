@@ -244,7 +244,7 @@ const CyberInterface: React.FC<CyberInterfaceProps> = ({
 			<div className={`${styles.thickScanline}`} />
 			<div className={`${styles.scanline}`}></div>
 			{/* データストリーム */}
-			<div className={`${styles.dataStream} `}>
+			<div className={`${styles.dataStream} hidden sm:block`}>
 				<div className={styles.dataContent}>
 					{dataStream.map((line, index) => (
 						<div key={index} className={randomGlitch && index % 5 === 0 ? styles.jitterEffect : ''}>

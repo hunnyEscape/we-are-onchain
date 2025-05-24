@@ -37,79 +37,10 @@ export const HeroBackground: React.FC<HeroBackgroundProps> = ({
 			{/* ライトとオーバーレイは常時レンダリング */}
 			<div
 				className={`${styles.darkOverlay} w-full`}
-				style={{
-					// transformを削除し、オーバーレイは固定に
-					transition: 'transform 1.5s ease-out',
-				}}
+				style={{transition: 'transform 1.5s ease-out',}}
 			/>
-			{glitchState.active && glitchState.type.includes('rgb') && glitchState.intensity > 2 && (
-				<>
-					<div
-						className={styles.rgbSliceRed}
-						style={{
-							backgroundImage: `url('${process.env.NEXT_PUBLIC_CLOUDFRONT_URL}/pepe/pepe-cyberpunk.webp')`,
-							transform: `translateX(${glitchState.intensity * 1.5}px)`,
-						}}
-					/>
-					<div
-						className={styles.rgbSliceBlue}
-						style={{
-							backgroundImage: `url('${process.env.NEXT_PUBLIC_CLOUDFRONT_URL}/pepe/pepe-cyberpunk.webp')`,
-							transform: `translateX(-${glitchState.intensity * 1.5}px)`,
-						}}
-					/>
-				</>
-			)}
-			<div
-				className={styles.centerLight}
-				style={{
-					transform: midLayerTransform,
-					transition: 'transform 1.5s ease-out',
-				}}
-			/>
+			<div className='hidden sm:block'>
 
-			{/* 重いエフェクト: モバイルでは非表示 */}
-			<div className="hidden sm:hidden ">
-				<div
-					className={styles.centerLight}
-					style={{
-						transform: midLayerTransform,
-						transition: 'transform 1.5s ease-out',
-					}}
-				/>
-				{/* メインノイズ */}
-				<div className={`${styles.mainNoise} ${glitchState.active ? styles.noiseIntense : ''
-					}`} />
-
-				{/* 格子状ノイズ */}
-				<div
-					className={styles.gridNoise}
-					style={{
-						backgroundImage: `url('${process.env.NEXT_PUBLIC_CLOUDFRONT_URL}/noisy_grid.webp')`,
-						transform: midLayerTransform,
-						transition: 'transform 1.5s ease-out',
-					}}
-				/>
-
-				{/* 動くノイズ */}
-				<div className={styles.movingNoise} />
-
-				{/* RGB分離効果 */}
-				<div className={`${styles.rgbSplit} ${glitchState.active && glitchState.type.includes('rgb') ? styles.rgbActive : ''
-					}`} />
-
-				{/* グリッチブロックエフェクト */}
-				{glitchState.active && glitchState.intensity > 2 && (
-					<div
-						className={styles.glitchBlocks}
-						style={{
-							backgroundImage: `url('${process.env.NEXT_PUBLIC_CLOUDFRONT_URL}/pepe/pepe-cyberpunk.webp')`,
-							opacity: 0.4 + glitchState.intensity * 0.05,
-						}}
-					/>
-				)}
-
-				{/* RGBスライス効果 */}
 				{glitchState.active && glitchState.type.includes('rgb') && glitchState.intensity > 2 && (
 					<>
 						<div
@@ -128,6 +59,13 @@ export const HeroBackground: React.FC<HeroBackgroundProps> = ({
 						/>
 					</>
 				)}
+				<div
+					className={styles.centerLight}
+					style={{
+						transform: midLayerTransform,
+						transition: 'transform 1.5s ease-out',
+					}}
+				/>
 			</div>
 		</>
 	);

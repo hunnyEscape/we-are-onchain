@@ -10,10 +10,15 @@ import { ShoppingCart } from 'lucide-react';
 const useCartInDashboard = () => {
 	const [cartItemCount, setCartItemCount] = useState(0);
 	const [onCartClick, setOnCartClick] = useState<(() => void) | null>(null);
+	const [isHydrated, setIsHydrated] = useState(false);
 
 	useEffect(() => {
+		// ハイドレーション完了を待つ
+		setIsHydrated(true);
+		
 		// カスタムイベントリスナーを追加してダッシュボードからカート情報を受信
 		const handleCartUpdate = (event: CustomEvent) => {
+			console.log('📨 Header received cart update:', event.detail.itemCount);
 			setCartItemCount(event.detail.itemCount);
 		};
 
@@ -30,7 +35,7 @@ const useCartInDashboard = () => {
 		};
 	}, []);
 
-	return { cartItemCount, onCartClick };
+	return { cartItemCount: isHydrated ? cartItemCount : 0, onCartClick };
 };
 
 const Header = () => {

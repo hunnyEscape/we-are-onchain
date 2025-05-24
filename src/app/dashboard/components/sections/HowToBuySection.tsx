@@ -35,13 +35,6 @@ interface PaymentMethod {
 	chain: string;
 }
 
-interface LoginOption {
-	name: string;
-	description: string;
-	icon: React.ReactNode;
-	available: boolean;
-}
-
 interface WalletOption {
 	name: string;
 	description: string;
@@ -52,39 +45,6 @@ interface WalletOption {
 const HowToBuySection: React.FC = () => {
 	const [activeStep, setActiveStep] = useState(1);
 	const [isPaymentTableOpen, setIsPaymentTableOpen] = useState(false);
-
-	const loginOptions: LoginOption[] = [
-		{
-			name: 'Google',
-			description: 'Sign in with your Google account',
-			icon: <Globe className="w-6 h-6 text-red-500" />,
-			available: true
-		},
-		{
-			name: 'Twitter/X',
-			description: 'Sign in with your X account',
-			icon: <Twitter className="w-6 h-6 text-blue-400" />,
-			available: true
-		},
-		{
-			name: 'Discord',
-			description: 'Sign in with your Discord account',
-			icon: <MessageCircle className="w-6 h-6 text-indigo-500" />,
-			available: true
-		},
-		{
-			name: 'GitHub',
-			description: 'Sign in with your GitHub account',
-			icon: <Github className="w-6 h-6 text-gray-300" />,
-			available: true
-		},
-		{
-			name: 'Email',
-			description: 'Traditional email + password',
-			icon: <Mail className="w-6 h-6 text-green-500" />,
-			available: true
-		}
-	];
 
 	const paymentMethods: PaymentMethod[] = [
 		{
@@ -159,24 +119,18 @@ const HowToBuySection: React.FC = () => {
 	const steps = [
 		{
 			id: 1,
-			title: 'Web2 Account Login',
-			description: 'Simple login like traditional websites',
-			details: '(1) Create an account using social login. No crypto wallet required for this step.'
-		},
-		{
-			id: 2,
 			title: 'Cart & Checkout',
 			description: 'Add products and set preferences',
 			details:`When you checkout. (1) Selact your payment currency. (2) Set shipping address. International shipping available.`
 		},
 		{
-			id: 3,
+			id: 2,
 			title: 'Invoice Payment',
 			description: 'Pay using generated invoice URL',
 			details: 'Receive an invoice with QR code and payment address. Use any compatible wallet to send the exact amount to complete your purchase.'
 		},
 		{
-			id: 4,
+			id: 3,
 			title: 'Order Completion',
 			description: 'Automatic processing and shipping',
 			details: 'Transaction reflects in our system within seconds. Shipping process begins immediately after payment confirmation.'
@@ -272,36 +226,8 @@ const HowToBuySection: React.FC = () => {
 										</p>
 									</div>
 
-									{/* Step 1: Login Options */}
+									{/* Step 1: Checkout Process */}
 									{step.id === 1 && (
-										<div className="space-y-4">
-											<div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-												{loginOptions.map((login, index) => (
-													<div key={index} className="p-4 border border-dark-300 rounded-sm flex items-center space-x-3">
-														{login.icon}
-														<div>
-															<div className="text-white font-medium">{login.name}</div>
-														</div>
-														{login.available && (
-															<CheckCircle className="w-5 h-5 text-neonGreen ml-auto" />
-														)}
-													</div>
-												))}
-											</div>
-
-											{/* Placeholder for Login Demo */}
-											<div className="p-4 border border-dark-300 rounded-sm bg-dark-200/30">
-												<div className="text-center text-gray-400 text-sm">
-													📱 Login Screen Demo Area
-													<br />
-													<span className="text-xs">(Interactive login mockup will be displayed here)</span>
-												</div>
-											</div>
-										</div>
-									)}
-
-									{/* Step 2: Checkout Process */}
-									{step.id === 2 && (
 										<div className="space-y-6">
 											{/* Important Notice */}
 											<div className="p-4 border border-yellow-600/30 rounded-sm bg-yellow-600/5">
@@ -359,20 +285,11 @@ const HowToBuySection: React.FC = () => {
 													</div>
 												)}
 											</div>
-
-											{/* Checkout Demo Area */}
-											<div className="p-4 border border-dark-300 rounded-sm bg-dark-200/30">
-												<div className="text-center text-gray-400 text-sm">
-													🛒 Checkout Process Demo Area
-													<br />
-													<span className="text-xs">(Interactive checkout flow will be displayed here)</span>
-												</div>
-											</div>
 										</div>
 									)}
 
-									{/* Step 3: Invoice Payment */}
-									{step.id === 3 && (
+									{/* Step 2: Invoice Payment */}
+									{step.id === 2 && (
 										<div className="space-y-6">
 											{/* Payment Process */}
 											<div>
@@ -422,8 +339,8 @@ const HowToBuySection: React.FC = () => {
 										</div>
 									)}
 
-									{/* Step 4: Order Completion */}
-									{step.id === 4 && (
+									{/* Step 3: Order Completion */}
+									{step.id === 3 && (
 										<div className="space-y-6">
 											<div className="grid grid-cols-1 md:grid-cols-2 gap-4">
 												<div className="p-4 border border-dark-300 rounded-sm">
@@ -448,14 +365,6 @@ const HowToBuySection: React.FC = () => {
 												</div>
 											</div>
 
-											{/* Order Completion Demo Area */}
-											<div className="p-4 border border-dark-300 rounded-sm bg-dark-200/30">
-												<div className="text-center text-gray-400 text-sm">
-													📦 Order Confirmation Demo Area
-													<br />
-													<span className="text-xs">(Order status and tracking interface will be displayed here)</span>
-												</div>
-											</div>
 										</div>
 									)}
 								</div>
@@ -504,13 +413,6 @@ const HowToBuySection: React.FC = () => {
 					</div>
 				</div>
 			</CyberCard>
-
-			{/* CTA */}
-			<div className="text-center">
-				<CyberButton variant="primary" className="px-8 py-4 text-lg">
-					Start Shopping Now
-				</CyberButton>
-			</div>
 		</div>
 	);
 };

@@ -3,12 +3,12 @@
 
 import React, { createContext, useContext, useReducer, useEffect } from 'react';
 import { DashboardState, CartItem, UserProfile, SectionType } from '../../../../types/dashboard';
-import {
-	cancelReservation,
-	generateSessionId,
+import { 
+	cancelReservation, 
+	generateSessionId, 
 	getUserReservations,
 	startPeriodicCleanup,
-	stopPeriodicCleanup
+	stopPeriodicCleanup 
 } from '@/lib/firestore/inventory';
 import { useAuth } from '@/contexts/AuthContext';
 
@@ -32,6 +32,7 @@ type DashboardAction =
 	| { type: 'CLEAR_EXPIRED_ITEMS' }
 	| { type: 'SYNC_WITH_RESERVATIONS'; payload: CartItemWithExpiry[] }
 	| { type: 'LOAD_FROM_STORAGE'; payload: Partial<DashboardState> }
+	| { type: 'SET_HYDRATED'; payload: boolean }
 	| { type: 'SET_ACTIVE_SECTION'; payload: SectionType | null }
 	| { type: 'SET_SLIDE_OPEN'; payload: boolean };
 
@@ -55,6 +56,7 @@ const removeExpiredItems = (items: CartItemWithExpiry[]): CartItemWithExpiry[] =
 interface ExtendedDashboardState extends DashboardState {
 	sessionId: string;
 	isFirestoreSynced: boolean;
+	isHydrated: boolean; // ハイドレーション完了フラグを追加
 }
 
 // Initial state
@@ -66,6 +68,7 @@ const initialState: ExtendedDashboardState = {
 	walletConnected: false,
 	sessionId: generateSessionId(),
 	isFirestoreSynced: false,
+	isHydrated: false, // 初期状態では false
 };
 
 // Reducer
@@ -84,9 +87,9 @@ function dashboardReducer(state: ExtendedDashboardState, action: DashboardAction
 
 			// 期限切れアイテムを除去
 			const validItems = removeExpiredItems(state.cartItems as CartItemWithExpiry[]);
-
+			
 			const existingItem = validItems.find(item => item.id === newItem.id);
-
+			
 			if (existingItem) {
 				const newQuantity = validateQuantity(existingItem.quantity + newItem.quantity, maxStock);
 				return {
@@ -101,7 +104,7 @@ function dashboardReducer(state: ExtendedDashboardState, action: DashboardAction
 
 			// 新しいアイテムの数量検証
 			const validatedQuantity = validateQuantity(newItem.quantity, maxStock);
-
+			
 			return {
 				...state,
 				cartItems: [...validItems, { ...newItem, quantity: validatedQuantity }],
@@ -111,13 +114,13 @@ function dashboardReducer(state: ExtendedDashboardState, action: DashboardAction
 		case 'REMOVE_FROM_CART': {
 			const validItems = removeExpiredItems(state.cartItems as CartItemWithExpiry[]);
 			const itemToRemove = validItems.find(item => item.id === action.payload) as CartItemWithExpiry;
-
+			
 			// Firestore予約もキャンセル（非同期）
 			if (itemToRemove?.reservationId) {
 				cancelReservation(action.payload, undefined, state.sessionId)
 					.catch(error => console.error('Failed to cancel reservation:', error));
 			}
-
+			
 			return {
 				...state,
 				cartItems: validItems.filter(item => item.id !== action.payload),
@@ -127,16 +130,16 @@ function dashboardReducer(state: ExtendedDashboardState, action: DashboardAction
 		case 'UPDATE_CART_QUANTITY': {
 			const { id, quantity, maxStock } = action.payload;
 			const validItems = removeExpiredItems(state.cartItems as CartItemWithExpiry[]);
-
+			
 			if (quantity <= 0) {
 				const itemToRemove = validItems.find(item => item.id === id) as CartItemWithExpiry;
-
+				
 				// Firestore予約もキャンセル（非同期）
 				if (itemToRemove?.reservationId) {
 					cancelReservation(id, undefined, state.sessionId)
 						.catch(error => console.error('Failed to cancel reservation:', error));
 				}
-
+				
 				return {
 					...state,
 					cartItems: validItems.filter(item => item.id !== id),
@@ -144,7 +147,7 @@ function dashboardReducer(state: ExtendedDashboardState, action: DashboardAction
 			}
 
 			const validatedQuantity = validateQuantity(quantity, maxStock);
-
+			
 			return {
 				...state,
 				cartItems: validItems.map(item =>
@@ -162,7 +165,7 @@ function dashboardReducer(state: ExtendedDashboardState, action: DashboardAction
 				cancelReservation(item.id, undefined, state.sessionId)
 					.catch(error => console.error('Failed to cancel reservation:', error));
 			});
-
+			
 			return { ...state, cartItems: [] };
 		}
 
@@ -172,10 +175,10 @@ function dashboardReducer(state: ExtendedDashboardState, action: DashboardAction
 		}
 
 		case 'SYNC_WITH_RESERVATIONS': {
-			return {
-				...state,
+			return { 
+				...state, 
 				cartItems: action.payload,
-				isFirestoreSynced: true
+				isFirestoreSynced: true 
 			};
 		}
 
@@ -187,6 +190,9 @@ function dashboardReducer(state: ExtendedDashboardState, action: DashboardAction
 			}
 			return { ...state, ...loadedData };
 		}
+
+		case 'SET_HYDRATED':
+			return { ...state, isHydrated: action.payload };
 
 		case 'SET_ACTIVE_SECTION':
 			return { ...state, activeSection: action.payload };
@@ -210,16 +216,23 @@ export function DashboardProvider({ children }: { children: React.ReactNode }) {
 	const [state, dispatch] = useReducer(dashboardReducer, initialState);
 	const { user } = useAuth();
 
-	// Load from localStorage on mount
+	// Load from localStorage on mount (クライアントサイドのみ)
 	useEffect(() => {
+		// ブラウザ環境でのみ実行
+		if (typeof window === 'undefined') return;
+		
 		try {
 			const savedState = localStorage.getItem('dashboard-state');
 			if (savedState) {
 				const parsed = JSON.parse(savedState);
+				console.log('📦 Loading from localStorage:', parsed);
 				dispatch({ type: 'LOAD_FROM_STORAGE', payload: parsed });
 			}
 		} catch (error) {
 			console.error('Failed to load dashboard state from localStorage:', error);
+		} finally {
+			// ハイドレーション完了をマーク
+			dispatch({ type: 'SET_HYDRATED', payload: true });
 		}
 	}, []);
 
@@ -229,10 +242,10 @@ export function DashboardProvider({ children }: { children: React.ReactNode }) {
 			try {
 				const userId = user?.uid;
 				const sessionId = state.sessionId;
-
+				
 				// Firestore予約を取得
 				const reservations = await getUserReservations(userId, sessionId);
-
+				
 				if (reservations.length > 0) {
 					// 予約をカートアイテムに変換
 					const reservedItems: CartItemWithExpiry[] = reservations.map(reservation => ({
@@ -244,7 +257,7 @@ export function DashboardProvider({ children }: { children: React.ReactNode }) {
 						addedAt: reservation.createdAt.toDate().toISOString(),
 						reservationId: reservation.id
 					}));
-
+					
 					// ローカルカートと予約を同期
 					dispatch({ type: 'SYNC_WITH_RESERVATIONS', payload: reservedItems });
 				}
@@ -262,14 +275,17 @@ export function DashboardProvider({ children }: { children: React.ReactNode }) {
 	// 定期的なクリーンアップの開始
 	useEffect(() => {
 		startPeriodicCleanup();
-
+		
 		return () => {
 			stopPeriodicCleanup();
 		};
 	}, []);
 
-	// Save to localStorage when state changes
+	// Save to localStorage when state changes (ハイドレーション完了後のみ)
 	useEffect(() => {
+		// ハイドレーション完了前は保存しない
+		if (!state.isHydrated) return;
+		
 		try {
 			const stateToSave = {
 				cartItems: state.cartItems,
@@ -277,22 +293,27 @@ export function DashboardProvider({ children }: { children: React.ReactNode }) {
 				sessionId: state.sessionId,
 				lastUpdated: new Date().toISOString(),
 			};
+			console.log('💾 Saving to localStorage:', stateToSave);
 			localStorage.setItem('dashboard-state', JSON.stringify(stateToSave));
 		} catch (error) {
 			console.error('Failed to save dashboard state to localStorage:', error);
 		}
-	}, [state.cartItems, state.userProfile, state.sessionId]);
+	}, [state.cartItems, state.userProfile, state.sessionId, state.isHydrated]);
 
-	// Notify header about cart changes
+	// Notify header about cart changes (ハイドレーション完了後のみ)
 	useEffect(() => {
+		// ハイドレーション完了前は通知しない
+		if (!state.isHydrated) return;
+		
 		const itemCount = state.cartItems.reduce((count, item) => count + item.quantity, 0);
-
+		
 		// カスタムイベントでヘッダーにカート数を通知
 		const cartUpdateEvent = new CustomEvent('cartUpdated', {
 			detail: { itemCount }
 		});
 		window.dispatchEvent(cartUpdateEvent);
-	}, [state.cartItems]);
+		console.log('🔔 Cart updated notification sent:', itemCount);
+	}, [state.cartItems, state.isHydrated]);
 
 	// Set up cart click handler for header
 	useEffect(() => {
@@ -382,12 +403,12 @@ export function useCart() {
 		const addedTime = new Date(addedAt).getTime();
 		const currentTime = Date.now();
 		const timeLeft = CART_EXPIRY_MS - (currentTime - addedTime);
-
+		
 		if (timeLeft <= 0) return null;
-
+		
 		const daysLeft = Math.floor(timeLeft / (24 * 60 * 60 * 1000));
 		const hoursLeft = Math.floor((timeLeft % (24 * 60 * 60 * 1000)) / (60 * 60 * 1000));
-
+		
 		if (daysLeft > 0) return `${daysLeft} day${daysLeft > 1 ? 's' : ''} left`;
 		if (hoursLeft > 0) return `${hoursLeft} hour${hoursLeft > 1 ? 's' : ''} left`;
 		return 'Expires soon';
@@ -398,7 +419,7 @@ export function useCart() {
 		const currentItem = state.cartItems.find(item => item.id === id);
 		const currentQuantity = currentItem ? currentItem.quantity : 0;
 		const totalRequested = currentQuantity + requestedQuantity;
-
+		
 		return {
 			canAdd: totalRequested <= availableStock && totalRequested <= 10,
 			maxCanAdd: Math.min(availableStock - currentQuantity, 10 - currentQuantity),

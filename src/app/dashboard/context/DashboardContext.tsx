@@ -117,6 +117,31 @@ export function DashboardProvider({ children }: { children: React.ReactNode }) {
 		}
 	}, [state.cartItems, state.userProfile]);
 
+	// Notify header about cart changes
+	useEffect(() => {
+		const itemCount = state.cartItems.reduce((count, item) => count + item.quantity, 0);
+		
+		// カスタムイベントでヘッダーにカート数を通知
+		const cartUpdateEvent = new CustomEvent('cartUpdated', {
+			detail: { itemCount }
+		});
+		window.dispatchEvent(cartUpdateEvent);
+	}, [state.cartItems]);
+
+	// Set up cart click handler for header
+	useEffect(() => {
+		const cartClickHandler = () => {
+			dispatch({ type: 'SET_ACTIVE_SECTION', payload: 'cart' });
+			dispatch({ type: 'SET_SLIDE_OPEN', payload: true });
+		};
+
+		// カスタムイベントでヘッダーにクリックハンドラーを登録
+		const handlerEvent = new CustomEvent('cartClickHandlerSet', {
+			detail: { clickHandler: cartClickHandler }
+		});
+		window.dispatchEvent(handlerEvent);
+	}, []);
+
 	return (
 		<DashboardContext.Provider value={{ state, dispatch }}>
 			{children}

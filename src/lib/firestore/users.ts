@@ -19,8 +19,8 @@ import {
 	UpdateUserProfile,
 	UpdateUserStats,
 	ProfileCompleteness
-} from '@/types/user';
-import { UserProfile } from '@/types/dashboard';
+} from '../../../types/user';
+import { UserProfile } from '../../../types/dashboard';
 
 // コレクション名
 const USERS_COLLECTION = 'users';

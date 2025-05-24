@@ -4,6 +4,34 @@ import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useAuth } from '@/contexts/AuthContext';
 import { AuthModal } from '../auth/AuthModal';
+import { ShoppingCart } from 'lucide-react';
+
+// ダッシュボードページでのみカート機能を使用するためのhook
+const useCartInDashboard = () => {
+	const [cartItemCount, setCartItemCount] = useState(0);
+	const [onCartClick, setOnCartClick] = useState<(() => void) | null>(null);
+
+	useEffect(() => {
+		// カスタムイベントリスナーを追加してダッシュボードからカート情報を受信
+		const handleCartUpdate = (event: CustomEvent) => {
+			setCartItemCount(event.detail.itemCount);
+		};
+
+		const handleCartClickHandler = (event: CustomEvent) => {
+			setOnCartClick(() => event.detail.clickHandler);
+		};
+
+		window.addEventListener('cartUpdated', handleCartUpdate as EventListener);
+		window.addEventListener('cartClickHandlerSet', handleCartClickHandler as EventListener);
+
+		return () => {
+			window.removeEventListener('cartUpdated', handleCartUpdate as EventListener);
+			window.removeEventListener('cartClickHandlerSet', handleCartClickHandler as EventListener);
+		};
+	}, []);
+
+	return { cartItemCount, onCartClick };
+};
 
 const Header = () => {
 	const [isVisible, setIsVisible] = useState(true);
@@ -12,6 +40,7 @@ const Header = () => {
 	const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
 
 	const { user, logout, loading } = useAuth();
+	const { cartItemCount, onCartClick } = useCartInDashboard();
 
 	useEffect(() => {
 		// カスタムイベントリスナーを追加してプロフィールページからログインモーダルを開く
@@ -52,6 +81,13 @@ const Header = () => {
 
 	const handleLoginClick = () => {
 		setIsAuthModalOpen(true);
+		setIsMobileMenuOpen(false);
+	};
+
+	const handleCartClick = () => {
+		if (onCartClick) {
+			onCartClick();
+		}
 		setIsMobileMenuOpen(false);
 	};
 
@@ -114,6 +150,27 @@ const Header = () => {
 									)}
 								</Link>
 							))}
+
+							{/* Cart Icon - Desktop */}
+							<button
+								onClick={handleCartClick}
+								className="relative p-2 text-gray-300 hover:text-white transition-colors duration-200 hover:bg-dark-200/50 rounded-sm group"
+								aria-label="Shopping cart"
+							>
+								<ShoppingCart className="w-6 h-6" />
+								
+								{/* Cart Badge */}
+								{cartItemCount > 0 && (
+									<div className="absolute -top-1 -right-1 w-5 h-5 bg-gradient-to-r from-neonGreen to-neonOrange rounded-full flex items-center justify-center">
+										<span className="text-xs font-bold text-black">
+											{cartItemCount > 99 ? '99+' : cartItemCount}
+										</span>
+									</div>
+								)}
+
+								{/* Glow effect */}
+								<div className="absolute inset-0 bg-gradient-to-r from-neonGreen/20 to-neonOrange/20 rounded-sm transform scale-0 group-hover:scale-100 transition-transform duration-200"></div>
+							</button>
 
 							{/* Authentication Section */}
 							{loading ? (
@@ -191,6 +248,24 @@ const Header = () => {
 									{link.label}
 								</Link>
 							))}
+
+							{/* Cart Icon - Mobile */}
+							<button
+								onClick={handleCartClick}
+								className="flex items-center justify-between w-full px-4 py-3 text-base font-medium text-gray-300 hover:text-white hover:bg-dark-200 transition-all duration-200 rounded-sm"
+							>
+								<div className="flex items-center space-x-3">
+									<ShoppingCart className="w-5 h-5" />
+									<span>Shopping Cart</span>
+								</div>
+								{cartItemCount > 0 && (
+									<div className="w-6 h-6 bg-gradient-to-r from-neonGreen to-neonOrange rounded-full flex items-center justify-center">
+										<span className="text-xs font-bold text-black">
+											{cartItemCount > 99 ? '99+' : cartItemCount}
+										</span>
+									</div>
+								)}
+							</button>
 
 							{/* Mobile Authentication Section */}
 							{loading ? (

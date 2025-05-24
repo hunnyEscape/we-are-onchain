@@ -59,14 +59,6 @@ const DashboardGrid: React.FC<DashboardGridProps> = ({ onCardClick }) => {
       description: 'Manage your account and view history',
       icon: <User className="w-8 h-8 text-neonGreen" />,
       stats: 'Rank #42'
-    },
-    {
-      id: 'cart' as SectionType,
-      title: 'Cart',
-      description: 'Review and checkout your items',
-      icon: <ShoppingCart className="w-8 h-8 text-neonOrange" />,
-      stats: cartItemCount > 0 ? `${cartItemCount} Items` : '0 Items',
-      badge: cartItemCount > 0 ? 'Ready' : undefined
     }
   ];
 

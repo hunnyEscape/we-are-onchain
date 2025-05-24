@@ -33,6 +33,6 @@ export default function Home() {
 			<PepePush />
 			<Footer />
 
-			<LayeredGallerySection />
+			<LayeredGallerySection /
 
 */

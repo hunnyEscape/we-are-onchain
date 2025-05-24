@@ -6,7 +6,7 @@ import CyberCard from '../../../components/common/CyberCard';
 import CyberButton from '../../../components/common/CyberButton';
 import ProteinModel from '../../../components/home/glowing-3d-text/ProteinModel';
 import { useCart } from '../../context/DashboardContext';
-import { ShoppingCart, Star, Shield, Zap, Check } from 'lucide-react';
+import { ShoppingCart, Star, Shield, Zap, Check, AlertTriangle, Clock } from 'lucide-react';
 
 interface Product {
 	id: string;
@@ -31,8 +31,10 @@ const ShopSection: React.FC = () => {
 	const [quantity, setQuantity] = useState(1);
 	const [selectedCurrency, setSelectedCurrency] = useState<'ETH' | 'USDC' | 'USDT'>('ETH');
 	const [showSuccessMessage, setShowSuccessMessage] = useState(false);
+	const [showStockWarning, setShowStockWarning] = useState(false);
+	const [stockWarningMessage, setStockWarningMessage] = useState('');
 
-	const { addToCart, cartItems } = useCart();
+	const { addToCart, cartItems, checkStock } = useCart();
 
 	// 商品データ
 	const product: Product = {
@@ -65,8 +67,43 @@ const ShopSection: React.FC = () => {
 		return cartItem ? cartItem.quantity : 0;
 	};
 
+	// 数量変更時のバリデーション
+	const handleQuantityChange = (newQuantity: number) => {
+		const stockCheck = checkStock(product.id, newQuantity - quantity, product.inStock);
+		
+		if (newQuantity < 1) {
+			setQuantity(1);
+			return;
+		}
+
+		if (!stockCheck.canAdd && newQuantity > quantity) {
+			if (stockCheck.willExceedStock) {
+				setStockWarningMessage(`Only ${product.inStock - getCartQuantity()} items available in stock`);
+			} else if (stockCheck.willExceedLimit) {
+				setStockWarningMessage('Maximum 10 items per order');
+			}
+			setShowStockWarning(true);
+			setTimeout(() => setShowStockWarning(false), 3000);
+			return;
+		}
+
+		setQuantity(Math.min(newQuantity, 10));
+	};
 
 	const handleAddToCart = () => {
+		const stockCheck = checkStock(product.id, quantity, product.inStock);
+		
+		if (!stockCheck.canAdd) {
+			if (stockCheck.willExceedStock) {
+				setStockWarningMessage(`Only ${stockCheck.maxCanAdd} more items can be added (stock limit)`);
+			} else if (stockCheck.willExceedLimit) {
+				setStockWarningMessage(`Only ${stockCheck.maxCanAdd} more items can be added (order limit: 10)`);
+			}
+			setShowStockWarning(true);
+			setTimeout(() => setShowStockWarning(false), 3000);
+			return;
+		}
+
 		const cartItem = {
 			id: product.id,
 			name: product.name,
@@ -75,12 +112,15 @@ const ShopSection: React.FC = () => {
 			currency: selectedCurrency,
 		};
 
-		addToCart(cartItem);
+		addToCart(cartItem, product.inStock);
 		setShowSuccessMessage(true);
 
 		setTimeout(() => {
 			setShowSuccessMessage(false);
 		}, 3000);
+
+		// 追加後は数量を1にリセット
+		setQuantity(1);
 	};
 
 	const handleBuyNow = () => {
@@ -89,6 +129,9 @@ const ShopSection: React.FC = () => {
 	};
 
 	const currentCartQuantity = getCartQuantity();
+	const availableToAdd = Math.min(product.inStock - currentCartQuantity, 10 - currentCartQuantity);
+	const isOutOfStock = product.inStock <= currentCartQuantity;
+	const isAtLimit = currentCartQuantity >= 10;
 
 	return (
 		<div className="space-y-8">
@@ -112,17 +155,25 @@ const ShopSection: React.FC = () => {
 				</div>
 			)}
 
+			{/* Stock Warning */}
+			{showStockWarning && (
+				<div className="fixed top-24 right-4 z-50 p-4 bg-yellow-600/10 border border-yellow-600 rounded-sm backdrop-blur-sm animate-pulse">
+					<div className="flex items-center space-x-2">
+						<AlertTriangle className="w-5 h-5 text-yellow-400" />
+						<span className="text-yellow-400 font-medium">{stockWarningMessage}</span>
+					</div>
+				</div>
+			)}
+
 			{/* Product Display */}
 			<div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
 				{/* 3D Model */}
 				<CyberCard
 					variant="default"
 					showEffects={false}
-					className="h-[500px] w-full" // Increased height and padding
+					className="h-[500px] w-full"
 				>
-					{/* Model Container - Takes up most of the card space */}
 					<div className="h-full w-full flex flex-col">
-						{/* 3D Model - Expanded to fill most of the container */}
 						<div className="w-full h-[400px] pointer-events-auto">
 							<ProteinModel
 								scale={1}
@@ -155,7 +206,9 @@ const ShopSection: React.FC = () => {
 								))}
 								<span className="text-sm text-gray-400 ml-2">({product.rating})</span>
 							</div>
-							<span className="text-sm text-neonGreen">{product.inStock} in stock</span>
+							<span className={`text-sm ${product.inStock > 10 ? 'text-neonGreen' : product.inStock > 0 ? 'text-yellow-400' : 'text-red-400'}`}>
+								{product.inStock > 0 ? `${product.inStock} in stock` : 'Out of stock'}
+							</span>
 						</div>
 						<p className="text-gray-400 leading-relaxed">
 							{product.description}
@@ -177,13 +230,30 @@ const ShopSection: React.FC = () => {
 						</div>
 					</div>
 
+					{/* Cart Status */}
+					{currentCartQuantity > 0 && (
+						<div className="flex items-center space-x-2 p-3 border border-neonGreen/30 rounded-sm bg-neonGreen/5">
+							<ShoppingCart className="w-4 h-4 text-neonGreen" />
+							<span className="text-sm text-neonGreen">
+								{currentCartQuantity} item{currentCartQuantity > 1 ? 's' : ''} in cart
+							</span>
+							{currentCartQuantity >= 5 && (
+								<>
+									<Clock className="w-4 h-4 text-yellow-400" />
+									<span className="text-xs text-yellow-400">Items expire in 30 days</span>
+								</>
+							)}
+						</div>
+					)}
+
 					{/* Quantity Selector */}
 					<div className="flex items-center space-x-4">
 						<label className="text-sm font-medium text-white">Quantity:</label>
 						<div className="flex items-center border border-dark-300 rounded-sm">
 							<button
-								onClick={() => setQuantity(Math.max(1, quantity - 1))}
-								className="px-3 py-2 text-white hover:bg-dark-200 transition-colors"
+								onClick={() => handleQuantityChange(quantity - 1)}
+								className="px-3 py-2 text-white hover:bg-dark-200 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+								disabled={quantity <= 1}
 							>
 								-
 							</button>
@@ -191,24 +261,37 @@ const ShopSection: React.FC = () => {
 								{quantity}
 							</span>
 							<button
-								onClick={() => setQuantity(Math.min(10, quantity + 1))}
-								className="px-3 py-2 text-white hover:bg-dark-200 transition-colors"
+								onClick={() => handleQuantityChange(quantity + 1)}
+								className="px-3 py-2 text-white hover:bg-dark-200 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+								disabled={quantity >= availableToAdd || isOutOfStock || isAtLimit}
 							>
 								+
 							</button>
 						</div>
-						{currentCartQuantity > 0 && (
-							<span className="text-sm text-neonGreen">
-								{currentCartQuantity} in cart
-							</span>
-						)}
+						<div className="text-xs text-gray-400">
+							{isOutOfStock ? 'Out of stock' : 
+							 isAtLimit ? 'Max limit reached' :
+							 `Max ${availableToAdd} more`}
+						</div>
 					</div>
+
+					{/* Stock Warnings */}
+					{(isOutOfStock || isAtLimit) && (
+						<div className="flex items-start space-x-2 p-3 border border-yellow-600/30 rounded-sm bg-yellow-600/5">
+							<AlertTriangle className="w-4 h-4 text-yellow-400 flex-shrink-0 mt-0.5" />
+							<div className="text-xs text-gray-300">
+								{isOutOfStock ? 'This item is currently out of stock.' :
+								 'Maximum order limit (10 items) reached for this product.'}
+							</div>
+						</div>
+					)}
 
 					<div className="space-y-3">
 						<CyberButton
 							variant="outline"
 							className="w-full flex items-center justify-center space-x-2"
 							onClick={handleAddToCart}
+							disabled={isOutOfStock || isAtLimit}
 						>
 							<ShoppingCart className="w-4 h-4" />
 							<span>Add to Cart</span>
@@ -228,10 +311,10 @@ const ShopSection: React.FC = () => {
 						</div>
 					</div>
 				</div>
-			</div >
+			</div>
 
 			{/* Nutrition Facts */}
-			< CyberCard
+			<CyberCard
 				title="Nutrition Facts"
 				description="Per 50g serving"
 				showEffects={false}
@@ -244,8 +327,8 @@ const ShopSection: React.FC = () => {
 						</div>
 					))}
 				</div>
-			</CyberCard >
-		</div >
+			</CyberCard>
+		</div>
 	);
 };
 

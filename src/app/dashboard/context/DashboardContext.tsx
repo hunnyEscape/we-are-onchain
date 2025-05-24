@@ -4,16 +4,42 @@
 import React, { createContext, useContext, useReducer, useEffect } from 'react';
 import { DashboardState, CartItem, UserProfile, SectionType } from '../../../../types/dashboard';
 
+// カート有効期限（30日）
+const CART_EXPIRY_DAYS = 30;
+const CART_EXPIRY_MS = CART_EXPIRY_DAYS * 24 * 60 * 60 * 1000;
+
+// 拡張されたCartItemの型（有効期限付き）
+interface CartItemWithExpiry extends CartItem {
+	addedAt: string; // ISO string
+}
+
 // Actions
 type DashboardAction =
 	| { type: 'SET_USER_PROFILE'; payload: UserProfile | null }
-	| { type: 'ADD_TO_CART'; payload: CartItem }
+	| { type: 'ADD_TO_CART'; payload: CartItem & { maxStock?: number } }
 	| { type: 'REMOVE_FROM_CART'; payload: string }
-	| { type: 'UPDATE_CART_QUANTITY'; payload: { id: string; quantity: number } }
+	| { type: 'UPDATE_CART_QUANTITY'; payload: { id: string; quantity: number; maxStock?: number } }
 	| { type: 'CLEAR_CART' }
+	| { type: 'CLEAR_EXPIRED_ITEMS' }
 	| { type: 'LOAD_FROM_STORAGE'; payload: Partial<DashboardState> }
 	| { type: 'SET_ACTIVE_SECTION'; payload: SectionType | null }
 	| { type: 'SET_SLIDE_OPEN'; payload: boolean };
+
+// Helper functions for cart management
+const isItemExpired = (addedAt: string): boolean => {
+	const addedTime = new Date(addedAt).getTime();
+	const currentTime = Date.now();
+	return currentTime - addedTime > CART_EXPIRY_MS;
+};
+
+const validateQuantity = (quantity: number, maxStock?: number): number => {
+	const validQuantity = Math.max(1, Math.min(quantity, 10)); // 最低1個、最大10個
+	return maxStock ? Math.min(validQuantity, maxStock) : validQuantity;
+};
+
+const removeExpiredItems = (items: CartItemWithExpiry[]): CartItemWithExpiry[] => {
+	return items.filter(item => !isItemExpired(item.addedAt));
+};
 
 // Initial state
 const initialState: DashboardState = {
@@ -31,44 +57,85 @@ function dashboardReducer(state: DashboardState, action: DashboardAction): Dashb
 			return { ...state, userProfile: action.payload };
 
 		case 'ADD_TO_CART': {
-			const existingItem = state.cartItems.find(item => item.id === action.payload.id);
+			const { maxStock, ...itemData } = action.payload;
+			const newItem: CartItemWithExpiry = {
+				...itemData,
+				addedAt: new Date().toISOString()
+			};
+
+			// 期限切れアイテムを除去
+			const validItems = removeExpiredItems(state.cartItems as CartItemWithExpiry[]);
+			
+			const existingItem = validItems.find(item => item.id === newItem.id);
+			
 			if (existingItem) {
+				const newQuantity = validateQuantity(existingItem.quantity + newItem.quantity, maxStock);
 				return {
 					...state,
-					cartItems: state.cartItems.map(item =>
-						item.id === action.payload.id
-							? { ...item, quantity: item.quantity + action.payload.quantity }
+					cartItems: validItems.map(item =>
+						item.id === newItem.id
+							? { ...item, quantity: newQuantity }
 							: item
 					),
 				};
 			}
+
+			// 新しいアイテムの数量検証
+			const validatedQuantity = validateQuantity(newItem.quantity, maxStock);
+			
 			return {
 				...state,
-				cartItems: [...state.cartItems, action.payload],
+				cartItems: [...validItems, { ...newItem, quantity: validatedQuantity }],
 			};
 		}
 
-		case 'REMOVE_FROM_CART':
+		case 'REMOVE_FROM_CART': {
+			const validItems = removeExpiredItems(state.cartItems as CartItemWithExpiry[]);
 			return {
 				...state,
-				cartItems: state.cartItems.filter(item => item.id !== action.payload),
+				cartItems: validItems.filter(item => item.id !== action.payload),
 			};
+		}
 
-		case 'UPDATE_CART_QUANTITY':
+		case 'UPDATE_CART_QUANTITY': {
+			const { id, quantity, maxStock } = action.payload;
+			const validItems = removeExpiredItems(state.cartItems as CartItemWithExpiry[]);
+			
+			if (quantity <= 0) {
+				return {
+					...state,
+					cartItems: validItems.filter(item => item.id !== id),
+				};
+			}
+
+			const validatedQuantity = validateQuantity(quantity, maxStock);
+			
 			return {
 				...state,
-				cartItems: state.cartItems.map(item =>
-					item.id === action.payload.id
-						? { ...item, quantity: Math.max(0, action.payload.quantity) }
+				cartItems: validItems.map(item =>
+					item.id === id
+						? { ...item, quantity: validatedQuantity }
 						: item
-				).filter(item => item.quantity > 0),
+				),
 			};
+		}
 
 		case 'CLEAR_CART':
 			return { ...state, cartItems: [] };
 
-		case 'LOAD_FROM_STORAGE':
-			return { ...state, ...action.payload };
+		case 'CLEAR_EXPIRED_ITEMS': {
+			const validItems = removeExpiredItems(state.cartItems as CartItemWithExpiry[]);
+			return { ...state, cartItems: validItems };
+		}
+
+		case 'LOAD_FROM_STORAGE': {
+			// ストレージからロード時も期限チェック
+			const loadedData = { ...action.payload };
+			if (loadedData.cartItems) {
+				loadedData.cartItems = removeExpiredItems(loadedData.cartItems as CartItemWithExpiry[]);
+			}
+			return { ...state, ...loadedData };
+		}
 
 		case 'SET_ACTIVE_SECTION':
 			return { ...state, activeSection: action.payload };
@@ -110,12 +177,25 @@ export function DashboardProvider({ children }: { children: React.ReactNode }) {
 			const stateToSave = {
 				cartItems: state.cartItems,
 				userProfile: state.userProfile,
+				lastUpdated: new Date().toISOString(),
 			};
 			localStorage.setItem('dashboard-state', JSON.stringify(stateToSave));
 		} catch (error) {
 			console.error('Failed to save dashboard state to localStorage:', error);
 		}
 	}, [state.cartItems, state.userProfile]);
+
+	// 定期的な期限切れアイテムチェック（10分ごと）
+	useEffect(() => {
+		const interval = setInterval(() => {
+			dispatch({ type: 'CLEAR_EXPIRED_ITEMS' });
+		}, 10 * 60 * 1000); // 10分
+
+		// 初回ロード時にも実行
+		dispatch({ type: 'CLEAR_EXPIRED_ITEMS' });
+
+		return () => clearInterval(interval);
+	}, []);
 
 	// Notify header about cart changes
 	useEffect(() => {
@@ -187,16 +267,16 @@ export function usePanel() {
 export function useCart() {
 	const { state, dispatch } = useDashboard();
 
-	const addToCart = (item: CartItem) => {
-		dispatch({ type: 'ADD_TO_CART', payload: item });
+	const addToCart = (item: CartItem, maxStock?: number) => {
+		dispatch({ type: 'ADD_TO_CART', payload: { ...item, maxStock } });
 	};
 
 	const removeFromCart = (id: string) => {
 		dispatch({ type: 'REMOVE_FROM_CART', payload: id });
 	};
 
-	const updateQuantity = (id: string, quantity: number) => {
-		dispatch({ type: 'UPDATE_CART_QUANTITY', payload: { id, quantity } });
+	const updateQuantity = (id: string, quantity: number, maxStock?: number) => {
+		dispatch({ type: 'UPDATE_CART_QUANTITY', payload: { id, quantity, maxStock } });
 	};
 
 	const clearCart = () => {
@@ -211,6 +291,36 @@ export function useCart() {
 		return state.cartItems.reduce((count, item) => count + item.quantity, 0);
 	};
 
+	// カート内のアイテムの残り有効期限を取得
+	const getItemTimeLeft = (addedAt: string) => {
+		const addedTime = new Date(addedAt).getTime();
+		const currentTime = Date.now();
+		const timeLeft = CART_EXPIRY_MS - (currentTime - addedTime);
+		
+		if (timeLeft <= 0) return null;
+		
+		const daysLeft = Math.floor(timeLeft / (24 * 60 * 60 * 1000));
+		const hoursLeft = Math.floor((timeLeft % (24 * 60 * 60 * 1000)) / (60 * 60 * 1000));
+		
+		if (daysLeft > 0) return `${daysLeft} day${daysLeft > 1 ? 's' : ''} left`;
+		if (hoursLeft > 0) return `${hoursLeft} hour${hoursLeft > 1 ? 's' : ''} left`;
+		return 'Expires soon';
+	};
+
+	// 在庫チェック機能
+	const checkStock = (id: string, requestedQuantity: number, availableStock: number) => {
+		const currentItem = state.cartItems.find(item => item.id === id);
+		const currentQuantity = currentItem ? currentItem.quantity : 0;
+		const totalRequested = currentQuantity + requestedQuantity;
+		
+		return {
+			canAdd: totalRequested <= availableStock && totalRequested <= 10,
+			maxCanAdd: Math.min(availableStock - currentQuantity, 10 - currentQuantity),
+			willExceedStock: totalRequested > availableStock,
+			willExceedLimit: totalRequested > 10
+		};
+	};
+
 	return {
 		cartItems: state.cartItems,
 		addToCart,
@@ -219,6 +329,8 @@ export function useCart() {
 		clearCart,
 		getCartTotal,
 		getCartItemCount,
+		getItemTimeLeft,
+		checkStock,
 	};
 }
 

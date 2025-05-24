@@ -127,18 +127,23 @@ const ShopSection: React.FC = () => {
 				<CyberCard
 					variant="default"
 					showEffects={false}
-					className="h-[500px]"
+					className="h-[500px] w-full" // Increased height and padding
 				>
-					<div className="h-full flex flex-col">
-						<div className="flex-1">
-							<ProteinModel scale={1.2} autoRotate={true} />
+					{/* Model Container - Takes up most of the card space */}
+					<div className="h-full w-full flex flex-col">
+						{/* 3D Model - Expanded to fill most of the container */}
+						<div className="w-full h-[400px] pointer-events-auto">
+							<ProteinModel
+								scale={1}
+								autoRotate={true}
+							/>
 						</div>
-						<div className="text-center pt-4">
-							<div className="inline-flex items-center space-x-2 px-3 py-1 bg-neonGreen/10 border border-neonGreen/30 rounded-sm">
-								<Shield className="w-4 h-4 text-neonGreen" />
-								<span className="text-xs text-neonGreen">Blockchain Verified</span>
-							</div>
-						</div>
+        <div className="w-full flex justify-center pt-4 pb-2">
+            <div className="inline-flex items-center space-x-2 px-4 py-2 bg-neonGreen/10 border border-neonGreen/30 rounded-sm">
+                <Shield className="w-5 h-5 text-neonGreen" /> 
+                <span className="text-sm text-neonGreen font-medium">Blockchain Verified</span> 
+            </div> 
+        </div>
 					</div>
 				</CyberCard>
 
@@ -237,10 +242,10 @@ const ShopSection: React.FC = () => {
 						</div>
 					</div>
 				</div>
-			</div>
+			</div >
 
 			{/* Nutrition Facts */}
-			<CyberCard
+			< CyberCard
 				title="Nutrition Facts"
 				description="Per 50g serving"
 				showEffects={false}
@@ -253,8 +258,8 @@ const ShopSection: React.FC = () => {
 						</div>
 					))}
 				</div>
-			</CyberCard>
-		</div>
+			</CyberCard >
+		</div >
 	);
 };
 

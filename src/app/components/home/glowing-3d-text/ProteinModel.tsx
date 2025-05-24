@@ -88,7 +88,7 @@ const ProteinModel: React.FC<ProteinModelProps> = ({ className = '', autoRotate 
 	}, []);
 
 	return (
-		<div className={`w-full h-full ${className}`}>
+
 			<Canvas
 				gl={{ antialias: false }}
 				dpr={1}
@@ -96,9 +96,7 @@ const ProteinModel: React.FC<ProteinModelProps> = ({ className = '', autoRotate 
 				frameloop="always"
 				style={{ touchAction: 'pan-y' }}
 			>
-				<ErrorBoundary fallback={<div className="text-center p-4">エラー: 3Dモデルの読み込みに失敗しました</div>}>
-					<ProteinContainer autoRotate={autoRotate} scale={scale} rotationSpeed={rotationSpeed} />
-				</ErrorBoundary>
+				<ProteinContainer autoRotate={autoRotate} scale={scale} rotationSpeed={rotationSpeed} />
 
 				<Environment preset="city" />
 				<PerspectiveCamera makeDefault position={[0, 0, 3]} fov={40} />
@@ -119,7 +117,7 @@ const ProteinModel: React.FC<ProteinModelProps> = ({ className = '', autoRotate 
 					/>
 				)}
 			</Canvas>
-		</div>
+
 	);
 };
 

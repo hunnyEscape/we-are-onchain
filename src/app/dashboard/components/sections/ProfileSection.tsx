@@ -5,7 +5,7 @@ import React, { useState, useEffect } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import CyberCard from '../../../components/common/CyberCard';
 import CyberButton from '../../../components/common/CyberButton';
-import { UserProfile } from '../../../../../types/dashboard';
+import { ProfileEditModal } from './ProfileEditModal';
 import {
 	User,
 	Wallet,
@@ -18,24 +18,28 @@ import {
 	Copy,
 	Check,
 	Shield,
-	LogIn
+	LogIn,
+	Edit,
+	AlertCircle,
+	CheckCircle
 } from 'lucide-react';
+import {
+	getUserDisplayName,
+	getUserAvatarUrl,
+	getUserInitials,
+	formatUserStats,
+	formatDate,
+	formatAddress,
+	calculateProfileCompleteness
+} from '@/utils/userHelpers';
 
 const ProfileSection: React.FC = () => {
-	const { user, loading } = useAuth();
+	const { user, loading, firestoreUser, firestoreLoading } = useAuth();
 	const [copiedAddress, setCopiedAddress] = useState(false);
-	const [showLoginPrompt, setShowLoginPrompt] = useState(false);
+	const [isEditModalOpen, setIsEditModalOpen] = useState(false);
 
-	useEffect(() => {
-		if (!loading && !user) {
-			setShowLoginPrompt(true);
-		} else {
-			setShowLoginPrompt(false);
-		}
-	}, [user, loading]);
-
-	// ローディング状
-	if (loading) {
+	// ローディング状態
+	if (loading || firestoreLoading) {
 		return (
 			<div className="space-y-8">
 				<div className="text-center">
@@ -91,7 +95,6 @@ const ProfileSection: React.FC = () => {
 								variant="primary"
 								className="flex items-center space-x-2"
 								onClick={() => {
-									// ヘッダーのログインボタンをクリックするか、カスタムイベントを発火
 									const loginEvent = new CustomEvent('openAuthModal');
 									window.dispatchEvent(loginEvent);
 								}}
@@ -123,15 +126,56 @@ const ProfileSection: React.FC = () => {
 		);
 	}
 
-	// 認証されたユーザーのプロフィールデータ（実際のFirebaseユーザーデータを使用）
-	const userProfile: UserProfile = {
-		walletAddress: user.uid, // Firebase UIDを使用（実際のウォレット接続時は置き換え）
-		displayName: user.displayName || user.email?.split('@')[0] || 'Anonymous User',
-		totalSpent: 0.125, // 実際のデータベースから取得
-		totalOrders: 3,
-		rank: 42,
-		badges: ['New Member', 'Early Adopter', 'Community Supporter'],
-		joinDate: user.metadata.creationTime ? new Date(user.metadata.creationTime) : new Date()
+	// Firestoreユーザーデータが存在しない場合
+	if (!firestoreUser) {
+		return (
+			<div className="space-y-8">
+				<div className="text-center">
+					<h2 className="text-3xl font-heading font-bold text-white mb-2">
+						Profile
+					</h2>
+					<p className="text-gray-400">
+						Setting up your profile...
+					</p>
+				</div>
+
+				<CyberCard showEffects={false}>
+					<div className="text-center py-12">
+						<div className="w-20 h-20 bg-gradient-to-br from-neonOrange/20 to-red-500/20 rounded-full flex items-center justify-center mx-auto mb-6">
+							<AlertCircle className="w-10 h-10 text-neonOrange" />
+						</div>
+
+						<h3 className="text-2xl font-bold text-white mb-4">
+							Profile Setup in Progress
+						</h3>
+
+						<p className="text-gray-400 mb-8 max-w-md mx-auto">
+							We're setting up your profile. This usually takes just a moment.
+						</p>
+
+						<CyberButton
+							variant="outline"
+							onClick={() => window.location.reload()}
+						>
+							Refresh Page
+						</CyberButton>
+					</div>
+				</CyberCard>
+			</div>
+		);
+	}
+
+	// プロフィール完成度を計算
+	const profileCompleteness = calculateProfileCompleteness(firestoreUser);
+	const formattedStats = formatUserStats(firestoreUser.stats);
+	const displayName = getUserDisplayName(firestoreUser, user);
+	const avatarUrl = getUserAvatarUrl(firestoreUser, user);
+	const initials = getUserInitials(firestoreUser, user);
+
+	const handleCopyAddress = () => {
+		navigator.clipboard.writeText(firestoreUser.walletAddress || firestoreUser.id);
+		setCopiedAddress(true);
+		setTimeout(() => setCopiedAddress(false), 2000);
 	};
 
 	const orderHistory = [
@@ -169,24 +213,10 @@ const ProfileSection: React.FC = () => {
 
 	const achievements = [
 		{ name: 'First Purchase', description: 'Made your first crypto purchase', earned: true },
-		{ name: 'Loyal Customer', description: 'Made 5+ purchases', earned: false, progress: 3 },
+		{ name: 'Loyal Customer', description: 'Made 5+ purchases', earned: false, progress: firestoreUser.stats.totalOrders },
 		{ name: 'Community Champion', description: 'Active in Discord for 30 days', earned: true },
-		{ name: 'Whale Status', description: 'Spent over 1 ETH total', earned: false, progress: 0.125 }
+		{ name: 'Whale Status', description: 'Spent over 1 ETH total', earned: false, progress: firestoreUser.stats.totalSpent }
 	];
-
-	const handleCopyAddress = () => {
-		navigator.clipboard.writeText(userProfile.walletAddress);
-		setCopiedAddress(true);
-		setTimeout(() => setCopiedAddress(false), 2000);
-	};
-
-	const formatDate = (date: Date) => {
-		return date.toLocaleDateString('en-US', {
-			year: 'numeric',
-			month: 'short',
-			day: 'numeric'
-		});
-	};
 
 	const getStatusColor = (status: string) => {
 		switch (status) {
@@ -209,19 +239,74 @@ const ProfileSection: React.FC = () => {
 				</p>
 			</div>
 
-			{/* Welcome Message for Authenticated User */}
+			{/* Profile Completeness Alert */}
+			{!profileCompleteness.isComplete && (
+				<div className="bg-gradient-to-r from-neonOrange/10 to-yellow-500/10 border border-neonOrange/30 rounded-sm p-4">
+					<div className="flex items-start space-x-3">
+						<AlertCircle className="w-5 h-5 text-neonOrange mt-0.5" />
+						<div className="flex-1">
+							<h4 className="text-neonOrange font-semibold mb-1">
+								Complete Your Profile ({profileCompleteness.completionPercentage}%)
+							</h4>
+							<p className="text-sm text-gray-300 mb-3">
+								Add missing information to unlock all features and improve your experience.
+							</p>
+							<div className="w-full bg-dark-300 rounded-full h-2 mb-3">
+								<div
+									className="bg-gradient-to-r from-neonOrange to-yellow-500 h-2 rounded-full transition-all duration-300"
+									style={{ width: `${profileCompleteness.completionPercentage}%` }}
+								/>
+							</div>
+							<div className="flex flex-wrap gap-2 mb-3">
+								{profileCompleteness.missingFields.map((field, index) => (
+									<span key={index} className="text-xs bg-neonOrange/20 text-neonOrange px-2 py-1 rounded">
+										{field}
+									</span>
+								))}
+							</div>
+							<CyberButton
+								variant="outline"
+								size="sm"
+								onClick={() => setIsEditModalOpen(true)}
+								className="flex items-center space-x-2"
+							>
+								<Edit className="w-3 h-3" />
+								<span>Complete Profile</span>
+							</CyberButton>
+						</div>
+					</div>
+				</div>
+			)}
+
+			{/* Welcome Message */}
 			<div className="bg-gradient-to-r from-neonGreen/10 to-neonOrange/10 border border-neonGreen/30 rounded-sm p-4">
-				<div className="flex items-center space-x-3">
-					<div className="w-10 h-10 bg-gradient-to-br from-neonGreen to-neonOrange rounded-full flex items-center justify-center">
-						<User className="w-5 h-5 text-black" />
+				<div className="flex items-center justify-between">
+					<div className="flex items-center space-x-3">
+						<div className="w-10 h-10 bg-gradient-to-br from-neonGreen to-neonOrange rounded-full flex items-center justify-center">
+							{profileCompleteness.isComplete ? (
+								<CheckCircle className="w-5 h-5 text-black" />
+							) : (
+								<User className="w-5 h-5 text-black" />
+							)}
+						</div>
+						<div>
+							<h3 className="text-white font-semibold">Welcome back, {displayName}!</h3>
+							<p className="text-sm text-gray-400">
+								Connected via {user.providerData[0]?.providerId === 'google.com' ? 'Google' : 'Email'}
+								{user.emailVerified && <span className="text-neonGreen ml-2">✓ Verified</span>}
+								{profileCompleteness.isComplete && <span className="text-neonGreen ml-2">✓ Complete</span>}
+							</p>
+						</div>
 					</div>
-					<div>
-						<h3 className="text-white font-semibold">Welcome back, {userProfile.displayName}!</h3>
-						<p className="text-sm text-gray-400">
-							Connected via {user.providerData[0]?.providerId === 'google.com' ? 'Google' : 'Email'}
-							{user.emailVerified && <span className="text-neonGreen ml-2">✓ Verified</span>}
-						</p>
-					</div>
+					<CyberButton
+						variant="outline"
+						size="sm"
+						onClick={() => setIsEditModalOpen(true)}
+						className="flex items-center space-x-2"
+					>
+						<Edit className="w-3 h-3" />
+						<span>Edit</span>
+					</CyberButton>
 				</div>
 			</div>
 
@@ -232,16 +317,16 @@ const ProfileSection: React.FC = () => {
 					<div className="flex items-start space-x-6">
 						{/* Avatar */}
 						<div className="flex-shrink-0">
-							{user.photoURL ? (
+							{avatarUrl ? (
 								<img
-									src={user.photoURL}
+									src={avatarUrl}
 									alt="Profile"
 									className="w-20 h-20 rounded-full border-2 border-neonGreen"
 								/>
 							) : (
 								<div className="w-20 h-20 bg-gradient-to-br from-neonGreen to-neonOrange rounded-full flex items-center justify-center">
 									<span className="text-2xl font-bold text-black">
-										{userProfile.displayName[0].toUpperCase()}
+										{initials}
 									</span>
 								</div>
 							)}
@@ -249,11 +334,16 @@ const ProfileSection: React.FC = () => {
 
 						{/* Profile Info */}
 						<div className="flex-1">
-							<h3 className="text-xl font-bold text-white mb-2">{userProfile.displayName}</h3>
+							<div className="flex items-center space-x-3 mb-2">
+								<h3 className="text-xl font-bold text-white">{displayName}</h3>
+								{firestoreUser.nickname && firestoreUser.nickname !== displayName && (
+									<span className="text-sm text-gray-400">({firestoreUser.nickname})</span>
+								)}
+							</div>
 
 							<div className="flex items-center space-x-2 mb-2">
 								<span className="text-sm text-gray-400">Email:</span>
-								<span className="text-sm text-gray-300">{user.email}</span>
+								<span className="text-sm text-gray-300">{firestoreUser.email}</span>
 								{user.emailVerified && (
 									<span className="text-xs bg-neonGreen/20 text-neonGreen px-2 py-1 rounded">Verified</span>
 								)}
@@ -262,7 +352,7 @@ const ProfileSection: React.FC = () => {
 							<div className="flex items-center space-x-2 mb-4">
 								<Wallet className="w-4 h-4 text-gray-400" />
 								<span className="font-mono text-sm text-gray-300">
-									User ID: {user.uid.slice(0, 8)}...{user.uid.slice(-4)}
+									User ID: {firestoreUser.id.slice(0, 8)}...{firestoreUser.id.slice(-4)}
 								</span>
 								<button
 									onClick={handleCopyAddress}
@@ -275,12 +365,18 @@ const ProfileSection: React.FC = () => {
 							<div className="grid grid-cols-2 gap-4">
 								<div>
 									<div className="text-sm text-gray-400">Member Since</div>
-									<div className="text-white font-semibold">{formatDate(userProfile.joinDate)}</div>
+									<div className="text-white font-semibold">{formatDate(firestoreUser.createdAt)}</div>
 								</div>
 								<div>
 									<div className="text-sm text-gray-400">Community Rank</div>
-									<div className="text-neonGreen font-semibold">#{userProfile.rank}</div>
+									<div className="text-neonGreen font-semibold">{formattedStats.rankFormatted}</div>
 								</div>
+							</div>
+
+							{/* Address Display */}
+							<div className="mt-4 p-3 bg-dark-200/30 rounded-sm">
+								<div className="text-sm text-gray-400 mb-1">Address</div>
+								<div className="text-sm text-gray-300">{formatAddress(firestoreUser.address)}</div>
 							</div>
 						</div>
 					</div>
@@ -292,19 +388,26 @@ const ProfileSection: React.FC = () => {
 						<div className="flex justify-between items-center">
 							<span className="text-gray-400">Total Spent</span>
 							<div className="text-right">
-								<div className="text-neonGreen font-bold">Ξ {userProfile.totalSpent}</div>
-								<div className="text-xs text-gray-500">$420.25</div>
+								<div className="text-neonGreen font-bold">{formattedStats.totalSpentFormatted}</div>
+								<div className="text-xs text-gray-500">{formattedStats.totalSpentUSDFormatted}</div>
 							</div>
 						</div>
 
 						<div className="flex justify-between items-center">
 							<span className="text-gray-400">Total Orders</span>
-							<span className="text-white font-semibold">{userProfile.totalOrders}</span>
+							<span className="text-white font-semibold">{firestoreUser.stats.totalOrders}</span>
 						</div>
 
 						<div className="flex justify-between items-center">
 							<span className="text-gray-400">Badges Earned</span>
-							<span className="text-neonOrange font-semibold">{userProfile.badges.length}</span>
+							<span className="text-neonOrange font-semibold">{formattedStats.badgeCount}</span>
+						</div>
+
+						<div className="flex justify-between items-center">
+							<span className="text-gray-400">Profile Status</span>
+							<span className={`font-semibold ${profileCompleteness.isComplete ? 'text-neonGreen' : 'text-neonOrange'}`}>
+								{profileCompleteness.isComplete ? 'Complete' : `${profileCompleteness.completionPercentage}%`}
+							</span>
 						</div>
 					</div>
 				</CyberCard>
@@ -313,7 +416,7 @@ const ProfileSection: React.FC = () => {
 			{/* Badges */}
 			<CyberCard title="Badges & Achievements" showEffects={false}>
 				<div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-					{userProfile.badges.map((badge, index) => (
+					{firestoreUser.stats.badges.map((badge, index) => (
 						<div key={index} className="flex items-center space-x-3 p-3 border border-neonOrange/30 rounded-sm bg-neonOrange/5">
 							<Award className="w-5 h-5 text-neonOrange" />
 							<span className="text-white font-medium">{badge}</span>
@@ -407,6 +510,13 @@ const ProfileSection: React.FC = () => {
 					</table>
 				</div>
 			</CyberCard>
+
+			{/* Profile Edit Modal */}
+			<ProfileEditModal
+				isOpen={isEditModalOpen}
+				onClose={() => setIsEditModalOpen(false)}
+				firestoreUser={firestoreUser}
+			/>
 		</div>
 	);
 };

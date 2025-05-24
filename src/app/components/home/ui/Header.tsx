@@ -26,9 +26,9 @@ const Header = () => {
 	}, [lastScrollY]);
 
 	const navLinks = [
-		{ href: '/shop', label: 'Shop', isHome: true },
-		{ href: '/how-to-buy', label: 'How to Buy' },
-		{ href: '/whitepaper', label: 'White Paper' },
+		{ href: '/dashboard', label: 'Shop', isHome: true },
+		{ href: '/dashboard', label: 'How to Buy' },
+		{ href: '/dashboard', label: 'White Paper' },
 	];
 
 	return (
@@ -104,7 +104,6 @@ const Header = () => {
 					</button>
 				</div>
 
-				{/* Mobile Navigation */}
 				<div className={`md:hidden transition-all duration-300 ease-out overflow-hidden ${isMobileMenuOpen ? 'max-h-64 opacity-100' : 'max-h-0 opacity-0'
 					}`}>
 					<div className="px-4 py-4 space-y-3 border-t border-dark-300 bg-black/50">

@@ -6,6 +6,8 @@ import CyberCard from '../../../components/common/CyberCard';
 import CyberButton from '../../../components/common/CyberButton';
 import { useCart, usePanel } from '../../context/DashboardContext';
 import { useAuth } from '@/contexts/AuthContext';
+import { usePriceConverter } from '@/hooks/usePriceConverter';
+import { PAYMENT_METHODS, PaymentMethodKey } from '../../../../../types/dashboard';
 import {
 	ShoppingCart,
 	Trash2,
@@ -13,9 +15,11 @@ import {
 	Minus,
 	Zap,
 	AlertCircle,
-	Gift,
 	Clock,
-	Package
+	Package,
+	RefreshCw,
+	TrendingUp,
+	TrendingDown
 } from 'lucide-react';
 
 const Info = ({ className = "w-4 h-4" }: { className?: string }) => (
@@ -38,10 +42,21 @@ const CartSection: React.FC = () => {
 	const { openPanel } = usePanel();
 	const { user } = useAuth();
 
+	// 暗号通貨価格変換フック
+	const {
+		convertUSDTo,
+		formatCryptoPrice,
+		formatUSDPrice,
+		isLoading: pricesLoading,
+		error: pricesError,
+		lastUpdated,
+		exchangeRates
+	} = usePriceConverter();
+
 	const [promoCode, setPromoCode] = useState('');
 	const [appliedPromo, setAppliedPromo] = useState<string | null>(null);
-	const [gasFeeEstimate] = useState(0.003); // ETH
-	const [selectedPaymentMethod, setSelectedPaymentMethod] = useState<'ETH' | 'USDC' | 'USDT'>('ETH');
+	const [gasFeeEstimate] = useState(0.003); // ETH equivalent in USD
+	const [selectedPaymentMethod, setSelectedPaymentMethod] = useState<PaymentMethodKey | null>(null);
 	const [showPromoError, setShowPromoError] = useState(false);
 
 	// カートアイテムの詳細情報を取得
@@ -101,18 +116,6 @@ const CartSection: React.FC = () => {
 		return calculateSubtotal() - calculateDiscount() + gasFeeEstimate;
 	};
 
-	const formatPrice = (price: number, currency: string = 'USD') => {
-		if (currency === 'ETH') {
-			return `Ξ ${price.toFixed(4)}`;
-		}
-		return `$${price.toFixed(2)} ${currency}`;
-	};
-
-	const convertToUSD = (amount: number) => {
-		const ethToUSD = 3359.50; // Mock exchange rate
-		return (amount * ethToUSD).toFixed(2);
-	};
-
 	const handleCheckout = () => {
 		try {
 			if (!user) {
@@ -131,7 +134,11 @@ const CartSection: React.FC = () => {
 			});
 
 			// 仮の処理完了メッセージ
-			alert(`Checkout initiated for ${formatPrice(calculateTotal())} ${selectedPaymentMethod}`);
+			const totalUSD = calculateTotal();
+			const totalCrypto = convertUSDTo(totalUSD, selectedPaymentMethod);
+			const formattedCrypto = formatCryptoPrice(totalCrypto, selectedPaymentMethod);
+
+			alert(`Checkout initiated for ${formatUSDPrice(totalUSD)} (${formattedCrypto})`);
 		} catch (error) {
 			console.error('Checkout error:', error);
 		}
@@ -156,6 +163,66 @@ const CartSection: React.FC = () => {
 			default:
 				return '';
 		}
+	};
+
+	// 価格表示コンポーネント
+	const PriceDisplay = ({
+		usdAmount,
+		showCrypto = true,
+		size = 'md'
+	}: {
+		usdAmount: number;
+		showCrypto?: boolean;
+		size?: 'sm' | 'md' | 'lg'
+	}) => {
+		const cryptoAmount = convertUSDTo(usdAmount, selectedPaymentMethod);
+		const isLoading = pricesLoading;
+		const hasError = pricesError !== null;
+
+		const sizeClasses = {
+			sm: 'text-sm',
+			md: 'text-base',
+			lg: 'text-lg font-bold'
+		};
+
+		return (
+			<div className={`${sizeClasses[size]}`}>
+				<div className="text-white font-semibold">
+					{formatUSDPrice(usdAmount)}
+				</div>
+				{showCrypto && (
+					<div className={`text-xs ${hasError ? 'text-red-400' : 'text-gray-400'} flex items-center space-x-1`}>
+						{isLoading ? (
+							<>
+								<RefreshCw className="w-3 h-3 animate-spin" />
+								<span>Loading...</span>
+							</>
+						) : hasError ? (
+							<span>Price unavailable</span>
+						) : (
+							<span>≈ {formatCryptoPrice(cryptoAmount, selectedPaymentMethod)}</span>
+						)}
+					</div>
+				)}
+			</div>
+		);
+	};
+
+	// 24時間変動表示コンポーネント
+	const PriceChangeIndicator = ({ currency }: { currency: string }) => {
+		const rate = exchangeRates[currency];
+		if (!rate) return null;
+
+		// ここでは仮の変動率を表示（実際のデータは価格フックから取得可能）
+		const change = 2.34; // 実際の実装では価格データから取得
+		const isPositive = change >= 0;
+
+		return (
+			<div className={`flex items-center space-x-1 text-xs ${isPositive ? 'text-green-400' : 'text-red-400'}`}>
+				{isPositive ? <TrendingUp className="w-3 h-3" /> : <TrendingDown className="w-3 h-3" />}
+				<span>{isPositive ? '+' : ''}{change.toFixed(2)}%</span>
+			</div>
+		);
 	};
 
 	if (cartItems.length === 0) {
@@ -190,7 +257,6 @@ const CartSection: React.FC = () => {
 				</p>
 			</div>
 
-
 			<div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
 				{/* Cart Items */}
 				<div className="lg:col-span-2 space-y-4">
@@ -207,10 +273,7 @@ const CartSection: React.FC = () => {
 									<div className="flex-1">
 										<h3 className="text-white font-semibold">{item.name}</h3>
 										<p className="text-sm text-gray-400">Premium whey protein blend</p>
-										<div className="text-neonGreen font-bold">
-											{formatPrice(item.price)}
-											<span className="text-xs text-gray-400 ml-2">per item</span>
-										</div>
+										<PriceDisplay usdAmount={item.price} showCrypto={true} size="sm" />
 
 										{/* Item Info */}
 										<div className="flex items-center space-x-2 mt-1">
@@ -242,11 +305,9 @@ const CartSection: React.FC = () => {
 
 									{/* Item Total */}
 									<div className="text-right">
-										<div className="text-white font-bold">
-											{formatPrice(item.price * item.quantity)}
-										</div>
+										<PriceDisplay usdAmount={item.price * item.quantity} showCrypto={true} size="md" />
 										<div className="text-xs text-gray-400">
-											{item.quantity} × {formatPrice(item.price)}
+											{item.quantity} × {formatUSDPrice(item.price)}
 										</div>
 									</div>
 
@@ -268,6 +329,16 @@ const CartSection: React.FC = () => {
 				<div className="lg:col-span-1">
 					<CyberCard title="Order Summary" showEffects={false}>
 						<div className="space-y-4">
+							{/* 価格データの状態表示 */}
+							{pricesError && (
+								<div className="p-3 border border-red-600/30 rounded-sm bg-red-600/5">
+									<div className="flex items-center space-x-2">
+										<AlertCircle className="w-4 h-4 text-red-400" />
+										<span className="text-xs text-red-400">Price data unavailable</span>
+									</div>
+								</div>
+							)}
+
 							{/* Authentication Notice */}
 							{!user && (
 								<div className="p-3 border border-yellow-600/30 rounded-sm bg-yellow-600/5">
@@ -281,51 +352,46 @@ const CartSection: React.FC = () => {
 							<div>
 								<label className="block text-sm font-medium text-white mb-2">Payment Method</label>
 								<div className="space-y-2">
-									{(['Solana', 'lightning', 'Avalanche c-chain','Ethereum mainnet', 'Sui'] as const).map((method) => (
-										<label key={method} className="flex items-center space-x-2 cursor-pointer">
-											<input
-												type="radio"
-												name="paymentMethod"
-												value={method}
-												checked={selectedPaymentMethod === method}
-												onChange={(e) => setSelectedPaymentMethod(e.target.value as any)}
-												className="text-neonGreen focus:ring-neonGreen"
-											/>
-											<span className="text-white">{method}</span>
-										</label>
-									))}
+									{(Object.keys(PAYMENT_METHODS) as PaymentMethodKey[]).map((methodKey) => {
+										const method = PAYMENT_METHODS[methodKey];
+										return (
+											<label key={methodKey} className="flex items-center justify-between p-2 border border-dark-300 rounded-sm hover:bg-dark-200/50 cursor-pointer transition-colors">
+												<div className="flex items-center space-x-2">
+													<input
+														type="radio"
+														name="paymentMethod"
+														value={methodKey}
+														checked={selectedPaymentMethod === methodKey}
+														onChange={(e) => setSelectedPaymentMethod(e.target.value as PaymentMethodKey)}
+														className="text-neonGreen focus:ring-neonGreen"
+													/>
+													<span className="text-white">{method.name}</span>
+												</div>
+											</label>
+										);
+									})}
 								</div>
+								{lastUpdated && (
+									<div className="text-xs text-gray-400 mt-2 flex items-center space-x-1">
+										<RefreshCw className="w-3 h-3" />
+										<span>Updated {new Date(lastUpdated).toLocaleTimeString()}</span>
+									</div>
+								)}
 							</div>
 
 							{/* Price Breakdown */}
-							<div className="space-y-3 pt-4 border-t border-dark-300">
-								<div className="flex justify-between">
-									<span className="text-gray-400">Subtotal ({getCartItemCount()} items)</span>
-									<span className="text-white">{formatPrice(calculateSubtotal())}</span>
-								</div>
-
+							<div className="space-y-3 pt-4">
 								{appliedPromo && (
 									<div className="flex justify-between">
 										<span className="text-gray-400">Discount ({appliedPromo})</span>
-										<span className="text-neonGreen">-{formatPrice(calculateDiscount())}</span>
+										<PriceDisplay usdAmount={-calculateDiscount()} showCrypto={true} size="sm" />
 									</div>
 								)}
 
-								<div className="flex justify-between">
-									<div className="flex items-center space-x-1">
-										<span className="text-gray-400">Network Fee</span>
-										<Info className="w-3 h-3 text-gray-400" />
-									</div>
-									<span className="text-gray-400">{formatPrice(gasFeeEstimate)}</span>
-								</div>
 
 								<div className="flex justify-between pt-3 border-t border-dark-300">
 									<span className="text-white font-semibold">Total</span>
-									<div className="text-right">
-										<div className="text-neonGreen font-bold text-lg">
-											{formatPrice(calculateTotal())}
-										</div>
-									</div>
+									<PriceDisplay usdAmount={calculateTotal()} showCrypto={true} size="lg" />
 								</div>
 							</div>
 
@@ -335,9 +401,11 @@ const CartSection: React.FC = () => {
 									variant="primary"
 									className="w-full flex items-center justify-center space-x-2"
 									onClick={handleCheckout}
+									disabled={pricesLoading && !pricesError || !selectedPaymentMethod}
 								>
-									<Zap className="w-4 h-4" />
-									<span>Proceed to checkout</span>
+									<span>
+										{!selectedPaymentMethod ? 'Select payment method...' : 'Proceed to checkout'}
+									</span>
 								</CyberButton>
 							</div>
 						</div>

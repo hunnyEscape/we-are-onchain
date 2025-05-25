@@ -4,6 +4,7 @@
 import React, { useState } from 'react';
 import CyberCard from '../../../components/common/CyberCard';
 import CyberButton from '../../../components/common/CyberButton';
+import LiveDemoSection from '../../../components/payment/LiveDemoSection';
 import {
 	User,
 	ShoppingCart,
@@ -26,7 +27,8 @@ import {
 	Wallet,
 	TrendingUp,
 	ChevronDown,
-	ChevronUp
+	ChevronUp,
+	Play
 } from 'lucide-react';
 
 interface PaymentMethod {
@@ -106,7 +108,7 @@ const HowToBuySection: React.FC = () => {
 			id: 1,
 			title: 'Cart & Checkout',
 			description: 'Add products and set preferences',
-			details: `When you checkout. (1) Selact your payment currency. (2) Set shipping address. International shipping available.`
+			details: `When you checkout. (1) Select your payment currency. (2) Set shipping address. International shipping available.`
 		},
 		{
 			id: 2,
@@ -255,7 +257,7 @@ const HowToBuySection: React.FC = () => {
 										</div>
 									)}
 
-									{/* Step 2: Invoice Payment */}
+									{/* Step 2: Invoice Payment - ★ LiveDemoSection統合 */}
 									{step.id === 2 && (
 										<div className="space-y-6">
 											{/* Payment Process */}
@@ -295,13 +297,22 @@ const HowToBuySection: React.FC = () => {
 												</div>
 											</div>
 
-											{/* QR Code Demo Area */}
-											<div className="p-4 border border-dark-300 rounded-sm bg-dark-200/30">
-												<div className="text-center text-gray-400 text-sm">
-													📱 QR Code & Payment Demo Area
-													<br />
-													<span className="text-xs">(Interactive payment interface will be displayed here)</span>
+											{/* ★ Live Demo Section - 旧QR Code Demo Areaを置き換え */}
+											<div className="border border-neonGreen/30 rounded-sm bg-neonGreen/5 p-6">
+												<div className="flex items-center space-x-3 mb-4">
+													<Play className="w-6 h-6 text-neonGreen" />
+													<h4 className="text-lg font-semibold text-white">Live Payment Demo</h4>
+													<span className="text-xs bg-neonGreen/20 text-neonGreen px-2 py-1 rounded border border-neonGreen/50">
+														LIVE
+													</span>
 												</div>
+
+												<div className="mb-4 text-sm text-gray-300">
+													Experience the real payment flow with Avalanche FUJI testnet. Try sending a small amount to see how the system works.
+												</div>
+
+												{/* LiveDemoSection コンポーネント統合 */}
+												<LiveDemoSection />
 											</div>
 										</div>
 									)}
@@ -331,7 +342,6 @@ const HowToBuySection: React.FC = () => {
 													<div className="text-sm text-gray-400">Blockchain-verified delivery tracking</div>
 												</div>
 											</div>
-
 										</div>
 									)}
 								</div>
@@ -368,7 +378,7 @@ const HowToBuySection: React.FC = () => {
 					<div className="border-b border-dark-300 pb-4">
 						<h4 className="text-white font-medium mb-2">Which blockchain should I choose?</h4>
 						<p className="text-sm text-gray-400">
-							Polygon offers the lowest fees ($0.01-$0.1) and fastest transactions. Ethereum is more expensive but widely supported. Choose based on your wallet and preference.
+							Avalanche offers low fees ($0.01-$0.1) and fast transactions. Ethereum is more expensive but widely supported. Choose based on your wallet and preference.
 						</p>
 					</div>
 

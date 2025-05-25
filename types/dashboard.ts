@@ -122,3 +122,20 @@ export const PAYMENT_METHODS = {
 } as const;
 
 export type PaymentMethodKey = keyof typeof PAYMENT_METHODS;
+
+// ★ 新規追加: Demo Payment関連の型定義
+export interface DemoPaymentSettings {
+	enabled: boolean;
+	defaultChain: 'avalanche-fuji';
+	maxConcurrentInvoices: number;
+	pollingInterval: number; // milliseconds
+	demoTimeout: number; // milliseconds
+}
+
+// How to Buy セクション設定
+export interface HowToBuyConfig {
+	enableLiveDemo: boolean;
+	demoSettings: DemoPaymentSettings;
+	supportedChains: string[];
+	faucetLinks: Record<string, string>;
+}

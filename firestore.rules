@@ -28,6 +28,24 @@ service cloud.firestore {
       allow write: if false; // Cloud Functions のみ書き込み可能
     }
     
+    // ★ 新規追加: Demo invoices
+    match /demo_invoices/{invoiceId} {
+      allow read: if true;   // パブリック読み取り（ステータス確認用）
+      allow write: if true;  // パブリック書き込み（API経由での作成用）
+    }
+    
+    // ★ 新規追加: Demo transactions
+    match /demo_transactions/{transactionId} {
+      allow read: if true;   // パブリック読み取り
+      allow write: if true;  // パブリック書き込み（決済完了時の記録用）
+    }
+    
+    // ★ 新規追加: Demo analytics
+    match /demo_analytics/{date} {
+      allow read: if true;   // パブリック読み取り（統計表示用）
+      allow write: if true;  // パブリック書き込み（分析データ記録用）
+    }
+    
     // その他のドキュメントはデフォルトで拒否
     match /{document=**} {
       allow read, write: if false;

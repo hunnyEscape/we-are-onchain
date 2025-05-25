@@ -28,6 +28,19 @@
 ├── sphere.webm
 ├── src
 │   ├── app
+│   │   ├── api
+│   │   │   ├── demo
+│   │   │   │   └── invoice
+│   │   │   │       ├── [invoiceId]
+│   │   │   │       │   └── status
+│   │   │   │       │       └── route.ts
+│   │   │   │       └── create
+│   │   │   │           └── route.ts
+│   │   │   └── utils
+│   │   │       ├── avalanche.ts
+│   │   │       ├── payment-monitor.ts
+│   │   │       ├── qr-generator.ts
+│   │   │       └── wallet-generator.ts
 │   │   ├── components
 │   │   │   ├── auth
 │   │   │   │   └── AuthModal.tsx
@@ -78,6 +91,9 @@
 │   │   │   │       │   └── types.ts
 │   │   │   │       └── types
 │   │   │   │           └── index.ts
+│   │   │   ├── payment
+│   │   │   │   ├── LiveDemoSection.tsx
+│   │   │   │   └── QRCodeDisplay.tsx
 │   │   │   └── ui
 │   │   │       ├── Footer.tsx
 │   │   │       ├── GlitchText.tsx
@@ -112,6 +128,7 @@
 │   │   ├── useCryptoPrices.ts
 │   │   └── usePriceConverter.ts
 │   ├── lib
+│   │   ├── avalanche-config.ts
 │   │   ├── firebase.ts
 │   │   └── firestore
 │   │       ├── inventory.ts
@@ -126,8 +143,9 @@
 └── types
     ├── crypto.ts
     ├── dashboard.ts
+    ├── demo-payment.ts
     ├── product.ts
     ├── react-three-fiber.d.ts
     └── user.ts
 
-30 directories, 100 files
+38 directories, 110 files

@@ -281,6 +281,209 @@ export const auth = getAuth(app);
 export const db = getFirestore(app);
 
 export default app;-e 
+### FILE: ./src/lib/avalanche-config.ts
+
+// src/lib/avalanche-config.ts
+import { AvalancheConfig, PaymentMonitorConfig, QRCodeConfig, RateLimitConfig } from '../../types/demo-payment';
+
+/**
+ * Avalanche FUJI Testnet 設定
+ */
+export const AVALANCHE_FUJI_CONFIG: AvalancheConfig = {
+  chainId: 43113,
+  name: 'Avalanche FUJI C-Chain',
+  rpcUrl: process.env.AVALANCHE_FUJI_RPC_URL || 'https://api.avax-test.network/ext/bc/C/rpc',
+  blockExplorer: 'https://testnet.snowscan.xyz',
+  nativeCurrency: {
+    name: 'Avalanche',
+    symbol: 'AVAX',
+    decimals: 18
+  },
+  faucetUrl: 'https://faucet.avax.network/',
+  averageBlockTime: 2000, // 2秒
+  confirmationBlocks: 3
+};
+
+/**
+ * フォールバック RPC エンドポイント（冗長性確保）
+ */
+export const AVALANCHE_FUJI_RPC_ENDPOINTS = [
+  'https://api.avax-test.network/ext/bc/C/rpc',
+  'https://avalanche-fuji.public.blastapi.io/ext/bc/C/rpc',
+  'https://rpc.ankr.com/avalanche_fuji'
+];
+
+/**
+ * ガス価格設定（FUJI Testnet用）
+ */
+export const GAS_CONFIG = {
+  gasLimit: '21000', // 標準送金
+  maxFeePerGas: '30000000000', // 30 gwei
+  maxPriorityFeePerGas: '2000000000', // 2 gwei
+  gasBuffer: 1.2 // 20%のバッファ
+};
+
+/**
+ * デモ決済設定
+ */
+export const DEMO_PAYMENT_CONFIG = {
+  // 基本設定
+  defaultAmount: process.env.DEMO_INVOICE_AMOUNT || '0.001', // AVAX
+  expiryMinutes: parseInt(process.env.INVOICE_EXPIRY_MINUTES || '5'),
+  
+  // HDウォレット設定
+  masterMnemonic: process.env.MASTER_WALLET_MNEMONIC || 'test test test test test test test test test test test junk',
+  derivationPath: "m/44'/43113'/0'/0/", // Avalanche用のBIP44パス
+  
+  // セキュリティ設定
+  maxAddressReuse: 1000, // 最大1000アドレスまで生成
+  addressPoolSize: 100, // 事前生成プール
+};
+
+/**
+ * 決済監視設定
+ */
+export const PAYMENT_MONITOR_CONFIG: PaymentMonitorConfig = {
+  pollInterval: 5000, // 5秒間隔
+  maxPollDuration: 300000, // 5分間
+  confirmationBlocks: 3, // 3ブロック確認
+  retryAttempts: 3,
+  backoffMultiplier: 1.5
+};
+
+/**
+ * QRコード生成設定
+ */
+export const QR_CODE_CONFIG: QRCodeConfig = {
+  size: 300,
+  margin: 4,
+  colorDark: '#000000',
+  colorLight: '#ffffff',
+  errorCorrectionLevel: 'M' // 中程度のエラー訂正
+};
+
+/**
+ * Rate Limiting設定
+ */
+export const RATE_LIMIT_CONFIG: RateLimitConfig = {
+  maxInvoicesPerIP: 3, // IPあたり最大3個
+  windowMinutes: 60, // 1時間ウィンドウ
+  maxInvoicesPerHour: 10, // 1時間あたり最大10個
+  cleanupIntervalMinutes: 5 // 5分間隔でクリーンアップ
+};
+
+/**
+ * Firestore コレクション名
+ */
+export const FIRESTORE_COLLECTIONS = {
+  DEMO_INVOICES: 'demo_invoices',
+  DEMO_TRANSACTIONS: 'demo_transactions',
+  DEMO_ANALYTICS: 'demo_analytics',
+  DEMO_RATE_LIMITS: 'demo_rate_limits'
+} as const;
+
+/**
+ * 環境変数バリデーション
+ */
+export function validateEnvironmentVariables(): { isValid: boolean; missingVars: string[] } {
+  const requiredVars = [
+    'AVALANCHE_FUJI_RPC_URL',
+    'MASTER_WALLET_MNEMONIC',
+    'NEXT_PUBLIC_FIREBASE_PROJECT_ID'
+  ];
+  
+  const missingVars = requiredVars.filter(varName => !process.env[varName]);
+  
+  return {
+    isValid: missingVars.length === 0,
+    missingVars
+  };
+}
+
+/**
+ * Avalanche用のEIP-681 URI生成
+ */
+export function generatePaymentURI(address: string, amountWei: string, chainId: number = 43113): string {
+  return `ethereum:${address}?value=${amountWei}&chainId=${chainId}`;
+}
+
+/**
+ * Wei から AVAX への変換
+ */
+export function weiToAVAX(weiAmount: string): string {
+  const wei = BigInt(weiAmount);
+  const avax = Number(wei) / Math.pow(10, 18);
+  return avax.toFixed(6); // 6桁精度
+}
+
+/**
+ * AVAX から Wei への変換
+ */
+export function avaxToWei(avaxAmount: string): string {
+  const avax = parseFloat(avaxAmount);
+  const wei = BigInt(Math.floor(avax * Math.pow(10, 18)));
+  return wei.toString();
+}
+
+/**
+ * ブロックエクスプローラーURL生成
+ */
+export function getExplorerURL(type: 'tx' | 'address', value: string): string {
+  const baseUrl = AVALANCHE_FUJI_CONFIG.blockExplorer;
+  return type === 'tx' 
+    ? `${baseUrl}/tx/${value}`
+    : `${baseUrl}/address/${value}`;
+}
+
+/**
+ * デモ用の統計データ初期化
+ */
+export function createInitialAnalytics(date: string) {
+  return {
+    date,
+    invoicesGenerated: 0,
+    invoicesCompleted: 0,
+    invoicesExpired: 0,
+    averageCompletionTime: 0,
+    totalAmountPaid: '0',
+    uniqueIPs: 0,
+    popularTimeSlots: {}
+  };
+}
+
+/**
+ * 開発環境判定
+ */
+export const isDevelopment = process.env.NODE_ENV === 'development';
+export const isProduction = process.env.NODE_ENV === 'production';
+
+/**
+ * ログ設定
+ */
+export const LOGGING_CONFIG = {
+  enableDebugLogs: isDevelopment,
+  enableAPILogs: true,
+  enableErrorTracking: isProduction,
+  logLevel: isDevelopment ? 'debug' : 'info'
+};
+
+/**
+ * セキュリティ設定
+ */
+export const SECURITY_CONFIG = {
+  // Private key暗号化（将来実装）
+  enablePrivateKeyEncryption: false,
+  encryptionKey: process.env.ENCRYPTION_KEY,
+  
+  // IPアドレス記録
+  recordIPAddresses: true,
+  enableGeoLocation: false,
+  
+  // CORS設定
+  allowedOrigins: isDevelopment 
+    ? ['http://localhost:3000', 'http://127.0.0.1:3000']
+    : [process.env.NEXT_PUBLIC_APP_URL || 'https://your-domain.com']
+};-e 
 ### FILE: ./src/lib/firestore/users.ts
 
 // src/lib/firestore/users.ts
@@ -2072,6 +2275,7 @@ export default ProfileSection;-e
 import React, { useState } from 'react';
 import CyberCard from '../../../components/common/CyberCard';
 import CyberButton from '../../../components/common/CyberButton';
+import LiveDemoSection from '../../../components/payment/LiveDemoSection';
 import {
 	User,
 	ShoppingCart,
@@ -2094,7 +2298,8 @@ import {
 	Wallet,
 	TrendingUp,
 	ChevronDown,
-	ChevronUp
+	ChevronUp,
+	Play
 } from 'lucide-react';
 
 interface PaymentMethod {
@@ -2174,7 +2379,7 @@ const HowToBuySection: React.FC = () => {
 			id: 1,
 			title: 'Cart & Checkout',
 			description: 'Add products and set preferences',
-			details: `When you checkout. (1) Selact your payment currency. (2) Set shipping address. International shipping available.`
+			details: `When you checkout. (1) Select your payment currency. (2) Set shipping address. International shipping available.`
 		},
 		{
 			id: 2,
@@ -2323,7 +2528,7 @@ const HowToBuySection: React.FC = () => {
 										</div>
 									)}
 
-									{/* Step 2: Invoice Payment */}
+									{/* Step 2: Invoice Payment - ★ LiveDemoSection統合 */}
 									{step.id === 2 && (
 										<div className="space-y-6">
 											{/* Payment Process */}
@@ -2363,13 +2568,22 @@ const HowToBuySection: React.FC = () => {
 												</div>
 											</div>
 
-											{/* QR Code Demo Area */}
-											<div className="p-4 border border-dark-300 rounded-sm bg-dark-200/30">
-												<div className="text-center text-gray-400 text-sm">
-													📱 QR Code & Payment Demo Area
-													<br />
-													<span className="text-xs">(Interactive payment interface will be displayed here)</span>
+											{/* ★ Live Demo Section - 旧QR Code Demo Areaを置き換え */}
+											<div className="border border-neonGreen/30 rounded-sm bg-neonGreen/5 p-6">
+												<div className="flex items-center space-x-3 mb-4">
+													<Play className="w-6 h-6 text-neonGreen" />
+													<h4 className="text-lg font-semibold text-white">Live Payment Demo</h4>
+													<span className="text-xs bg-neonGreen/20 text-neonGreen px-2 py-1 rounded border border-neonGreen/50">
+														LIVE
+													</span>
 												</div>
+
+												<div className="mb-4 text-sm text-gray-300">
+													Experience the real payment flow with Avalanche FUJI testnet. Try sending a small amount to see how the system works.
+												</div>
+
+												{/* LiveDemoSection コンポーネント統合 */}
+												<LiveDemoSection />
 											</div>
 										</div>
 									)}
@@ -2399,7 +2613,6 @@ const HowToBuySection: React.FC = () => {
 													<div className="text-sm text-gray-400">Blockchain-verified delivery tracking</div>
 												</div>
 											</div>
-
 										</div>
 									)}
 								</div>
@@ -2436,7 +2649,7 @@ const HowToBuySection: React.FC = () => {
 					<div className="border-b border-dark-300 pb-4">
 						<h4 className="text-white font-medium mb-2">Which blockchain should I choose?</h4>
 						<p className="text-sm text-gray-400">
-							Polygon offers the lowest fees ($0.01-$0.1) and fastest transactions. Ethereum is more expensive but widely supported. Choose based on your wallet and preference.
+							Avalanche offers low fees ($0.01-$0.1) and fast transactions. Ethereum is more expensive but widely supported. Choose based on your wallet and preference.
 						</p>
 					</div>
 
@@ -8638,6 +8851,758 @@ export const GlitchText: React.FC<GlitchTextProps> = ({
 };
 
 export default GlitchText;-e 
+### FILE: ./src/app/components/payment/LiveDemoSection.tsx
+
+// src/app/components/payment/LiveDemoSection.tsx
+'use client';
+
+import React, { useState, useEffect, useCallback, useRef } from 'react';
+import {
+	Play,
+	RefreshCw,
+	CheckCircle,
+	Clock,
+	AlertCircle,
+	XCircle,
+	Zap,
+	ExternalLink
+} from 'lucide-react';
+import CyberButton from '../common/CyberButton';
+import CyberCard from '../common/CyberCard';
+import QRCodeDisplay from './QRCodeDisplay';
+import { CreateDemoInvoiceResponse, DemoInvoiceStatusResponse } from '../../../../types/demo-payment';
+
+/**
+ * デモの状態管理（API型に合わせて拡張）
+ */
+type DemoStatus = 'idle' | 'generating' | 'pending' | 'waiting' | 'confirming' | 'completed' | 'expired' | 'error';
+
+/**
+ * デモ決済の状態
+ */
+interface DemoState {
+	status: DemoStatus;
+	invoiceId?: string;
+	paymentAddress?: string;
+	amount?: string;
+	qrCodeDataURL?: string;
+	paymentURI?: string;
+	expiresAt?: string;
+	timeRemaining?: number;
+	transactionHash?: string;
+	confirmations?: number;
+	errorMessage?: string;
+}
+
+/**
+ * ライブデモセクションコンポーネント
+ */
+const LiveDemoSection: React.FC = () => {
+	const [demoState, setDemoState] = useState<DemoState>({ status: 'idle' });
+	const [isPolling, setIsPolling] = useState(false);
+
+	// ポーリング管理用ref
+	const pollingIntervalRef = useRef<NodeJS.Timeout | null>(null);
+	const timeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+	/**
+	 * ポーリング停止
+	 */
+	const stopPolling = useCallback(() => {
+		if (pollingIntervalRef.current) {
+			clearInterval(pollingIntervalRef.current);
+			pollingIntervalRef.current = null;
+		}
+		if (timeoutRef.current) {
+			clearTimeout(timeoutRef.current);
+			timeoutRef.current = null;
+		}
+		setIsPolling(false);
+	}, []);
+
+	/**
+	 * コンポーネントアンマウント時のクリーンアップ
+	 */
+	useEffect(() => {
+		return () => {
+			stopPolling();
+		};
+	}, [stopPolling]);
+
+	/**
+	 * 時間フォーマット（秒 → mm:ss）
+	 */
+	const formatTime = useCallback((seconds: number): string => {
+		const minutes = Math.floor(seconds / 60);
+		const remainingSeconds = seconds % 60;
+		return `${minutes}:${remainingSeconds.toString().padStart(2, '0')}`;
+	}, []);
+
+	/**
+	 * ステータス確認API呼び出し
+	 */
+	const checkInvoiceStatus = useCallback(async (invoiceId: string): Promise<void> => {
+		try {
+			const response = await fetch(`/api/demo/invoice/${invoiceId}/status`);
+			const data: DemoInvoiceStatusResponse = await response.json();
+
+			if (!data.success) {
+				throw new Error(data.error?.message || 'Status check failed');
+			}
+
+			const statusData = data.data!;
+
+			// API の status を UI の status にマッピング
+			let uiStatus: DemoStatus = statusData.status as DemoStatus;
+			if (statusData.status === 'pending') {
+				uiStatus = 'waiting'; // APIの'pending'をUIの'waiting'にマッピング
+			}
+
+			// 状態更新
+			setDemoState(prev => ({
+				...prev,
+				status: uiStatus,
+				timeRemaining: statusData.timeRemaining,
+				transactionHash: statusData.transactionHash,
+				confirmations: statusData.confirmations
+			}));
+
+			// 完了・期限切れ・エラー時はポーリング停止
+			if (['completed', 'expired', 'error'].includes(uiStatus)) {
+				stopPolling();
+			}
+
+			console.log('📊 Status updated:', {
+				invoiceId,
+				apiStatus: statusData.status,
+				uiStatus: uiStatus,
+				timeRemaining: statusData.timeRemaining
+			});
+
+		} catch (error) {
+			console.error('❌ Status check failed:', error);
+			setDemoState(prev => ({
+				...prev,
+				status: 'error',
+				errorMessage: error instanceof Error ? error.message : 'Status check failed'
+			}));
+			stopPolling();
+		}
+	}, [stopPolling]);
+
+	/**
+	 * ポーリング開始
+	 */
+	const startPolling = useCallback((invoiceId: string) => {
+		setIsPolling(true);
+
+		// 即座に1回チェック
+		checkInvoiceStatus(invoiceId);
+
+		// 5秒間隔でポーリング
+		pollingIntervalRef.current = setInterval(() => {
+			checkInvoiceStatus(invoiceId);
+		}, 5000);
+
+		// 5分後に自動停止
+		timeoutRef.current = setTimeout(() => {
+			stopPolling();
+			setDemoState(prev => ({
+				...prev,
+				status: 'expired'
+			}));
+		}, 5 * 60 * 1000);
+
+		console.log('🔄 Started polling for invoice:', invoiceId);
+	}, [checkInvoiceStatus, stopPolling]);
+
+	/**
+	 * デモInvoice生成
+	 */
+	const generateDemoInvoice = useCallback(async () => {
+		try {
+			setDemoState({ status: 'generating' });
+
+			const response = await fetch('/api/demo/invoice/create', {
+				method: 'POST',
+				headers: {
+					'Content-Type': 'application/json',
+				},
+				body: JSON.stringify({
+					chainId: 43113 // Avalanche FUJI
+				}),
+			});
+
+			const data: CreateDemoInvoiceResponse = await response.json();
+
+			if (!data.success) {
+				throw new Error(data.error?.message || 'Invoice generation failed');
+			}
+
+			const invoiceData = data.data!;
+
+			// 状態更新
+			setDemoState({
+				status: 'waiting',
+				invoiceId: invoiceData.invoiceId,
+				paymentAddress: invoiceData.paymentAddress,
+				amount: invoiceData.amount,
+				qrCodeDataURL: invoiceData.qrCodeDataURL,
+				paymentURI: invoiceData.paymentURI,
+				expiresAt: invoiceData.expiresAt,
+				timeRemaining: 300 // 5分
+			});
+
+			// ポーリング開始
+			startPolling(invoiceData.invoiceId);
+
+			console.log('✅ Demo invoice generated:', {
+				invoiceId: invoiceData.invoiceId,
+				address: invoiceData.paymentAddress.substring(0, 10) + '...'
+			});
+
+		} catch (error) {
+			console.error('❌ Invoice generation failed:', error);
+			setDemoState({
+				status: 'error',
+				errorMessage: error instanceof Error ? error.message : 'Failed to generate invoice'
+			});
+		}
+	}, [startPolling]);
+
+	/**
+	 * デモリセット
+	 */
+	const resetDemo = useCallback(() => {
+		stopPolling();
+		setDemoState({ status: 'idle' });
+		console.log('🔄 Demo reset');
+	}, [stopPolling]);
+
+	/**
+	 * コピー時のフィードバック
+	 */
+	const handleCopy = useCallback((text: string, type: 'address' | 'uri') => {
+		console.log(`📋 ${type} copied:`, text.substring(0, 20) + '...');
+	}, []);
+
+	/**
+	 * ブロックエクスプローラーリンク
+	 */
+	const getExplorerLink = useCallback((txHash: string) => {
+		return `https://testnet.snowscan.xyz/tx/${txHash}`;
+	}, []);
+
+	/**
+	 * ステータスアイコン取得
+	 */
+	const getStatusIcon = () => {
+		switch (demoState.status) {
+			case 'generating':
+				return <RefreshCw className="w-5 h-5 text-blue-400 animate-spin" />;
+			case 'waiting':
+				return <Clock className="w-5 h-5 text-yellow-400" />;
+			case 'confirming':
+				return <Zap className="w-5 h-5 text-orange-400" />;
+			case 'completed':
+				return <CheckCircle className="w-5 h-5 text-green-400" />;
+			case 'expired':
+				return <XCircle className="w-5 h-5 text-red-400" />;
+			case 'error':
+				return <AlertCircle className="w-5 h-5 text-red-400" />;
+			default:
+				return <Play className="w-5 h-5 text-neonGreen" />;
+		}
+	};
+
+	/**
+	 * ステータステキスト取得
+	 */
+	const getStatusText = () => {
+		switch (demoState.status) {
+			case 'idle':
+				return 'Ready to start demo';
+			case 'generating':
+				return 'Generating payment invoice...';
+			case 'pending':
+			case 'waiting':
+				return 'Waiting for payment';
+			case 'confirming':
+				return `Confirming transaction (${demoState.confirmations || 0}/3 confirmations)`;
+			case 'completed':
+				return 'Payment completed successfully!';
+			case 'expired':
+				return 'Demo payment expired';
+			case 'error':
+				return 'Error occurred';
+			default:
+				return 'Unknown status';
+		}
+	};
+
+	return (
+		<div className="space-y-6">
+			{/* ヘッダー */}
+			<div className="text-center">
+				<h4 className="text-lg font-semibold text-white mb-2 flex items-center justify-center space-x-2">
+					{getStatusIcon()}
+					<span>Live Payment Demo</span>
+				</h4>
+				<p className="text-sm text-gray-400">
+					Try demo payment with 0.001 AVAX on Avalanche FUJI Testnet
+				</p>
+			</div>
+
+			{/* ステータス表示 */}
+			<CyberCard showEffects={false} className="text-center">
+				<div className="space-y-4">
+					{/* ステータスインジケーター */}
+					<div className="flex items-center justify-center space-x-3">
+						{getStatusIcon()}
+						<span className="text-white font-medium">
+							{getStatusText()}
+						</span>
+					</div>
+
+					{/* タイマー表示 */}
+					{demoState.timeRemaining !== undefined && ['pending', 'waiting'].includes(demoState.status) && (
+						<div className="text-center">
+							<div className="text-2xl font-bold text-yellow-400 font-mono">
+								{formatTime(demoState.timeRemaining)}
+							</div>
+							<div className="text-xs text-gray-400">
+								Time remaining
+							</div>
+						</div>
+					)}
+
+					{/* エラーメッセージ */}
+					{demoState.status === 'error' && demoState.errorMessage && (
+						<div className="p-3 bg-red-900/20 border border-red-600/30 rounded-sm">
+							<div className="text-sm text-red-400">
+								{demoState.errorMessage}
+							</div>
+						</div>
+					)}
+
+					{/* 完了時のトランザクション情報 */}
+					{demoState.status === 'completed' && demoState.transactionHash && (
+						<div className="p-3 bg-green-900/20 border border-green-600/30 rounded-sm">
+							<div className="text-sm text-green-400 mb-2">
+								Transaction confirmed!
+							</div>
+							<CyberButton
+								size="sm"
+								variant="outline"
+								onClick={() => window.open(getExplorerLink(demoState.transactionHash!), '_blank')}
+								className="flex items-center space-x-1"
+							>
+								<ExternalLink className="w-3 h-3" />
+								<span>View on Explorer</span>
+							</CyberButton>
+						</div>
+					)}
+
+					{/* アクションボタン */}
+					<div className="flex justify-center space-x-3">
+						{demoState.status === 'idle' && (
+							<CyberButton
+								variant="primary"
+								onClick={generateDemoInvoice}
+								className="flex items-center space-x-2"
+							>
+								<Play className="w-4 h-4" />
+								<span>Generate Demo Invoice</span>
+							</CyberButton>
+						)}
+
+						{['completed', 'expired', 'error'].includes(demoState.status) && (
+							<CyberButton
+								variant="secondary"
+								onClick={resetDemo}
+								className="flex items-center space-x-2"
+							>
+								<RefreshCw className="w-4 h-4" />
+								<span>Try Again</span>
+							</CyberButton>
+						)}
+
+						{['waiting', 'confirming', 'pending'].includes(demoState.status) && (
+							<CyberButton
+								variant="outline"
+								onClick={resetDemo}
+								className="flex items-center space-x-2"
+							>
+								<XCircle className="w-4 h-4" />
+								<span>Cancel</span>
+							</CyberButton>
+						)}
+					</div>
+				</div>
+			</CyberCard>
+
+			{/* QRコード表示 */}
+			{['waiting', 'confirming', 'completed', 'pending'].includes(demoState.status) &&
+				demoState.qrCodeDataURL && demoState.paymentURI && demoState.paymentAddress && (<>
+					<QRCodeDisplay
+						qrCodeDataURL={demoState.qrCodeDataURL}
+						paymentURI={demoState.paymentURI}
+						paymentAddress={demoState.paymentAddress}
+						amount={demoState.amount || '0.001'}
+						chainId={43113}
+						onCopy={handleCopy}
+						showMetadata={true}
+					/>
+					<div className="mt-4 text-center">
+						<button
+							onClick={() => {
+								window.location.href = demoState.paymentURI!;
+							}}
+							className="inline-block px-4 py-2 bg-neonGreen text-black font-semibold rounded-md hover:bg-neonGreen/90"
+						>
+							Pay with Wallet
+						</button>
+					</div>
+				</>)}
+
+			{/* 使用方法説明 */}
+			{demoState.status === 'idle' && (
+				<div className="bg-blue-900/20 border border-blue-600/30 rounded-sm p-4">
+					<h5 className="text-blue-400 font-medium mb-2">📖 How to use this demo</h5>
+					<div className="text-sm text-gray-300 space-y-1">
+						<div>1. Click "Generate Demo Invoice" to create a payment request</div>
+						<div>2. Scan the QR code with your mobile wallet (or copy the address)</div>
+						<div>3. Send exactly 0.001 AVAX to the displayed address</div>
+						<div>4. Watch the real-time payment confirmation</div>
+					</div>
+					<div className="mt-3 text-xs text-blue-300">
+						💡 Need FUJI testnet tokens? Get them from the{' '}
+						<a
+							href="https://faucet.avax.network/"
+							target="_blank"
+							rel="noopener noreferrer"
+							className="underline hover:text-blue-200"
+						>
+							Avalanche Faucet
+						</a>
+					</div>
+				</div>
+			)}
+
+			{/* デバッグ情報（開発環境のみ） */}
+			{process.env.NODE_ENV === 'development' && (
+				<div className="bg-yellow-900/20 border border-yellow-600/30 rounded-sm p-3">
+					<div className="text-xs text-yellow-400 font-mono">
+						🔧 Debug: Status={demoState.status} |
+						Polling={isPolling.toString()} |
+						ID={demoState.invoiceId || 'none'}
+					</div>
+				</div>
+			)}
+		</div>
+	);
+};
+
+export default LiveDemoSection;-e 
+### FILE: ./src/app/components/payment/QRCodeDisplay.tsx
+
+// src/app/components/payment/QRCodeDisplay.tsx
+'use client';
+
+import React, { useState, useCallback } from 'react';
+import { Copy, Check, ExternalLink, Smartphone, AlertCircle } from 'lucide-react';
+import CyberButton from '../common/CyberButton';
+
+/**
+ * QRコード表示コンポーネントのプロパティ
+ */
+interface QRCodeDisplayProps {
+  qrCodeDataURL: string;
+  paymentURI: string;
+  paymentAddress: string;
+  amount: string;
+  chainId: number;
+  className?: string;
+  size?: 'sm' | 'md' | 'lg';
+  showMetadata?: boolean;
+  onCopy?: (text: string, type: 'address' | 'uri') => void;
+}
+
+/**
+ * コピー状態管理
+ */
+interface CopyState {
+  address: boolean;
+  uri: boolean;
+}
+
+/**
+ * QRコード表示コンポーネント
+ */
+const QRCodeDisplay: React.FC<QRCodeDisplayProps> = ({
+  qrCodeDataURL,
+  paymentURI,
+  paymentAddress,
+  amount,
+  chainId,
+  className = '',
+  size = 'md',
+  showMetadata = true,
+  onCopy
+}) => {
+  const [copyState, setCopyState] = useState<CopyState>({ address: false, uri: false });
+  const [imageError, setImageError] = useState(false);
+
+  // サイズ設定
+  const sizeConfig = {
+    sm: { qr: 'w-48 h-48', container: 'p-4' },
+    md: { qr: 'w-64 h-64', container: 'p-6' },
+    lg: { qr: 'w-80 h-80', container: 'p-8' }
+  };
+
+  const config = sizeConfig[size];
+
+  /**
+   * テキストコピー機能
+   */
+  const handleCopy = useCallback(async (text: string, type: 'address' | 'uri') => {
+    try {
+      await navigator.clipboard.writeText(text);
+      
+      // コピー状態更新
+      setCopyState(prev => ({ ...prev, [type]: true }));
+      
+      // 2秒後にリセット
+      setTimeout(() => {
+        setCopyState(prev => ({ ...prev, [type]: false }));
+      }, 2000);
+      
+      // 親コンポーネントに通知
+      onCopy?.(text, type);
+      
+      console.log('📋 Copied to clipboard:', type, text.substring(0, 20) + '...');
+    } catch (error) {
+      console.error('❌ Failed to copy to clipboard:', error);
+    }
+  }, [onCopy]);
+
+  /**
+   * QRコード画像エラーハンドリング
+   */
+  const handleImageError = useCallback(() => {
+    setImageError(true);
+    console.error('❌ QR code image failed to load');
+  }, []);
+
+  /**
+   * ブロックエクスプローラーURL生成
+   */
+  const getExplorerURL = useCallback((address: string) => {
+    return `https://testnet.snowscan.xyz/address/${address}`;
+  }, []);
+
+  /**
+   * ネットワーク名取得
+   */
+  const getNetworkName = useCallback((chainId: number) => {
+    switch (chainId) {
+      case 43113: return 'Avalanche FUJI';
+      case 43114: return 'Avalanche Mainnet';
+      default: return `Chain ${chainId}`;
+    }
+  }, []);
+
+  /**
+   * アドレス短縮表示
+   */
+  const formatAddress = useCallback((address: string) => {
+    return `${address.substring(0, 6)}...${address.substring(address.length - 4)}`;
+  }, []);
+
+  return (
+    <div className={`bg-dark-200/50 border border-dark-300 rounded-sm ${config.container} ${className}`}>
+      {/* ヘッダー */}
+      <div className="text-center mb-4">
+        <h3 className="text-lg font-semibold text-white mb-1">
+          Payment QR Code
+        </h3>
+        <p className="text-sm text-gray-400">
+          Scan with any compatible wallet
+        </p>
+      </div>
+
+      {/* QRコード表示エリア */}
+      <div className="flex justify-center mb-6">
+        <div className="relative">
+          {!imageError ? (
+            <img
+              src={qrCodeDataURL}
+              alt="Payment QR Code"
+              className={`${config.qr} border-2 border-white rounded-sm shadow-lg`}
+              onError={handleImageError}
+            />
+          ) : (
+            // QRコード読み込みエラー時のフォールバック
+            <div className={`${config.qr} border-2 border-red-400 rounded-sm bg-red-900/20 flex items-center justify-center`}>
+              <div className="text-center">
+                <AlertCircle className="w-12 h-12 text-red-400 mx-auto mb-2" />
+                <p className="text-sm text-red-400">QR Code Error</p>
+              </div>
+            </div>
+          )}
+          
+          {/* QRコード角のアクセント */}
+          <div className="absolute -top-1 -left-1 w-4 h-4 border-l-2 border-t-2 border-neonGreen"></div>
+          <div className="absolute -top-1 -right-1 w-4 h-4 border-r-2 border-t-2 border-neonGreen"></div>
+          <div className="absolute -bottom-1 -left-1 w-4 h-4 border-l-2 border-b-2 border-neonGreen"></div>
+          <div className="absolute -bottom-1 -right-1 w-4 h-4 border-r-2 border-b-2 border-neonGreen"></div>
+        </div>
+      </div>
+
+      {/* モバイル用説明 */}
+      <div className="bg-blue-900/20 border border-blue-600/30 rounded-sm p-3 mb-4">
+        <div className="flex items-start space-x-3">
+          <Smartphone className="w-5 h-5 text-blue-400 flex-shrink-0 mt-0.5" />
+          <div>
+            <div className="text-blue-400 font-medium text-sm mb-1">
+              📱 Mobile Wallet Instructions
+            </div>
+            <div className="text-xs text-gray-300">
+              Open your wallet app → Scan QR → Confirm transaction
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* 決済詳細情報 */}
+      <div className="space-y-3">
+        {/* 支払いアドレス */}
+        <div>
+          <label className="block text-xs font-medium text-gray-400 mb-1">
+            Payment Address
+          </label>
+          <div className="flex items-center space-x-2">
+            <div className="flex-1 bg-dark-100 border border-dark-300 rounded-sm p-2">
+              <div className="font-mono text-sm text-white break-all">
+                {paymentAddress}
+              </div>
+            </div>
+            <CyberButton
+              size="sm"
+              variant="outline"
+              onClick={() => handleCopy(paymentAddress, 'address')}
+              className="flex items-center space-x-1 min-w-[80px]"
+            >
+              {copyState.address ? (
+                <>
+                  <Check className="w-3 h-3" />
+                  <span>Copied</span>
+                </>
+              ) : (
+                <>
+                  <Copy className="w-3 h-3" />
+                  <span>Copy</span>
+                </>
+              )}
+            </CyberButton>
+          </div>
+        </div>
+
+        {/* 金額表示 */}
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <label className="block text-xs font-medium text-gray-400 mb-1">
+              Amount
+            </label>
+            <div className="bg-dark-100 border border-dark-300 rounded-sm p-2">
+              <div className="text-sm font-semibold text-white">
+                {amount} AVAX
+              </div>
+            </div>
+          </div>
+          
+          <div>
+            <label className="block text-xs font-medium text-gray-400 mb-1">
+              Network
+            </label>
+            <div className="bg-dark-100 border border-dark-300 rounded-sm p-2">
+              <div className="text-sm text-white">
+                {getNetworkName(chainId)}
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Payment URI（オプション） */}
+        {showMetadata && (
+          <div>
+            <label className="block text-xs font-medium text-gray-400 mb-1">
+              Payment URI
+            </label>
+            <div className="flex items-center space-x-2">
+              <div className="flex-1 bg-dark-100 border border-dark-300 rounded-sm p-2">
+                <div className="font-mono text-xs text-gray-300 break-all">
+                  {paymentURI.length > 60 
+                    ? `${paymentURI.substring(0, 60)}...` 
+                    : paymentURI
+                  }
+                </div>
+              </div>
+              <CyberButton
+                size="sm"
+                variant="outline"
+                onClick={() => handleCopy(paymentURI, 'uri')}
+                className="flex items-center space-x-1 min-w-[80px]"
+              >
+                {copyState.uri ? (
+                  <>
+                    <Check className="w-3 h-3" />
+                    <span>Copied</span>
+                  </>
+                ) : (
+                  <>
+                    <Copy className="w-3 h-3" />
+                    <span>Copy</span>
+                  </>
+                )}
+              </CyberButton>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* フッターアクション */}
+      <div className="mt-4 pt-4 border-t border-dark-300">
+        <div className="flex items-center justify-between">
+          <div className="text-xs text-gray-400">
+            Chain ID: {chainId}
+          </div>
+          
+          <CyberButton
+            size="sm"
+            variant="outline"
+            onClick={() => window.open(getExplorerURL(paymentAddress), '_blank')}
+            className="flex items-center space-x-1"
+          >
+            <ExternalLink className="w-3 h-3" />
+            <span>Explorer</span>
+          </CyberButton>
+        </div>
+      </div>
+
+      {/* デバッグ情報（開発環境のみ） */}
+      {process.env.NODE_ENV === 'development' && (
+        <div className="mt-3 p-2 bg-yellow-900/20 border border-yellow-600/30 rounded-sm">
+          <div className="text-xs text-yellow-400">
+            🔧 Dev: Address {formatAddress(paymentAddress)} • URI {paymentURI.substring(0, 30)}...
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
+export default QRCodeDisplay;-e 
 ### FILE: ./src/app/components/common/GridPattern.tsx
 
 // src/app/components/common/GridPattern.tsx
@@ -9072,6 +10037,2137 @@ export default function Home() {
 			<Footer />
 		</main>
 	);
+}-e 
+### FILE: ./src/app/api/demo/invoice/create/route.ts
+
+// src/app/api/demo/invoice/create/route.ts
+import { NextRequest, NextResponse } from 'next/server';
+import { nanoid } from 'nanoid';
+import { serverTimestamp } from 'firebase/firestore';
+import {
+	CreateDemoInvoiceRequest,
+	CreateDemoInvoiceResponse,
+	DemoInvoiceDocument,
+	DemoPaymentErrorCode
+} from '../../../../../../types/demo-payment';
+import {
+	DEMO_PAYMENT_CONFIG,
+	AVALANCHE_FUJI_CONFIG,
+	RATE_LIMIT_CONFIG,
+	FIRESTORE_COLLECTIONS,
+	avaxToWei,
+	LOGGING_CONFIG,
+	validateEnvironmentVariables
+} from '@/lib/avalanche-config';
+import { generateDemoWallet } from '../../../utils/wallet-generator';
+import { generatePaymentQRCode } from '../../../utils/qr-generator';
+import { getAvalancheRPC } from '../../../utils/avalanche';
+import { doc, setDoc, collection, query, where, getDocs, Timestamp } from 'firebase/firestore';
+import { db } from '@/lib/firebase';
+
+/**
+ * Rate limiting用のメモリキャッシュ
+ */
+interface RateLimitEntry {
+	count: number;
+	windowStart: number;
+}
+
+const rateLimitCache = new Map<string, RateLimitEntry>();
+
+/**
+ * IPアドレス取得
+ */
+function getClientIP(request: NextRequest): string {
+	const forwarded = request.headers.get('x-forwarded-for');
+	const realIP = request.headers.get('x-real-ip');
+	const remoteAddr = request.headers.get('x-remote-addr');
+
+	if (forwarded) {
+		return forwarded.split(',')[0].trim();
+	}
+	if (realIP) {
+		return realIP;
+	}
+	if (remoteAddr) {
+		return remoteAddr;
+	}
+
+	return 'unknown';
+}
+
+/**
+ * Rate limiting チェック
+ */
+function checkRateLimit(ip: string): { allowed: boolean; remaining: number } {
+	const now = Date.now();
+	const windowMs = RATE_LIMIT_CONFIG.windowMinutes * 60 * 1000;
+
+	const entry = rateLimitCache.get(ip);
+
+	if (!entry) {
+		// 新しいIP
+		rateLimitCache.set(ip, { count: 1, windowStart: now });
+		return { allowed: true, remaining: RATE_LIMIT_CONFIG.maxInvoicesPerIP - 1 };
+	}
+
+	// ウィンドウ期間をチェック
+	if (now - entry.windowStart > windowMs) {
+		// 新しいウィンドウ
+		rateLimitCache.set(ip, { count: 1, windowStart: now });
+		return { allowed: true, remaining: RATE_LIMIT_CONFIG.maxInvoicesPerIP - 1 };
+	}
+
+	// 現在のウィンドウ内での制限チェック
+	if (entry.count >= RATE_LIMIT_CONFIG.maxInvoicesPerIP) {
+		return { allowed: false, remaining: 0 };
+	}
+
+	// カウント更新
+	entry.count++;
+	rateLimitCache.set(ip, entry);
+
+	return { allowed: true, remaining: RATE_LIMIT_CONFIG.maxInvoicesPerIP - entry.count };
+}
+
+/**
+ * Rate limiting キャッシュクリーンアップ
+ */
+function cleanupRateLimit(): void {
+	const now = Date.now();
+	const windowMs = RATE_LIMIT_CONFIG.windowMinutes * 60 * 1000;
+
+	for (const [ip, entry] of rateLimitCache.entries()) {
+		if (now - entry.windowStart > windowMs) {
+			rateLimitCache.delete(ip);
+		}
+	}
+}
+
+/**
+ * エラーレスポンス生成
+ */
+function createErrorResponse(
+	code: DemoPaymentErrorCode,
+	message: string,
+	status: number = 400,
+	details?: any
+): NextResponse<CreateDemoInvoiceResponse> {
+	return NextResponse.json({
+		success: false,
+		error: { code, message, details }
+	}, { status });
+}
+
+/**
+ * 環境変数検証
+ */
+function validateEnvironment(): { valid: boolean; error?: string } {
+	const validation = validateEnvironmentVariables();
+
+	if (!validation.isValid) {
+		return {
+			valid: false,
+			error: `Missing environment variables: ${validation.missingVars.join(', ')}`
+		};
+	}
+
+	return { valid: true };
+}
+
+/**
+ * POST /api/demo/invoice/create
+ */
+export async function POST(request: NextRequest): Promise<NextResponse<CreateDemoInvoiceResponse>> {
+	try {
+		if (LOGGING_CONFIG.enableAPILogs) {
+			console.log('📋 Demo invoice creation request received');
+		}
+
+		// 環境変数検証
+		const envValidation = validateEnvironment();
+		if (!envValidation.valid) {
+			console.error('❌ Environment validation failed:', envValidation.error);
+			return createErrorResponse(
+				'RPC_CONNECTION_FAILED',
+				'Server configuration error',
+				500
+			);
+		}
+
+		// Rate limiting クリーンアップ
+		cleanupRateLimit();
+
+		// クライアントIP取得
+		const clientIP = getClientIP(request);
+
+		// Rate limiting チェック
+		const rateLimitResult = checkRateLimit(clientIP);
+		if (!rateLimitResult.allowed) {
+			if (LOGGING_CONFIG.enableAPILogs) {
+				console.warn('⚠️ Rate limit exceeded for IP:', clientIP);
+			}
+
+			return createErrorResponse(
+				'RATE_LIMIT_EXCEEDED',
+				`Too many requests. Maximum ${RATE_LIMIT_CONFIG.maxInvoicesPerIP} invoices per ${RATE_LIMIT_CONFIG.windowMinutes} minutes.`,
+				429
+			);
+		}
+
+		// リクエストボディ解析
+		let requestBody: CreateDemoInvoiceRequest;
+		try {
+			requestBody = await request.json();
+		} catch {
+			requestBody = {}; // デフォルト値使用
+		}
+
+		// チェーンID検証
+		const chainId = requestBody.chainId || AVALANCHE_FUJI_CONFIG.chainId;
+		if (chainId !== AVALANCHE_FUJI_CONFIG.chainId) {
+			return createErrorResponse(
+				'INVALID_CHAIN_ID',
+				`Unsupported chain ID: ${chainId}. Only Avalanche FUJI (${AVALANCHE_FUJI_CONFIG.chainId}) is supported.`
+			);
+		}
+
+		// Invoice ID生成
+		const invoiceId = `demo_${nanoid(16)}`;
+
+		// ユーザーエージェント取得
+		const userAgent = request.headers.get('user-agent') || 'Unknown';
+
+		if (LOGGING_CONFIG.enableDebugLogs) {
+			console.log('🆔 Generated invoice ID:', invoiceId);
+		}
+
+		// ウォレット生成
+		let wallet;
+		try {
+			wallet = generateDemoWallet(invoiceId);
+		} catch (error) {
+			console.error('❌ Wallet generation failed:', error);
+			return createErrorResponse(
+				'WALLET_GENERATION_FAILED',
+				'Failed to generate payment wallet',
+				500,
+				error
+			);
+		}
+
+		// 金額設定（Wei変換）
+		const amountAVAX = DEMO_PAYMENT_CONFIG.defaultAmount;
+		const amountWei = avaxToWei(amountAVAX);
+
+		// RPC接続テスト
+		try {
+			const rpc = getAvalancheRPC();
+			const connectionTest = await rpc.testConnection();
+
+			if (!connectionTest.success) {
+				console.error('❌ RPC connection test failed:', connectionTest.error);
+				return createErrorResponse(
+					'RPC_CONNECTION_FAILED',
+					'Unable to connect to Avalanche network',
+					503
+				);
+			}
+		} catch (error) {
+			console.error('❌ RPC connection error:', error);
+			return createErrorResponse(
+				'RPC_CONNECTION_FAILED',
+				'Network connection error',
+				503
+			);
+		}
+
+		// QRコード生成
+		let qrCode;
+		try {
+			qrCode = await generatePaymentQRCode(wallet.address, amountWei, chainId);
+		} catch (error) {
+			console.error('❌ QR code generation failed:', error);
+			return createErrorResponse(
+				'QR_GENERATION_FAILED',
+				'Failed to generate QR code',
+				500,
+				error
+			);
+		}
+
+		// 有効期限設定
+		const now = new Date();
+		const expiresAt = new Date(now.getTime() + (DEMO_PAYMENT_CONFIG.expiryMinutes * 60 * 1000));
+
+		// Firestore保存用データ準備
+		const invoiceDocument: Omit<DemoInvoiceDocument, 'createdAt' | 'expiresAt'> & {
+			createdAt: any;
+			expiresAt: any;
+		} = {
+			invoiceId,
+			paymentAddress: wallet.address,
+			privateKey: wallet.privateKey, // 注意: 本番環境では暗号化が必要
+			amount: amountAVAX,
+			amountWei: amountWei,
+			chainId,
+			status: 'pending',
+			userAgent,
+			ipAddress: clientIP,
+			createdAt: serverTimestamp(),
+			expiresAt: Timestamp.fromDate(expiresAt)
+		};
+
+		// Firestoreに保存
+		try {
+			const docRef = doc(db, FIRESTORE_COLLECTIONS.DEMO_INVOICES, invoiceId);
+			await setDoc(docRef, invoiceDocument);
+
+			if (LOGGING_CONFIG.enableDebugLogs) {
+				console.log('💾 Invoice saved to Firestore:', invoiceId);
+			}
+		} catch (error) {
+			console.error('❌ Firestore save failed:', error);
+			return createErrorResponse(
+				'FIRESTORE_ERROR',
+				'Failed to save invoice',
+				500,
+				error
+			);
+		}
+
+		// ガス代見積もり（簡易版）
+		const estimatedGasFee = '0.0005'; // 固定値（実際は動的に計算可能）
+
+		// レスポンス作成
+		const response: CreateDemoInvoiceResponse = {
+			success: true,
+			data: {
+				invoiceId,
+				paymentAddress: wallet.address,
+				amount: amountAVAX,
+				amountWei: amountWei,
+				chainId,
+				qrCodeDataURL: qrCode.dataURL,
+				paymentURI: qrCode.paymentURI,
+				expiresAt: expiresAt.toISOString(),
+				estimatedGasFee
+			}
+		};
+
+		// レスポンスヘッダー設定
+		const headers = new Headers();
+		headers.set('X-RateLimit-Remaining', rateLimitResult.remaining.toString());
+		headers.set('X-RateLimit-Limit', RATE_LIMIT_CONFIG.maxInvoicesPerIP.toString());
+		headers.set('X-Invoice-ID', invoiceId);
+
+		if (LOGGING_CONFIG.enableAPILogs) {
+			console.log('✅ Demo invoice created successfully:', {
+				invoiceId,
+				address: wallet.address.substring(0, 10) + '...',
+				amount: amountAVAX,
+				expiresAt: expiresAt.toISOString()
+			});
+		}
+
+		return NextResponse.json(response, {
+			status: 201,
+			headers
+		});
+
+	} catch (error) {
+		console.error('❌ Unexpected error in invoice creation:', error);
+
+		return createErrorResponse(
+			'RPC_CONNECTION_FAILED',
+			'Internal server error',
+			500,
+			LOGGING_CONFIG.enableDebugLogs ? error : undefined
+		);
+	}
+}
+
+/**
+ * GET /api/demo/invoice/create (method not allowed)
+ */
+export async function GET(): Promise<NextResponse> {
+	return NextResponse.json(
+		{ error: 'Method not allowed. Use POST to create invoices.' },
+		{ status: 405 }
+	);
+}
+
+/**
+ * OPTIONS /api/demo/invoice/create (CORS preflight)
+ */
+export async function OPTIONS(): Promise<NextResponse> {
+	return new NextResponse(null, {
+		status: 200,
+		headers: {
+			'Access-Control-Allow-Methods': 'POST',
+			'Access-Control-Allow-Headers': 'Content-Type',
+		},
+	});
+}-e 
+### FILE: ./src/app/api/demo/invoice/[invoiceId]/status/route.ts
+
+// src/app/api/demo/invoice/[invoiceId]/status/route.ts
+import { NextRequest, NextResponse } from 'next/server';
+import {
+	DemoInvoiceStatusResponse,
+	DemoPaymentErrorCode
+} from '../../../../../../../types/demo-payment';
+import {
+	LOGGING_CONFIG,
+	getExplorerURL
+} from '@/lib/avalanche-config';
+import { checkInvoicePayment, getPaymentMonitor } from '../../../../utils/payment-monitor';
+
+/**
+ * パラメータ型定義
+ */
+interface RouteParams {
+	params: {
+		invoiceId: string;
+	};
+}
+
+/**
+ * Invoice ID バリデーション
+ */
+function validateInvoiceId(invoiceId: string): { valid: boolean; error?: string } {
+	if (!invoiceId || typeof invoiceId !== 'string') {
+		return { valid: false, error: 'Invoice ID is required' };
+	}
+
+	if (!invoiceId.startsWith('demo_')) {
+		return { valid: false, error: 'Invalid invoice ID format' };
+	}
+
+	if (invoiceId.length < 10 || invoiceId.length > 50) {
+		return { valid: false, error: 'Invalid invoice ID length' };
+	}
+
+	// 英数字とアンダースコアのみ許可
+	if (!/^demo_[a-zA-Z0-9_-]+$/.test(invoiceId)) {
+		return { valid: false, error: 'Invalid invoice ID characters' };
+	}
+
+	return { valid: true };
+}
+
+/**
+ * エラーレスポンス生成
+ */
+function createErrorResponse(
+	code: DemoPaymentErrorCode,
+	message: string,
+	status: number = 400
+): NextResponse<DemoInvoiceStatusResponse> {
+	return NextResponse.json({
+		success: false,
+		error: { code, message }
+	}, { status });
+}
+
+/**
+ * CORS ヘッダー設定
+ */
+function setCORSHeaders(headers: Headers): void {
+	headers.set('Access-Control-Allow-Origin', '*');
+	headers.set('Access-Control-Allow-Methods', 'GET, OPTIONS');
+	headers.set('Access-Control-Allow-Headers', 'Content-Type');
+	headers.set('Access-Control-Max-Age', '86400');
+}
+
+/**
+ * キャッシュヘッダー設定
+ */
+function setCacheHeaders(headers: Headers, maxAge: number = 5): void {
+	headers.set('Cache-Control', `public, max-age=${maxAge}, s-maxage=${maxAge}`);
+	headers.set('Vary', 'Accept-Encoding');
+}
+
+/**
+ * GET /api/demo/invoice/[invoiceId]/status
+ */
+export async function GET(
+	request: NextRequest,
+	{ params }: RouteParams
+): Promise<NextResponse<DemoInvoiceStatusResponse>> {
+	const startTime = Date.now();
+
+	try {
+		if (LOGGING_CONFIG.enableAPILogs) {
+			console.log('📊 Invoice status check request:', { invoiceId: params.invoiceId });
+		}
+
+		// Invoice ID バリデーション
+		const validation = validateInvoiceId(params.invoiceId);
+		if (!validation.valid) {
+			return createErrorResponse(
+				'INVOICE_NOT_FOUND',
+				validation.error || 'Invalid invoice ID',
+				400
+			);
+		}
+
+		// 決済監視実行
+		let monitorResult;
+		try {
+			monitorResult = await checkInvoicePayment(params.invoiceId);
+		} catch (error) {
+			console.error('❌ Payment monitoring failed:', error);
+
+			if (error instanceof Error) {
+				// 特定エラーのハンドリング
+				if (error.message.includes('not found')) {
+					return createErrorResponse(
+						'INVOICE_NOT_FOUND',
+						'Invoice not found',
+						404
+					);
+				}
+
+				if (error.message.includes('network') || error.message.includes('RPC')) {
+					return createErrorResponse(
+						'RPC_CONNECTION_FAILED',
+						'Network connection error',
+						503
+					);
+				}
+			}
+
+			return createErrorResponse(
+				'PAYMENT_MONITORING_FAILED',
+				'Failed to check payment status',
+				500
+			);
+		}
+
+		// エラー状態の処理
+		if (monitorResult.status === 'error') {
+			if (monitorResult.error?.includes('not found')) {
+				return createErrorResponse(
+					'INVOICE_NOT_FOUND',
+					'Invoice not found',
+					404
+				);
+			}
+
+			return createErrorResponse(
+				'PAYMENT_MONITORING_FAILED',
+				monitorResult.error || 'Payment monitoring error',
+				500
+			);
+		}
+
+		// レスポンスデータ作成
+		const responseData: DemoInvoiceStatusResponse['data'] = {
+			invoiceId: params.invoiceId,
+			status: monitorResult.status,
+			paymentAddress: '', // monitorResultに含まれていない場合は空文字
+			amount: '', // monitorResultに含まれていない場合は空文字
+			chainId: 43113, // FUJI固定
+			createdAt: '', // 実際の実装では取得する
+			expiresAt: '', // 実際の実装では取得する
+			timeRemaining: monitorResult.timeRemaining
+		};
+
+		// 支払い完了情報の追加
+		if (monitorResult.hasPayment) {
+			responseData.transactionHash = monitorResult.transactionHash;
+			responseData.blockNumber = monitorResult.blockNumber;
+			responseData.confirmations = monitorResult.confirmations;
+			responseData.paidAt = ''; // 実際の実装では正確な日時を設定
+		}
+
+		// レスポンス作成
+		const response: DemoInvoiceStatusResponse = {
+			success: true,
+			data: responseData
+		};
+
+		// レスポンスヘッダー設定
+		const headers = new Headers();
+		setCORSHeaders(headers);
+
+		// ステータスに応じたキャッシュ設定
+		if (monitorResult.status === 'completed') {
+			setCacheHeaders(headers, 300); // 5分キャッシュ（完了状態）
+		} else if (monitorResult.status === 'expired') {
+			setCacheHeaders(headers, 3600); // 1時間キャッシュ（期限切れ）
+		} else {
+			setCacheHeaders(headers, 5); // 5秒キャッシュ（進行中）
+		}
+
+		// パフォーマンス計測
+		const duration = Date.now() - startTime;
+		headers.set('X-Response-Time', `${duration}ms`);
+		headers.set('X-Invoice-Status', monitorResult.status);
+
+		if (monitorResult.hasPayment) {
+			headers.set('X-Payment-Detected', 'true');
+		}
+
+		// 追加情報ヘッダー
+		if (monitorResult.transactionHash) {
+			headers.set('X-Transaction-Hash', monitorResult.transactionHash);
+			headers.set('X-Explorer-URL', getExplorerURL('tx', monitorResult.transactionHash));
+		}
+
+		if (LOGGING_CONFIG.enableAPILogs) {
+			console.log('✅ Invoice status check completed:', {
+				invoiceId: params.invoiceId,
+				status: monitorResult.status,
+				hasPayment: monitorResult.hasPayment,
+				duration: `${duration}ms`
+			});
+		}
+
+		return NextResponse.json(response, {
+			status: 200,
+			headers
+		});
+
+	} catch (error) {
+		const duration = Date.now() - startTime;
+
+		console.error('❌ Unexpected error in status check:', {
+			invoiceId: params.invoiceId,
+			error,
+			duration: `${duration}ms`
+		});
+
+		return createErrorResponse(
+			'PAYMENT_MONITORING_FAILED',
+			'Internal server error',
+			500
+		);
+	}
+}
+
+/**
+ * POST /api/demo/invoice/[invoiceId]/status (method not allowed)
+ */
+export async function POST(): Promise<NextResponse> {
+	return NextResponse.json(
+		{ error: 'Method not allowed. Use GET to check invoice status.' },
+		{ status: 405 }
+	);
+}
+
+/**
+ * PUT /api/demo/invoice/[invoiceId]/status (method not allowed)
+ */
+export async function PUT(): Promise<NextResponse> {
+	return NextResponse.json(
+		{ error: 'Method not allowed. Invoice status updates are automatic.' },
+		{ status: 405 }
+	);
+}
+
+/**
+ * DELETE /api/demo/invoice/[invoiceId]/status (method not allowed)
+ */
+export async function DELETE(): Promise<NextResponse> {
+	return NextResponse.json(
+		{ error: 'Method not allowed. Invoices expire automatically.' },
+		{ status: 405 }
+	);
+}
+
+/**
+ * OPTIONS /api/demo/invoice/[invoiceId]/status (CORS preflight)
+ */
+export async function OPTIONS(): Promise<NextResponse> {
+	const headers = new Headers();
+	setCORSHeaders(headers);
+
+	return new NextResponse(null, {
+		status: 200,
+		headers
+	});
+}
+
+/**
+ * PATCH /api/demo/invoice/[invoiceId]/status (管理用 - 将来実装)
+ */
+export async function PATCH(
+	request: NextRequest,
+	{ params }: RouteParams
+): Promise<NextResponse> {
+	// 将来の管理機能用（現在は無効）
+	return NextResponse.json(
+		{ error: 'Manual status updates are not currently supported.' },
+		{ status: 501 }
+	);
+}-e 
+### FILE: ./src/app/api/utils/avalanche.ts
+
+// src/app/api/utils/avalanche.ts
+import { ethers } from 'ethers';
+import {
+	AVALANCHE_FUJI_CONFIG,
+	AVALANCHE_FUJI_RPC_ENDPOINTS,
+	GAS_CONFIG,
+	LOGGING_CONFIG,
+	avaxToWei,
+	weiToAVAX
+} from '@/lib/avalanche-config';
+import { DemoPaymentError } from '../../../../types/demo-payment';
+
+/**
+ * トランザクション情報
+ */
+interface TransactionInfo {
+	hash: string;
+	blockNumber: number | null;
+	confirmations: number;
+	from: string;
+	to: string;
+	value: string; // Wei
+	gasPrice: string;
+	gasUsed?: string;
+	status: number | null; // 1 = success, 0 = failed
+	timestamp?: number;
+}
+
+/**
+ * 残高チェック結果
+ */
+interface BalanceCheckResult {
+	currentBalance: string; // Wei
+	currentBalanceAVAX: string; // AVAX
+	requiredAmount: string; // Wei
+	requiredAmountAVAX: string; // AVAX
+	hasReceived: boolean;
+	isExactMatch: boolean;
+	isOverpayment: boolean;
+	receivedAmount: string; // Wei (if any)
+}
+
+/**
+ * Avalanche RPC接続管理クラス
+ */
+export class AvalancheRPCManager {
+	private providers: ethers.JsonRpcProvider[];
+	private currentProviderIndex: number = 0;
+	private connectionAttempts: Map<string, number> = new Map();
+	private maxRetries: number = 3;
+
+	constructor() {
+		// 複数のRPCエンドポイントでプロバイダー初期化
+		this.providers = AVALANCHE_FUJI_RPC_ENDPOINTS.map(url => {
+			return new ethers.JsonRpcProvider(url, {
+				chainId: AVALANCHE_FUJI_CONFIG.chainId,
+				name: AVALANCHE_FUJI_CONFIG.name
+			});
+		});
+
+		if (LOGGING_CONFIG.enableDebugLogs) {
+			console.log('🔗 AvalancheRPCManager initialized with', this.providers.length, 'providers');
+		}
+	}
+
+	/**
+	 * 現在のプロバイダー取得
+	 */
+	public getCurrentProvider(): ethers.JsonRpcProvider {
+		return this.providers[this.currentProviderIndex];
+	}
+
+	/**
+	 * 次のプロバイダーに切り替え
+	 */
+	private switchToNextProvider(): void {
+		this.currentProviderIndex = (this.currentProviderIndex + 1) % this.providers.length;
+
+		if (LOGGING_CONFIG.enableDebugLogs) {
+			console.log('🔄 Switched to provider index:', this.currentProviderIndex);
+		}
+	}
+
+	/**
+	 * RPC接続テスト
+	 */
+	public async testConnection(): Promise<{ success: boolean; blockNumber?: number; error?: string }> {
+		try {
+			const provider = this.getCurrentProvider();
+			const blockNumber = await provider.getBlockNumber();
+
+			if (LOGGING_CONFIG.enableDebugLogs) {
+				console.log('✅ RPC connection test successful, block number:', blockNumber);
+			}
+
+			return { success: true, blockNumber };
+		} catch (error) {
+			console.error('❌ RPC connection test failed:', error);
+
+			// 他のプロバイダーを試す
+			const originalIndex = this.currentProviderIndex;
+			let attempts = 0;
+
+			while (attempts < this.providers.length - 1) {
+				this.switchToNextProvider();
+				attempts++;
+
+				try {
+					const provider = this.getCurrentProvider();
+					const blockNumber = await provider.getBlockNumber();
+
+					if (LOGGING_CONFIG.enableDebugLogs) {
+						console.log('✅ Fallback RPC connection successful, block number:', blockNumber);
+					}
+
+					return { success: true, blockNumber };
+				} catch (fallbackError) {
+					console.warn('⚠️ Fallback RPC also failed:', fallbackError);
+				}
+			}
+
+			// 元のプロバイダーに戻す
+			this.currentProviderIndex = originalIndex;
+
+			return {
+				success: false,
+				error: error instanceof Error ? error.message : 'Unknown RPC error'
+			};
+		}
+	}
+
+	/**
+	 * アドレスの残高取得
+	 */
+	public async getBalance(address: string): Promise<string> {
+		try {
+			if (!ethers.isAddress(address)) {
+				throw new Error(`Invalid address: ${address}`);
+			}
+
+			const provider = this.getCurrentProvider();
+			const balance = await provider.getBalance(address);
+
+			if (LOGGING_CONFIG.enableDebugLogs) {
+				console.log('💰 Balance for', address, ':', weiToAVAX(balance.toString()), 'AVAX');
+			}
+
+			return balance.toString();
+		} catch (error) {
+			console.error('❌ Error getting balance:', error);
+			throw this.createAvalancheError('RPC_CONNECTION_FAILED', 'Failed to get balance', error);
+		}
+	}
+
+	/**
+	 * アドレスに対する支払いチェック
+	 */
+	public async checkPayment(
+		address: string,
+		expectedAmountWei: string,
+		fromBlock?: number
+	): Promise<BalanceCheckResult> {
+		try {
+			// 現在残高取得
+			const currentBalanceWei = await this.getBalance(address);
+			const currentBalanceAVAX = weiToAVAX(currentBalanceWei);
+			const requiredAmountAVAX = weiToAVAX(expectedAmountWei);
+
+			// 金額比較
+			const currentBalance = BigInt(currentBalanceWei);
+			const requiredAmount = BigInt(expectedAmountWei);
+
+			const hasReceived = currentBalance >= requiredAmount;
+			const isExactMatch = currentBalance === requiredAmount;
+			const isOverpayment = currentBalance > requiredAmount;
+
+			const result: BalanceCheckResult = {
+				currentBalance: currentBalanceWei,
+				currentBalanceAVAX,
+				requiredAmount: expectedAmountWei,
+				requiredAmountAVAX,
+				hasReceived,
+				isExactMatch,
+				isOverpayment,
+				receivedAmount: hasReceived ? currentBalanceWei : '0'
+			};
+
+			if (LOGGING_CONFIG.enableDebugLogs) {
+				console.log('💳 Payment check result:', {
+					address: address.substring(0, 10) + '...',
+					hasReceived,
+					currentBalanceAVAX,
+					requiredAmountAVAX
+				});
+			}
+
+			return result;
+		} catch (error) {
+			console.error('❌ Error checking payment:', error);
+			throw this.createAvalancheError('PAYMENT_MONITORING_FAILED', 'Failed to check payment', error);
+		}
+	}
+
+	/**
+	 * トランザクション情報取得
+	 */
+	public async getTransactionInfo(txHash: string): Promise<TransactionInfo | null> {
+		try {
+			if (!txHash.startsWith('0x') || txHash.length !== 66) {
+				throw new Error(`Invalid transaction hash: ${txHash}`);
+			}
+
+			const provider = this.getCurrentProvider();
+
+			// トランザクション取得
+			const tx = await provider.getTransaction(txHash);
+			if (!tx) {
+				return null;
+			}
+
+			// レシート取得（確認済みトランザクションの場合）
+			const receipt = await provider.getTransactionReceipt(txHash);
+
+			// 現在のブロック番号取得
+			const currentBlock = await provider.getBlockNumber();
+
+			const confirmations = tx.blockNumber ? currentBlock - tx.blockNumber + 1 : 0;
+
+			const txInfo: TransactionInfo = {
+				hash: tx.hash,
+				blockNumber: tx.blockNumber,
+				confirmations,
+				from: tx.from,
+				to: tx.to || '',
+				value: tx.value.toString(),
+				gasPrice: tx.gasPrice?.toString() || '0',
+				gasUsed: receipt?.gasUsed?.toString(),
+				status: receipt?.status ?? null,
+				timestamp: tx.blockNumber ? (await provider.getBlock(tx.blockNumber))?.timestamp : undefined
+			};
+
+			if (LOGGING_CONFIG.enableDebugLogs) {
+				console.log('📋 Transaction info retrieved:', {
+					hash: txHash.substring(0, 10) + '...',
+					confirmations,
+					status: txInfo.status
+				});
+			}
+
+			return txInfo;
+		} catch (error) {
+			console.error('❌ Error getting transaction info:', error);
+			throw this.createAvalancheError('RPC_CONNECTION_FAILED', 'Failed to get transaction info', error);
+		}
+	}
+
+	/**
+	 * 最新ブロック番号取得
+	 */
+	public async getLatestBlockNumber(): Promise<number> {
+		try {
+			const provider = this.getCurrentProvider();
+			const blockNumber = await provider.getBlockNumber();
+
+			if (LOGGING_CONFIG.enableDebugLogs) {
+				console.log('📦 Latest block number:', blockNumber);
+			}
+
+			return blockNumber;
+		} catch (error) {
+			console.error('❌ Error getting latest block number:', error);
+			throw this.createAvalancheError('RPC_CONNECTION_FAILED', 'Failed to get latest block number', error);
+		}
+	}
+
+	/**
+	 * ガス価格取得
+	 */
+	public async getGasPrice(): Promise<string> {
+		try {
+			const provider = this.getCurrentProvider();
+			const feeData = await provider.getFeeData();
+
+			// EIP-1559対応: maxFeePerGas を優先、フォールバックでgasPrice
+			const gasPrice = feeData.maxFeePerGas || feeData.gasPrice || BigInt(GAS_CONFIG.maxFeePerGas);
+
+			if (LOGGING_CONFIG.enableDebugLogs) {
+				console.log('⛽ Current gas price:', ethers.formatUnits(gasPrice, 'gwei'), 'gwei');
+			}
+
+			return gasPrice.toString();
+		} catch (error) {
+			console.error('❌ Error getting gas price:', error);
+			// フォールバック値を返す
+			return GAS_CONFIG.maxFeePerGas;
+		}
+	}
+
+	/**
+	 * アドレスのトランザクション履歴取得（制限付き）
+	 */
+	public async getRecentTransactions(
+		address: string,
+		fromBlock: number = 0,
+		toBlock: number | 'latest' = 'latest'
+	): Promise<TransactionInfo[]> {
+		try {
+			const provider = this.getCurrentProvider();
+
+			// 受信トランザクションを検索
+			const filter = {
+				address: null,
+				topics: null,
+				fromBlock,
+				toBlock
+			};
+
+			// 注意: この方法は効率的ではないため、本番環境では別のアプローチを検討
+			console.warn('⚠️ getRecentTransactions は開発用です。本番環境では Indexing Service を使用してください。');
+
+			return [];
+		} catch (error) {
+			console.error('❌ Error getting recent transactions:', error);
+			return [];
+		}
+	}
+
+	/**
+	 * ネットワーク情報取得
+	 */
+	public async getNetworkInfo(): Promise<{ chainId: number; name: string; blockNumber: number }> {
+		try {
+			const provider = this.getCurrentProvider();
+			const network = await provider.getNetwork();
+			const blockNumber = await provider.getBlockNumber();
+
+			const networkInfo = {
+				chainId: Number(network.chainId),
+				name: network.name,
+				blockNumber
+			};
+
+			if (LOGGING_CONFIG.enableDebugLogs) {
+				console.log('🌐 Network info:', networkInfo);
+			}
+
+			return networkInfo;
+		} catch (error) {
+			console.error('❌ Error getting network info:', error);
+			throw this.createAvalancheError('RPC_CONNECTION_FAILED', 'Failed to get network info', error);
+		}
+	}
+
+	/**
+	 * エラーオブジェクト作成
+	 */
+	private createAvalancheError(
+		code: 'RPC_CONNECTION_FAILED' | 'PAYMENT_MONITORING_FAILED',
+		message: string,
+		details?: any
+	): DemoPaymentError {
+		return {
+			code,
+			message,
+			details,
+			timestamp: new Date()
+		};
+	}
+}
+
+/**
+ * シングルトンインスタンス
+ */
+let rpcManagerInstance: AvalancheRPCManager | null = null;
+
+/**
+ * RPC マネージャー取得（シングルトン）
+ */
+export function getAvalancheRPC(): AvalancheRPCManager {
+	if (!rpcManagerInstance) {
+		rpcManagerInstance = new AvalancheRPCManager();
+	}
+	return rpcManagerInstance;
+}
+
+/**
+ * 簡単な残高チェック（便利関数）
+ */
+export async function checkAddressBalance(address: string): Promise<string> {
+	const rpc = getAvalancheRPC();
+	return await rpc.getBalance(address);
+}
+
+/**
+ * 簡単な支払いチェック（便利関数）
+ */
+export async function checkPaymentReceived(
+	address: string,
+	expectedAmountWei: string
+): Promise<boolean> {
+	const rpc = getAvalancheRPC();
+	const result = await rpc.checkPayment(address, expectedAmountWei);
+	return result.hasReceived;
+}
+
+/**
+ * RPC接続状態チェック
+ */
+export async function checkRPCHealth(): Promise<{ healthy: boolean; blockNumber?: number; error?: string }> {
+	try {
+		const rpc = getAvalancheRPC();
+		const testResult = await rpc.testConnection();
+		return {
+			healthy: testResult.success,
+			blockNumber: testResult.blockNumber,
+			error: testResult.error
+		};
+	} catch (error) {
+		return {
+			healthy: false,
+			error: error instanceof Error ? error.message : 'Unknown error'
+		};
+	}
+}-e 
+### FILE: ./src/app/api/utils/payment-monitor.ts
+
+// src/app/api/utils/payment-monitor.ts
+import { Timestamp, doc, updateDoc, getDoc } from 'firebase/firestore';
+import { db } from '@/lib/firebase';
+import {
+	DemoInvoiceDocument,
+	DemoInvoiceStatus,
+	DemoPaymentError
+} from '../../../../types/demo-payment';
+import {
+	FIRESTORE_COLLECTIONS,
+	PAYMENT_MONITOR_CONFIG,
+	AVALANCHE_FUJI_CONFIG,
+	LOGGING_CONFIG
+} from '@/lib/avalanche-config';
+import { getAvalancheRPC } from './avalanche';
+
+/**
+ * 決済監視結果
+ */
+export interface PaymentMonitorResult {
+	invoiceId: string;
+	status: DemoInvoiceStatus;
+	hasPayment: boolean;
+	transactionHash?: string;
+	blockNumber?: number;
+	confirmations?: number;
+	paidAmount?: string;
+	timeRemaining?: number; // seconds
+	error?: string;
+}
+
+/**
+ * 決済監視クラス
+ */
+export class PaymentMonitor {
+	private rpc = getAvalancheRPC();
+
+	/**
+	 * Invoice情報をFirestoreから取得
+	 */
+	private async getInvoiceFromFirestore(invoiceId: string): Promise<DemoInvoiceDocument | null> {
+		try {
+			const docRef = doc(db, FIRESTORE_COLLECTIONS.DEMO_INVOICES, invoiceId);
+			const docSnap = await getDoc(docRef);
+
+			if (!docSnap.exists()) {
+				return null;
+			}
+
+			const data = docSnap.data() as DemoInvoiceDocument;
+
+			if (LOGGING_CONFIG.enableDebugLogs) {
+				console.log('📄 Retrieved invoice from Firestore:', {
+					invoiceId,
+					status: data.status,
+					address: data.paymentAddress.substring(0, 10) + '...'
+				});
+			}
+
+			return data;
+		} catch (error) {
+			console.error('❌ Error retrieving invoice from Firestore:', error);
+			throw this.createMonitorError('FIRESTORE_ERROR', 'Failed to retrieve invoice', error);
+		}
+	}
+
+	/**
+	 * Invoiceステータスを更新
+	 */
+	private async updateInvoiceStatus(
+		invoiceId: string,
+		updates: Partial<DemoInvoiceDocument>
+	): Promise<void> {
+		try {
+			const docRef = doc(db, FIRESTORE_COLLECTIONS.DEMO_INVOICES, invoiceId);
+
+			// updatedAtタイムスタンプを追加
+			const updateData = {
+				...updates,
+				updatedAt: Timestamp.now()
+			};
+
+			await updateDoc(docRef, updateData);
+
+			if (LOGGING_CONFIG.enableDebugLogs) {
+				console.log('💾 Updated invoice status:', { invoiceId, updates: Object.keys(updates) });
+			}
+		} catch (error) {
+			console.error('❌ Error updating invoice status:', error);
+			throw this.createMonitorError('FIRESTORE_ERROR', 'Failed to update invoice status', error);
+		}
+	}
+
+	/**
+	 * Invoice期限切れチェック
+	 */
+	private checkInvoiceExpiry(invoice: DemoInvoiceDocument): boolean {
+		const now = new Date();
+		const expiresAt = invoice.expiresAt instanceof Timestamp
+			? invoice.expiresAt.toDate()
+			: new Date(invoice.expiresAt as any);
+
+		return now > expiresAt;
+	}
+
+	/**
+	 * 残り時間計算（秒）
+	 */
+	private calculateTimeRemaining(invoice: DemoInvoiceDocument): number {
+		const now = new Date();
+		const expiresAt = invoice.expiresAt instanceof Timestamp
+			? invoice.expiresAt.toDate()
+			: new Date(invoice.expiresAt as any);
+
+		const remainingMs = expiresAt.getTime() - now.getTime();
+		return Math.max(0, Math.floor(remainingMs / 1000));
+	}
+
+	/**
+	 * アドレスの受信履歴をチェック（簡易版）
+	 */
+	private async scanForIncomingTransactions(
+		address: string,
+		expectedAmountWei: string
+	): Promise<{ found: boolean; txHash?: string; blockNumber?: number; amount?: string }> {
+		try {
+			// 現在の残高チェック
+			const balance = await this.rpc.getBalance(address);
+			const expectedAmount = BigInt(expectedAmountWei);
+			const currentBalance = BigInt(balance);
+
+			if (currentBalance >= expectedAmount) {
+				// 残高が期待値以上の場合、支払いありと判定
+				// 注意: 実際のトランザクションハッシュ取得には別途実装が必要
+
+				if (LOGGING_CONFIG.enableDebugLogs) {
+					console.log('💰 Payment detected by balance check:', {
+						address: address.substring(0, 10) + '...',
+						expectedAmount: expectedAmountWei,
+						currentBalance: balance,
+						hasPayment: true
+					});
+				}
+
+				return {
+					found: true,
+					amount: balance,
+					// 注意: 実際の実装では、トランザクション履歴APIまたはイベントログを使用
+					txHash: undefined,
+					blockNumber: undefined
+				};
+			}
+
+			return { found: false };
+		} catch (error) {
+			console.error('❌ Error scanning for transactions:', error);
+			throw this.createMonitorError('PAYMENT_MONITORING_FAILED', 'Failed to scan for transactions', error);
+		}
+	}
+
+	/**
+	 * 特定のトランザクションの確認数チェック
+	 */
+	private async checkTransactionConfirmations(txHash: string): Promise<number> {
+		try {
+			const txInfo = await this.rpc.getTransactionInfo(txHash);
+
+			if (!txInfo || !txInfo.blockNumber) {
+				return 0;
+			}
+
+			return txInfo.confirmations;
+		} catch (error) {
+			console.error('❌ Error checking transaction confirmations:', error);
+			return 0;
+		}
+	}
+
+	/**
+	 * メイン決済監視関数
+	 */
+	public async monitorPayment(invoiceId: string): Promise<PaymentMonitorResult> {
+		try {
+			// Invoiceデータ取得
+			const invoice = await this.getInvoiceFromFirestore(invoiceId);
+
+			if (!invoice) {
+				return {
+					invoiceId,
+					status: 'error',
+					hasPayment: false,
+					error: 'Invoice not found'
+				};
+			}
+
+			// 期限切れチェック
+			if (this.checkInvoiceExpiry(invoice)) {
+				// 期限切れの場合、ステータス更新
+				if (invoice.status === 'pending') {
+					await this.updateInvoiceStatus(invoiceId, { status: 'expired' });
+				}
+
+				return {
+					invoiceId,
+					status: 'expired',
+					hasPayment: false,
+					timeRemaining: 0
+				};
+			}
+
+			// 残り時間計算
+			const timeRemaining = this.calculateTimeRemaining(invoice);
+
+			// すでに完了している場合
+			if (invoice.status === 'completed') {
+				return {
+					invoiceId,
+					status: 'completed',
+					hasPayment: true,
+					transactionHash: invoice.transactionHash,
+					blockNumber: invoice.blockNumber,
+					confirmations: invoice.confirmations,
+					paidAmount: invoice.paidAmount,
+					timeRemaining
+				};
+			}
+
+			// トランザクション確認中の場合
+			if (invoice.status === 'confirming' && invoice.transactionHash) {
+				const confirmations = await this.checkTransactionConfirmations(invoice.transactionHash);
+
+				// 十分な確認数に達した場合
+				if (confirmations >= AVALANCHE_FUJI_CONFIG.confirmationBlocks) {
+					await this.updateInvoiceStatus(invoiceId, {
+						status: 'completed',
+						confirmations,
+						paidAt: Timestamp.now()
+					});
+
+					return {
+						invoiceId,
+						status: 'completed',
+						hasPayment: true,
+						transactionHash: invoice.transactionHash,
+						blockNumber: invoice.blockNumber,
+						confirmations,
+						paidAmount: invoice.paidAmount,
+						timeRemaining
+					};
+				} else {
+					// まだ確認中
+					await this.updateInvoiceStatus(invoiceId, { confirmations });
+
+					return {
+						invoiceId,
+						status: 'confirming',
+						hasPayment: true,
+						transactionHash: invoice.transactionHash,
+						blockNumber: invoice.blockNumber,
+						confirmations,
+						paidAmount: invoice.paidAmount,
+						timeRemaining
+					};
+				}
+			}
+
+			// 新しい支払いをチェック（pending状態の場合）
+			if (invoice.status === 'pending') {
+				const paymentResult = await this.scanForIncomingTransactions(
+					invoice.paymentAddress,
+					invoice.amountWei
+				);
+
+				if (paymentResult.found) {
+					// 支払い検出 - 確認中ステータスに更新
+					const updates: Partial<DemoInvoiceDocument> = {
+						status: 'confirming',
+						paidAmount: paymentResult.amount,
+						confirmations: 0
+					};
+
+					if (paymentResult.txHash) {
+						updates.transactionHash = paymentResult.txHash;
+					}
+					if (paymentResult.blockNumber) {
+						updates.blockNumber = paymentResult.blockNumber;
+					}
+
+					await this.updateInvoiceStatus(invoiceId, updates);
+
+					if (LOGGING_CONFIG.enableAPILogs) {
+						console.log('✅ Payment detected for invoice:', invoiceId);
+					}
+
+					return {
+						invoiceId,
+						status: 'confirming',
+						hasPayment: true,
+						transactionHash: paymentResult.txHash,
+						blockNumber: paymentResult.blockNumber,
+						confirmations: 0,
+						paidAmount: paymentResult.amount,
+						timeRemaining
+					};
+				}
+			}
+
+			// 支払い未検出
+			return {
+				invoiceId,
+				status: invoice.status,
+				hasPayment: false,
+				timeRemaining
+			};
+
+		} catch (error) {
+			console.error('❌ Payment monitoring error:', error);
+
+			return {
+				invoiceId,
+				status: 'error',
+				hasPayment: false,
+				error: error instanceof Error ? error.message : 'Unknown monitoring error'
+			};
+		}
+	}
+
+	/**
+	 * 複数Invoiceの一括監視
+	 */
+	public async monitorMultiplePayments(invoiceIds: string[]): Promise<PaymentMonitorResult[]> {
+		try {
+			// 並列処理で効率化
+			const promises = invoiceIds.map(id => this.monitorPayment(id));
+			const results = await Promise.all(promises);
+
+			if (LOGGING_CONFIG.enableDebugLogs) {
+				console.log('📊 Bulk payment monitoring completed:', {
+					total: invoiceIds.length,
+					completed: results.filter(r => r.status === 'completed').length,
+					pending: results.filter(r => r.status === 'pending').length
+				});
+			}
+
+			return results;
+		} catch (error) {
+			console.error('❌ Bulk payment monitoring error:', error);
+			throw this.createMonitorError('PAYMENT_MONITORING_FAILED', 'Failed to monitor multiple payments', error);
+		}
+	}
+
+	/**
+	 * 期限切れInvoiceの一括更新
+	 */
+	public async expireOldInvoices(): Promise<{ expiredCount: number }> {
+		try {
+			// 注意: 実際の実装では、Firestoreクエリで期限切れInvoiceを検索
+			// ここでは簡単な実装例を示す
+
+			console.log('🧹 Starting expired invoice cleanup...');
+
+			// TODO: Firestoreクエリで期限切れInvoiceを取得し、一括更新
+
+			return { expiredCount: 0 };
+		} catch (error) {
+			console.error('❌ Error expiring old invoices:', error);
+			throw this.createMonitorError('FIRESTORE_ERROR', 'Failed to expire old invoices', error);
+		}
+	}
+
+	/**
+	 * エラーオブジェクト作成
+	 */
+	private createMonitorError(
+		code: 'FIRESTORE_ERROR' | 'PAYMENT_MONITORING_FAILED',
+		message: string,
+		details?: any
+	): DemoPaymentError {
+		return {
+			code,
+			message,
+			details,
+			timestamp: new Date()
+		};
+	}
+}
+
+/**
+ * シングルトンインスタンス
+ */
+let paymentMonitorInstance: PaymentMonitor | null = null;
+
+/**
+ * Payment Monitor取得（シングルトン）
+ */
+export function getPaymentMonitor(): PaymentMonitor {
+	if (!paymentMonitorInstance) {
+		paymentMonitorInstance = new PaymentMonitor();
+	}
+	return paymentMonitorInstance;
+}
+
+/**
+ * 簡単な決済チェック（便利関数）
+ */
+export async function checkInvoicePayment(invoiceId: string): Promise<PaymentMonitorResult> {
+	const monitor = getPaymentMonitor();
+	return await monitor.monitorPayment(invoiceId);
+}
+
+/**
+ * 決済監視の統計情報取得
+ */
+export function getMonitoringStats(): {
+	activeMonitors: number;
+	checkInterval: number;
+	confirmationBlocks: number;
+} {
+	return {
+		activeMonitors: paymentMonitorInstance ? 1 : 0,
+		checkInterval: PAYMENT_MONITOR_CONFIG.pollInterval,
+		confirmationBlocks: AVALANCHE_FUJI_CONFIG.confirmationBlocks
+	};
+}-e 
+### FILE: ./src/app/api/utils/wallet-generator.ts
+
+// src/app/api/utils/wallet-generator.ts
+import { ethers } from 'ethers';
+import { generateMnemonic, mnemonicToSeedSync, validateMnemonic } from 'bip39';
+import HDKey from 'hdkey';
+import crypto from 'crypto';
+import { GeneratedWallet, DemoPaymentError } from '../../../../types/demo-payment';
+import { DEMO_PAYMENT_CONFIG, LOGGING_CONFIG } from '@/lib/avalanche-config';
+
+/**
+ * HDウォレットからのアドレス生成クラス
+ */
+export class DemoWalletGenerator {
+  private hdWallet: HDKey;
+  private basePath: string;
+  private usedIndices: Set<number>;
+
+  constructor(mnemonic?: string) {
+    // マスターシードの検証と設定
+    const masterMnemonic = mnemonic || DEMO_PAYMENT_CONFIG.masterMnemonic;
+    
+    if (!validateMnemonic(masterMnemonic)) {
+      throw new Error('Invalid mnemonic phrase');
+    }
+
+    // HDウォレット生成
+    const seed = mnemonicToSeedSync(masterMnemonic);
+    this.hdWallet = HDKey.fromMasterSeed(seed);
+    this.basePath = DEMO_PAYMENT_CONFIG.derivationPath;
+    this.usedIndices = new Set<number>();
+
+    if (LOGGING_CONFIG.enableDebugLogs) {
+      console.log('🔐 DemoWalletGenerator initialized with derivation path:', this.basePath);
+    }
+  }
+
+  /**
+   * デモIDから決定論的にウォレットインデックスを生成
+   */
+  private generateDeterministicIndex(demoId: string): number {
+    // SHA256でハッシュ化してインデックス生成
+    const hash = crypto.createHash('sha256').update(demoId).digest('hex');
+    const hashNum = parseInt(hash.substring(0, 8), 16);
+    
+    // 最大アドレス数以内に収める
+    const index = hashNum % DEMO_PAYMENT_CONFIG.maxAddressReuse;
+    
+    if (LOGGING_CONFIG.enableDebugLogs) {
+      console.log('📍 Generated deterministic index:', index, 'for demoId:', demoId);
+    }
+    
+    return index;
+  }
+
+  /**
+   * デモIDから決定論的にウォレット生成
+   */
+  public generateWalletFromDemoId(demoId: string): GeneratedWallet {
+    try {
+      const index = this.generateDeterministicIndex(demoId);
+      return this.generateWalletAtIndex(index);
+    } catch (error) {
+      console.error('❌ Error generating wallet from demoId:', error);
+      throw this.createWalletError('WALLET_GENERATION_FAILED', 'Failed to generate wallet from demo ID', error);
+    }
+  }
+
+  /**
+   * 指定されたインデックスでウォレット生成
+   */
+  public generateWalletAtIndex(index: number): GeneratedWallet {
+    try {
+      if (index < 0 || index >= DEMO_PAYMENT_CONFIG.maxAddressReuse) {
+        throw new Error(`Index ${index} is out of range (0-${DEMO_PAYMENT_CONFIG.maxAddressReuse - 1})`);
+      }
+
+      // 派生パス生成
+      const derivationPath = `${this.basePath}${index}`;
+      const derivedKey = this.hdWallet.derive(derivationPath);
+
+      if (!derivedKey.privateKey) {
+        throw new Error('Failed to derive private key');
+      }
+
+      // ethers.jsでウォレット作成
+      const privateKeyHex = '0x' + derivedKey.privateKey.toString('hex');
+      const wallet = new ethers.Wallet(privateKeyHex);
+
+      // 公開鍵を手動で生成（ethers v6では直接アクセスできないため）
+      const publicKey = derivedKey.publicKey ? '0x' + derivedKey.publicKey.toString('hex') : wallet.signingKey.publicKey;
+
+      // 使用済みインデックスとして記録
+      this.usedIndices.add(index);
+
+      const result: GeneratedWallet = {
+        address: wallet.address,
+        privateKey: privateKeyHex,
+        publicKey: publicKey,
+        index,
+        derivationPath
+      };
+
+      if (LOGGING_CONFIG.enableDebugLogs) {
+        console.log('✅ Generated wallet:', {
+          address: result.address,
+          index: result.index,
+          derivationPath: result.derivationPath
+        });
+      }
+
+      return result;
+    } catch (error) {
+      console.error('❌ Error generating wallet at index:', index, error);
+      throw this.createWalletError('WALLET_GENERATION_FAILED', `Failed to generate wallet at index ${index}`, error);
+    }
+  }
+
+  /**
+   * 次の未使用インデックスでウォレット生成
+   */
+  public generateNextWallet(): GeneratedWallet {
+    try {
+      // 未使用のインデックスを探す
+      let index = 0;
+      while (this.usedIndices.has(index) && index < DEMO_PAYMENT_CONFIG.maxAddressReuse) {
+        index++;
+      }
+
+      if (index >= DEMO_PAYMENT_CONFIG.maxAddressReuse) {
+        throw new Error('No available wallet indices');
+      }
+
+      return this.generateWalletAtIndex(index);
+    } catch (error) {
+      console.error('❌ Error generating next wallet:', error);
+      throw this.createWalletError('WALLET_GENERATION_FAILED', 'Failed to generate next available wallet', error);
+    }
+  }
+
+  /**
+   * ランダムなインデックスでウォレット生成（衝突回避）
+   */
+  public generateRandomWallet(maxAttempts: number = 10): GeneratedWallet {
+    try {
+      for (let attempt = 0; attempt < maxAttempts; attempt++) {
+        const randomIndex = Math.floor(Math.random() * DEMO_PAYMENT_CONFIG.maxAddressReuse);
+        
+        if (!this.usedIndices.has(randomIndex)) {
+          return this.generateWalletAtIndex(randomIndex);
+        }
+      }
+
+      // フォールバック: 次の利用可能なウォレットを生成
+      console.warn('⚠️ Random wallet generation failed, falling back to next available wallet');
+      return this.generateNextWallet();
+    } catch (error) {
+      console.error('❌ Error generating random wallet:', error);
+      throw this.createWalletError('WALLET_GENERATION_FAILED', 'Failed to generate random wallet', error);
+    }
+  }
+
+  /**
+   * ウォレットアドレスの検証
+   */
+  public static validateAddress(address: string): boolean {
+    try {
+      return ethers.isAddress(address);
+    } catch {
+      return false;
+    }
+  }
+
+  /**
+   * 秘密鍵の検証
+   */
+  public static validatePrivateKey(privateKey: string): boolean {
+    try {
+      new ethers.Wallet(privateKey);
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  /**
+   * 使用済みインデックスの状態取得
+   */
+  public getUsageStats(): { used: number; available: number; total: number } {
+    return {
+      used: this.usedIndices.size,
+      available: DEMO_PAYMENT_CONFIG.maxAddressReuse - this.usedIndices.size,
+      total: DEMO_PAYMENT_CONFIG.maxAddressReuse
+    };
+  }
+
+  /**
+   * 使用済みインデックスのリセット（テスト用）
+   */
+  public resetUsedIndices(): void {
+    this.usedIndices.clear();
+    if (LOGGING_CONFIG.enableDebugLogs) {
+      console.log('🔄 Reset used wallet indices');
+    }
+  }
+
+  /**
+   * エラーオブジェクト作成ヘルパー
+   */
+  private createWalletError(code: 'WALLET_GENERATION_FAILED', message: string, details?: any): DemoPaymentError {
+    return {
+      code,
+      message,
+      details,
+      timestamp: new Date()
+    };
+  }
+}
+
+/**
+ * シングルトンインスタンス（メモリ効率化）
+ */
+let walletGeneratorInstance: DemoWalletGenerator | null = null;
+
+/**
+ * ウォレットジェネレーター取得（シングルトン）
+ */
+export function getWalletGenerator(): DemoWalletGenerator {
+  if (!walletGeneratorInstance) {
+    walletGeneratorInstance = new DemoWalletGenerator();
+  }
+  return walletGeneratorInstance;
+}
+
+/**
+ * デモID用のウォレット生成（便利関数）
+ */
+export function generateDemoWallet(demoId: string): GeneratedWallet {
+  const generator = getWalletGenerator();
+  return generator.generateWalletFromDemoId(demoId);
+}
+
+/**
+ * ランダムウォレット生成（便利関数）
+ */
+export function generateRandomDemoWallet(): GeneratedWallet {
+  const generator = getWalletGenerator();
+  return generator.generateRandomWallet();
+}
+
+/**
+ * ウォレット生成の統計情報取得
+ */
+export function getWalletGenerationStats() {
+  const generator = getWalletGenerator();
+  return generator.getUsageStats();
+}
+
+/**
+ * 新しいマスターシード生成（セットアップ用）
+ */
+export function generateNewMasterMnemonic(): string {
+  const mnemonic = generateMnemonic(256); // 24語のシード
+  
+  if (LOGGING_CONFIG.enableDebugLogs) {
+    console.log('🆕 Generated new master mnemonic (24 words)');
+  }
+  
+  return mnemonic;
+}
+
+/**
+ * マスターシードの検証
+ */
+export function validateMasterMnemonic(mnemonic: string): { isValid: boolean; wordCount: number } {
+  const isValid = validateMnemonic(mnemonic);
+  const wordCount = mnemonic.trim().split(/\s+/).length;
+  
+  return { isValid, wordCount };
+}-e 
+### FILE: ./src/app/api/utils/qr-generator.ts
+
+// src/app/api/utils/qr-generator.ts
+import QRCode from 'qrcode';
+import { QRCodeConfig, DemoPaymentError } from '../../../../types/demo-payment';
+import { QR_CODE_CONFIG, generatePaymentURI, LOGGING_CONFIG } from '@/lib/avalanche-config';
+
+/**
+ * QRコード生成オプション
+ */
+interface QRGenerationOptions {
+	format?: 'png' | 'svg' | 'utf8';
+	includeMetadata?: boolean;
+	customConfig?: Partial<QRCodeConfig>;
+}
+
+/**
+ * 生成されたQRコードデータ
+ */
+interface GeneratedQRCode {
+	dataURL: string; // Base64データURL
+	paymentURI: string; // EIP-681 URI
+	metadata: {
+		size: number;
+		format: string;
+		errorCorrectionLevel: string;
+		generatedAt: string;
+		chainId: number;
+		amount: string;
+		address: string;
+	};
+}
+
+/**
+ * QRコード生成クラス
+ */
+export class DemoQRGenerator {
+	private config: QRCodeConfig;
+
+	constructor(customConfig?: Partial<QRCodeConfig>) {
+		this.config = { ...QR_CODE_CONFIG, ...customConfig };
+	}
+
+	/**
+	 * EIP-681 Payment URI用のQRコード生成
+	 */
+	public async generatePaymentQR(
+		address: string,
+		amountWei: string,
+		chainId: number = 43113,
+		options: QRGenerationOptions = {}
+	): Promise<GeneratedQRCode> {
+		try {
+			// 入力検証
+			this.validateInputs(address, amountWei, chainId);
+
+			// Payment URI生成
+			const paymentURI = generatePaymentURI(address, amountWei, chainId);
+
+			if (LOGGING_CONFIG.enableDebugLogs) {
+				console.log('🔗 Generated payment URI:', paymentURI);
+			}
+
+			// QRコード設定準備
+			const qrConfig = { ...this.config, ...options.customConfig };
+
+			// QRコード生成オプション
+			const qrOptions: QRCode.QRCodeToDataURLOptions = {
+				errorCorrectionLevel: qrConfig.errorCorrectionLevel,
+				type: 'image/png',
+			//	quality: 0.92,
+				margin: qrConfig.margin,
+				color: {
+					dark: qrConfig.colorDark,
+					light: qrConfig.colorLight,
+				},
+				width: qrConfig.size,
+			};
+
+			// QRコード生成
+			const dataURL = await QRCode.toDataURL(paymentURI, qrOptions);
+
+			// メタデータ生成
+			const metadata = this.generateMetadata(address, amountWei, chainId, qrConfig);
+
+			const result: GeneratedQRCode = {
+				dataURL,
+				paymentURI,
+				metadata
+			};
+
+			if (LOGGING_CONFIG.enableDebugLogs) {
+				console.log('✅ QR code generated successfully:', {
+					address: address.substring(0, 10) + '...',
+					size: qrConfig.size,
+					format: 'PNG'
+				});
+			}
+
+			return result;
+		} catch (error) {
+			console.error('❌ Error generating payment QR code:', error);
+			throw this.createQRError('QR_GENERATION_FAILED', 'Failed to generate payment QR code', error);
+		}
+	}
+
+	/**
+	 * SVG形式でのQRコード生成
+	 */
+	public async generatePaymentQRSVG(
+		address: string,
+		amountWei: string,
+		chainId: number = 43113,
+		options: QRGenerationOptions = {}
+	): Promise<{ svg: string; paymentURI: string; metadata: any }> {
+		try {
+			this.validateInputs(address, amountWei, chainId);
+
+			const paymentURI = generatePaymentURI(address, amountWei, chainId);
+			const qrConfig = { ...this.config, ...options.customConfig };
+
+			const svgOptions: QRCode.QRCodeToStringOptions = {
+				errorCorrectionLevel: qrConfig.errorCorrectionLevel,
+				type: 'svg',
+				margin: qrConfig.margin,
+				color: {
+					dark: qrConfig.colorDark,
+					light: qrConfig.colorLight,
+				},
+				width: qrConfig.size,
+			};
+
+			const svg = await QRCode.toString(paymentURI, svgOptions);
+			const metadata = this.generateMetadata(address, amountWei, chainId, qrConfig);
+
+			return { svg, paymentURI, metadata };
+		} catch (error) {
+			console.error('❌ Error generating SVG QR code:', error);
+			throw this.createQRError('QR_GENERATION_FAILED', 'Failed to generate SVG QR code', error);
+		}
+	}
+
+	/**
+	 * ASCII形式でのQRコード生成（デバッグ用）
+	 */
+	public async generatePaymentQRText(
+		address: string,
+		amountWei: string,
+		chainId: number = 43113
+	): Promise<{ text: string; paymentURI: string }> {
+		try {
+			this.validateInputs(address, amountWei, chainId);
+
+			const paymentURI = generatePaymentURI(address, amountWei, chainId);
+
+			const textOptions: QRCode.QRCodeToStringOptions = {
+				errorCorrectionLevel: this.config.errorCorrectionLevel,
+				type: 'utf8',
+				//small: true
+			};
+
+			const text = await QRCode.toString(paymentURI, textOptions);
+
+			return { text, paymentURI };
+		} catch (error) {
+			console.error('❌ Error generating text QR code:', error);
+			throw this.createQRError('QR_GENERATION_FAILED', 'Failed to generate text QR code', error);
+		}
+	}
+
+	/**
+	 * バッチでのQRコード生成（複数チェーン対応）
+	 */
+	public async generateMultiChainQRs(
+		address: string,
+		amountWei: string,
+		chainIds: number[]
+	): Promise<Record<number, GeneratedQRCode>> {
+		try {
+			const results: Record<number, GeneratedQRCode> = {};
+
+			// 並列処理で複数チェーンのQRコード生成
+			const promises = chainIds.map(async (chainId) => {
+				const qr = await this.generatePaymentQR(address, amountWei, chainId);
+				return { chainId, qr };
+			});
+
+			const completed = await Promise.all(promises);
+
+			completed.forEach(({ chainId, qr }) => {
+				results[chainId] = qr;
+			});
+
+			if (LOGGING_CONFIG.enableDebugLogs) {
+				console.log('✅ Generated QR codes for chains:', chainIds);
+			}
+
+			return results;
+		} catch (error) {
+			console.error('❌ Error generating multi-chain QRs:', error);
+			throw this.createQRError('QR_GENERATION_FAILED', 'Failed to generate multi-chain QR codes', error);
+		}
+	}
+
+	/**
+	 * 入力値の検証
+	 */
+	private validateInputs(address: string, amountWei: string, chainId: number): void {
+		// アドレス検証
+		if (!address || typeof address !== 'string') {
+			throw new Error('Invalid address: must be a non-empty string');
+		}
+
+		if (!address.startsWith('0x') || address.length !== 42) {
+			throw new Error('Invalid address: must be a valid Ethereum address');
+		}
+
+		// 金額検証
+		if (!amountWei || typeof amountWei !== 'string') {
+			throw new Error('Invalid amount: must be a non-empty string');
+		}
+
+		try {
+			const amount = BigInt(amountWei);
+			if (amount <= 0) {
+				throw new Error('Invalid amount: must be greater than 0');
+			}
+		} catch {
+			throw new Error('Invalid amount: must be a valid Wei amount');
+		}
+
+		// チェーンID検証
+		if (!Number.isInteger(chainId) || chainId <= 0) {
+			throw new Error('Invalid chainId: must be a positive integer');
+		}
+	}
+
+	/**
+	 * メタデータ生成
+	 */
+	private generateMetadata(
+		address: string,
+		amountWei: string,
+		chainId: number,
+		config: QRCodeConfig
+	) {
+		return {
+			size: config.size,
+			format: 'PNG',
+			errorCorrectionLevel: config.errorCorrectionLevel,
+			generatedAt: new Date().toISOString(),
+			chainId,
+			amount: amountWei,
+			address: address.toLowerCase()
+		};
+	}
+
+	/**
+	 * エラーオブジェクト作成
+	 */
+	private createQRError(code: 'QR_GENERATION_FAILED', message: string, details?: any): DemoPaymentError {
+		return {
+			code,
+			message,
+			details,
+			timestamp: new Date()
+		};
+	}
+}
+
+/**
+ * デフォルトQRジェネレーターのシングルトンインスタンス
+ */
+let qrGeneratorInstance: DemoQRGenerator | null = null;
+
+/**
+ * QRジェネレーター取得（シングルトン）
+ */
+export function getQRGenerator(customConfig?: Partial<QRCodeConfig>): DemoQRGenerator {
+	if (!qrGeneratorInstance || customConfig) {
+		qrGeneratorInstance = new DemoQRGenerator(customConfig);
+	}
+	return qrGeneratorInstance;
+}
+
+/**
+ * 簡単なQRコード生成（便利関数）
+ */
+export async function generatePaymentQRCode(
+	address: string,
+	amountWei: string,
+	chainId: number = 43113
+): Promise<GeneratedQRCode> {
+	const generator = getQRGenerator();
+	return generator.generatePaymentQR(address, amountWei, chainId);
+}
+
+/**
+ * カスタム設定でのQRコード生成
+ */
+export async function generateCustomPaymentQR(
+	address: string,
+	amountWei: string,
+	chainId: number,
+	customConfig: Partial<QRCodeConfig>
+): Promise<GeneratedQRCode> {
+	const generator = new DemoQRGenerator(customConfig);
+	return generator.generatePaymentQR(address, amountWei, chainId);
+}
+
+/**
+ * QRコード生成能力のテスト
+ */
+export async function testQRGeneration(): Promise<{ success: boolean; error?: string }> {
+	try {
+		const testAddress = '0x742d35Cc6634C0532925a3b8D0A9A81a9b6c3C7B';
+		const testAmount = '1000000000000000000'; // 1 AVAX in Wei
+		const testChainId = 43113;
+
+		await generatePaymentQRCode(testAddress, testAmount, testChainId);
+
+		if (LOGGING_CONFIG.enableDebugLogs) {
+			console.log('✅ QR generation test passed');
+		}
+
+		return { success: true };
+	} catch (error) {
+		console.error('❌ QR generation test failed:', error);
+		return {
+			success: false,
+			error: error instanceof Error ? error.message : 'Unknown error'
+		};
+	}
 }-e 
 ### FILE: ./src/hooks/usePriceConverter.ts
 
@@ -10256,6 +13352,228 @@ export const sanitizeUserData = (data: UpdateUserProfile): UpdateUserProfile => 
 
 	return sanitized;
 };-e 
+### FILE: ./types/demo-payment.ts
+
+// types/demo-payment.ts
+import { Timestamp } from 'firebase/firestore';
+
+/**
+ * デモInvoiceの状態
+ */
+export type DemoInvoiceStatus = 
+  | 'pending'     // 支払い待機中
+  | 'confirming'  // ブロック確認中（1-3 confirmations）
+  | 'completed'   // 支払い完了
+  | 'expired'     // 期限切れ
+  | 'error';      // エラー状態
+
+/**
+ * サポートされるブロックチェーン
+ */
+export type SupportedChain = 'avalanche-fuji';
+
+/**
+ * Avalanche FUJI ネットワーク設定
+ */
+export interface AvalancheConfig {
+  chainId: number;
+  name: string;
+  rpcUrl: string;
+  blockExplorer: string;
+  nativeCurrency: {
+    name: string;
+    symbol: string;
+    decimals: number;
+  };
+  faucetUrl: string;
+  averageBlockTime: number; // milliseconds
+  confirmationBlocks: number;
+}
+
+/**
+ * デモInvoice作成リクエスト
+ */
+export interface CreateDemoInvoiceRequest {
+  chainId?: number; // デフォルト: 43113 (FUJI)
+  userAgent?: string;
+  ipAddress?: string;
+}
+
+/**
+ * デモInvoice作成レスポンス
+ */
+export interface CreateDemoInvoiceResponse {
+  success: boolean;
+  data?: {
+    invoiceId: string;
+    paymentAddress: string;
+    amount: string; // AVAX amount
+    amountWei: string; // Wei amount  
+    chainId: number;
+    qrCodeDataURL: string; // Base64 QR code image
+    paymentURI: string; // EIP-681 URI
+    expiresAt: string; // ISO string
+    estimatedGasFee: string; // AVAX amount
+  };
+  error?: {
+    code: string;
+    message: string;
+    details?: any;
+  };
+}
+
+/**
+ * デモInvoiceステータスレスポンス
+ */
+export interface DemoInvoiceStatusResponse {
+  success: boolean;
+  data?: {
+    invoiceId: string;
+    status: DemoInvoiceStatus;
+    paymentAddress: string;
+    amount: string;
+    chainId: number;
+    createdAt: string;
+    expiresAt: string;
+    transactionHash?: string;
+    blockNumber?: number;
+    confirmations?: number;
+    paidAt?: string;
+    timeRemaining?: number; // seconds
+  };
+  error?: {
+    code: string;
+    message: string;
+  };
+}
+
+/**
+ * Firestore保存用のデモInvoiceデータ
+ */
+export interface DemoInvoiceDocument {
+  invoiceId: string;
+  paymentAddress: string;
+  privateKey: string; // 暗号化して保存予定
+  amount: string; // AVAX amount
+  amountWei: string; // Wei amount
+  chainId: number;
+  status: DemoInvoiceStatus;
+  
+  // リクエスト情報
+  userAgent?: string;
+  ipAddress?: string;
+  
+  // タイムスタンプ
+  createdAt: Timestamp;
+  expiresAt: Timestamp;
+  
+  // 支払い完了後の情報
+  transactionHash?: string;
+  blockNumber?: number;
+  confirmations?: number;
+  paidAt?: Timestamp;
+  paidAmount?: string; // 実際に支払われた金額
+}
+
+/**
+ * ウォレット生成結果
+ */
+export interface GeneratedWallet {
+  address: string;
+  privateKey: string;
+  publicKey: string;
+  index: number; // HD wallet index
+  derivationPath: string;
+}
+
+/**
+ * 決済監視設定
+ */
+export interface PaymentMonitorConfig {
+  pollInterval: number; // milliseconds
+  maxPollDuration: number; // milliseconds  
+  confirmationBlocks: number;
+  retryAttempts: number;
+  backoffMultiplier: number;
+}
+
+/**
+ * QRコード生成設定
+ */
+export interface QRCodeConfig {
+  size: number;
+  margin: number;
+  colorDark: string;
+  colorLight: string;
+  errorCorrectionLevel: 'L' | 'M' | 'Q' | 'H';
+}
+
+/**
+ * Rate limiting設定
+ */
+export interface RateLimitConfig {
+  maxInvoicesPerIP: number;
+  windowMinutes: number;
+  maxInvoicesPerHour: number;
+  cleanupIntervalMinutes: number;
+}
+
+/**
+ * デモ決済エラーコード
+ */
+export type DemoPaymentErrorCode = 
+  | 'RATE_LIMIT_EXCEEDED'
+  | 'INVALID_CHAIN_ID'
+  | 'WALLET_GENERATION_FAILED'
+  | 'FIRESTORE_ERROR'
+  | 'QR_GENERATION_FAILED'
+  | 'INVOICE_NOT_FOUND'
+  | 'INVOICE_EXPIRED'
+  | 'RPC_CONNECTION_FAILED'
+  | 'PAYMENT_MONITORING_FAILED'
+  | 'INVALID_TRANSACTION'
+  | 'INSUFFICIENT_CONFIRMATIONS';
+
+/**
+ * デモ決済エラー
+ */
+export interface DemoPaymentError {
+  code: DemoPaymentErrorCode;
+  message: string;
+  details?: any;
+  timestamp: Date;
+  invoiceId?: string;
+}
+
+/**
+ * 統計データ（analytics用）
+ */
+export interface DemoAnalytics {
+  date: string; // YYYY-MM-DD
+  invoicesGenerated: number;
+  invoicesCompleted: number;
+  invoicesExpired: number;
+  averageCompletionTime: number; // seconds
+  totalAmountPaid: string; // AVAX
+  uniqueIPs: number;
+  popularTimeSlots: Record<string, number>; // hour -> count
+}
+
+/**
+ * フロントエンド用のUI状態
+ */
+export interface DemoPaymentUIState {
+  status: 'idle' | 'generating' | 'waiting' | 'confirming' | 'completed' | 'expired' | 'error';
+  invoiceId?: string;
+  paymentAddress?: string;
+  qrCodeDataURL?: string;
+  paymentURI?: string;
+  timeRemaining?: number; // seconds
+  confirmations?: number;
+  transactionHash?: string;
+  errorMessage?: string;
+  isPolling: boolean;
+}-e 
 ### FILE: ./types/product.ts
 
 // types/product.ts
@@ -10796,7 +14114,24 @@ export const PAYMENT_METHODS = {
 	ETH: { name: 'Ethereum mainnet', symbol: 'ETH', icon: 'Ξ' },
 } as const;
 
-export type PaymentMethodKey = keyof typeof PAYMENT_METHODS;-e 
+export type PaymentMethodKey = keyof typeof PAYMENT_METHODS;
+
+// ★ 新規追加: Demo Payment関連の型定義
+export interface DemoPaymentSettings {
+	enabled: boolean;
+	defaultChain: 'avalanche-fuji';
+	maxConcurrentInvoices: number;
+	pollingInterval: number; // milliseconds
+	demoTimeout: number; // milliseconds
+}
+
+// How to Buy セクション設定
+export interface HowToBuyConfig {
+	enableLiveDemo: boolean;
+	demoSettings: DemoPaymentSettings;
+	supportedChains: string[];
+	faucetLinks: Record<string, string>;
+}-e 
 ### FILE: ./types/user.ts
 
 // types/user.ts

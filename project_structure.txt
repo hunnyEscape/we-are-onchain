@@ -34,7 +34,8 @@
 │   │   │   ├── common
 │   │   │   │   ├── CyberButton.tsx
 │   │   │   │   ├── CyberCard.tsx
-│   │   │   │   └── GridPattern.tsx
+│   │   │   │   ├── GridPattern.tsx
+│   │   │   │   └── PriceDisplay.tsx
 │   │   │   ├── home
 │   │   │   │   ├── glowing-3d-text
 │   │   │   │   │   ├── GlowingText.module.css
@@ -107,6 +108,9 @@
 │   │       └── cyber-components.css
 │   ├── contexts
 │   │   └── AuthContext.tsx
+│   ├── hooks
+│   │   ├── useCryptoPrices.ts
+│   │   └── usePriceConverter.ts
 │   ├── lib
 │   │   ├── firebase.ts
 │   │   └── firestore
@@ -120,9 +124,10 @@
 ├── tailwind.config.js
 ├── tsconfig.json
 └── types
+    ├── crypto.ts
     ├── dashboard.ts
     ├── product.ts
     ├── react-three-fiber.d.ts
     └── user.ts
 
-29 directories, 96 files
+30 directories, 100 files

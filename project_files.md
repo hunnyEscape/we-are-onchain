@@ -2117,7 +2117,7 @@ const HowToBuySection: React.FC = () => {
 	const paymentMethods: PaymentMethod[] = [
 		{
 			id: 'solana',
-			symbol: '$SOL, $USDT',
+			symbol: '$SOL',
 			chain: 'Solana'
 		},
 		{
@@ -2127,8 +2127,8 @@ const HowToBuySection: React.FC = () => {
 		},
 		{
 			id: 'avalanche',
-			symbol: '$AVAX, $USDC, $USDT',
-			chain: 'Avalanche'
+			symbol: '$AVAX',
+			chain: 'Avalanche c-chain'
 		},
 		{
 			id: 'sui',
@@ -2137,23 +2137,8 @@ const HowToBuySection: React.FC = () => {
 		},
 		{
 			id: 'eth',
-			symbol: '$ETH, $USDC, $USDT',
+			symbol: '$ETH',
 			chain: 'ETH'
-		},
-		{
-			id: 'arbitrum',
-			symbol: '$ETH, $USDT',
-			chain: 'Arbitrum'
-		},
-		{
-			id: 'optimism',
-			symbol: '$ETH, $USDT',
-			chain: 'Optimism'
-		},
-		{
-			id: 'bnb',
-			symbol: '$BNB',
-			chain: 'BNB'
 		}
 	];
 
@@ -2189,7 +2174,7 @@ const HowToBuySection: React.FC = () => {
 			id: 1,
 			title: 'Cart & Checkout',
 			description: 'Add products and set preferences',
-			details:`When you checkout. (1) Selact your payment currency. (2) Set shipping address. International shipping available.`
+			details: `When you checkout. (1) Selact your payment currency. (2) Set shipping address. International shipping available.`
 		},
 		{
 			id: 2,
@@ -2219,31 +2204,13 @@ const HowToBuySection: React.FC = () => {
 					How to Buy
 				</h2>
 				<p className="text-gray-400">
-					Your complete guide to purchasing with cryptocurrency
+					Only{' '}
+					<span className="text-purple-300 font-semibold">Solana</span>,{' '}
+					<span className="text-yellow-300 font-semibold">Lightning</span>,{' '}
+					<span className="text-red-400 font-semibold">Avalanche c-chain</span>,{' '}
+					<span className="text-gray-300 font-semibold">Ethereum mainnet</span>{' '}
+					and <span className="text-sky-300 font-semibold">Sui</span> are accepted.
 				</p>
-
-				{/* Concept Highlights */}
-				<div className="grid grid-cols-1 md:grid-cols-2 gap-4 max-w-4xl mx-auto">
-					<div className="p-4 border border-neonGreen/30 rounded-sm bg-neonGreen/5">
-						<div className="flex items-center space-x-3 mb-2">
-							<TrendingUp className="w-6 h-6 text-neonGreen" />
-							<h3 className="text-neonGreen font-semibold">Web2.0 + Web3.0 Hybrid</h3>
-						</div>
-						<p className="text-sm text-gray-300">
-							Combining web2.0 usability with cryptocurrency payments
-						</p>
-					</div>
-
-					<div className="p-4 border border-neonOrange/30 rounded-sm bg-neonOrange/5">
-						<div className="flex items-center space-x-3 mb-2">
-							<QrCode className="w-6 h-6 text-neonOrange" />
-							<h3 className="text-neonOrange font-semibold">Invoice Method</h3>
-						</div>
-						<p className="text-sm text-gray-300">
-							No wallet connection required, simple payment via QR codes and URLs with your wallet
-						</p>
-					</div>
-				</div>
 			</div>
 
 			{/* Step-by-Step Guide */}
@@ -2498,11 +2465,13 @@ export default HowToBuySection;-e
 // src/app/dashboard/components/sections/CartSection.tsx
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import CyberCard from '../../../components/common/CyberCard';
 import CyberButton from '../../../components/common/CyberButton';
 import { useCart, usePanel } from '../../context/DashboardContext';
 import { useAuth } from '@/contexts/AuthContext';
+import { usePriceConverter } from '@/hooks/usePriceConverter';
+import { PAYMENT_METHODS, PaymentMethodKey } from '../../../../../types/dashboard';
 import {
 	ShoppingCart,
 	Trash2,
@@ -2510,17 +2479,12 @@ import {
 	Minus,
 	Zap,
 	AlertCircle,
-	Gift,
 	Clock,
 	Package,
-	Loader2,
-	Shield
+	RefreshCw,
+	TrendingUp,
+	TrendingDown
 } from 'lucide-react';
-import {
-	checkStockAvailability,
-	cancelReservation,
-	confirmReservations
-} from '@/lib/firestore/inventory';
 
 const Info = ({ className = "w-4 h-4" }: { className?: string }) => (
 	<svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -2536,87 +2500,45 @@ const CartSection: React.FC = () => {
 		clearCart,
 		getCartTotal,
 		getCartItemCount,
-		getItemTimeLeft,
-		getCartItemsWithReservations,
-		getSessionId,
-		isFirestoreSynced
+		getCartItemsWithDetails
 	} = useCart();
 
 	const { openPanel } = usePanel();
 	const { user } = useAuth();
 
+	// 暗号通貨価格変換フック
+	const {
+		convertUSDTo,
+		formatCryptoPrice,
+		formatUSDPrice,
+		isLoading: pricesLoading,
+		error: pricesError,
+		lastUpdated,
+		exchangeRates
+	} = usePriceConverter();
+
 	const [promoCode, setPromoCode] = useState('');
 	const [appliedPromo, setAppliedPromo] = useState<string | null>(null);
-	const [gasFeeEstimate] = useState(0.003); // ETH
-	const [selectedPaymentMethod, setSelectedPaymentMethod] = useState<'ETH' | 'USDC' | 'USDT'>('ETH');
+	const [gasFeeEstimate] = useState(0.003); // ETH equivalent in USD
+	const [selectedPaymentMethod, setSelectedPaymentMethod] = useState<PaymentMethodKey | null>(null);
 	const [showPromoError, setShowPromoError] = useState(false);
-	const [isUpdating, setIsUpdating] = useState<{ [itemId: string]: boolean }>({});
-	const [stockWarnings, setStockWarnings] = useState<{ [itemId: string]: string }>({});
 
 	// カートアイテムの詳細情報を取得
-	const cartItemsWithDetails = getCartItemsWithReservations();
+	const cartItemsWithDetails = getCartItemsWithDetails();
 
-	const updateItemQuantity = async (id: string, newQuantity: number) => {
-		setIsUpdating(prev => ({ ...prev, [id]: true }));
-
-		try {
-			if (newQuantity <= 0) {
-				await handleRemoveItem(id);
-				return;
-			}
-
-			// Firestore在庫チェック
-			const stockCheck = await checkStockAvailability(
-				id,
-				newQuantity,
-				user?.uid,
-				getSessionId()
-			);
-
-			if (!stockCheck.canReserve) {
-				let warningMessage = 'Cannot update quantity';
-				if (stockCheck.limitReasons.exceedsStock) {
-					warningMessage = `Only ${stockCheck.maxCanReserve} items available`;
-				} else if (stockCheck.limitReasons.exceedsOrderLimit) {
-					warningMessage = 'Exceeds order limit';
-				}
-
-				setStockWarnings(prev => ({ ...prev, [id]: warningMessage }));
-				setTimeout(() => {
-					setStockWarnings(prev => ({ ...prev, [id]: '' }));
-				}, 3000);
-				return;
-			}
-
-			// ローカル更新
-			updateQuantity(id, newQuantity, stockCheck.availableStock);
-
-		} catch (error) {
-			console.error('Error updating quantity:', error);
-			setStockWarnings(prev => ({ ...prev, [id]: 'Update failed' }));
-			setTimeout(() => {
-				setStockWarnings(prev => ({ ...prev, [id]: '' }));
-			}, 3000);
-		} finally {
-			setIsUpdating(prev => ({ ...prev, [id]: false }));
+	const updateItemQuantity = (id: string, newQuantity: number) => {
+		if (newQuantity <= 0) {
+			removeFromCart(id);
+			return;
 		}
+
+		// ローカルでの基本的な数量制限（1-10個）
+		const validQuantity = Math.max(1, Math.min(newQuantity, 10));
+		updateQuantity(id, validQuantity);
 	};
 
-	const handleRemoveItem = async (id: string) => {
-		setIsUpdating(prev => ({ ...prev, [id]: true }));
-
-		try {
-			// Firestore予約をキャンセル
-			await cancelReservation(id, user?.uid, getSessionId());
-
-			// ローカルカートから削除
-			removeFromCart(id);
-
-		} catch (error) {
-			console.error('Error removing item:', error);
-		} finally {
-			setIsUpdating(prev => ({ ...prev, [id]: false }));
-		}
+	const handleRemoveItem = (id: string) => {
+		removeFromCart(id);
 	};
 
 	const applyPromoCode = () => {
@@ -2658,19 +2580,7 @@ const CartSection: React.FC = () => {
 		return calculateSubtotal() - calculateDiscount() + gasFeeEstimate;
 	};
 
-	const formatPrice = (price: number, currency: string = 'USD') => {
-		if (currency === 'ETH') {
-			return `Ξ ${price.toFixed(4)}`;
-		}
-		return `$${price.toFixed(2)} ${currency}`;
-	};
-
-	const convertToUSD = (amount: number) => {
-		const ethToUSD = 3359.50; // Mock exchange rate
-		return (amount * ethToUSD).toFixed(2);
-	};
-
-	const handleCheckout = async () => {
+	const handleCheckout = () => {
 		try {
 			if (!user) {
 				// ログインが必要
@@ -2678,26 +2588,21 @@ const CartSection: React.FC = () => {
 				return;
 			}
 
-			// 予約を確定
-			const reservationIds = cartItemsWithDetails
-				.map(item => item.reservationId)
-				.filter(Boolean) as string[];
-
-			if (reservationIds.length > 0) {
-				const confirmResult = await confirmReservations(reservationIds);
-
-				if (!confirmResult.success || confirmResult.errors.length > 0) {
-					console.error('Some reservations could not be confirmed:', confirmResult.errors);
-				}
-			}
-
+			// TODO: チェックアウト処理を実装
 			console.log('Checkout initiated', {
 				cartItems,
 				total: calculateTotal(),
 				paymentMethod: selectedPaymentMethod,
 				appliedPromo,
-				confirmedReservations: reservationIds
+				user: user.uid
 			});
+
+			// 仮の処理完了メッセージ
+			const totalUSD = calculateTotal();
+			const totalCrypto = convertUSDTo(totalUSD, selectedPaymentMethod);
+			const formattedCrypto = formatCryptoPrice(totalCrypto, selectedPaymentMethod);
+
+			alert(`Checkout initiated for ${formatUSDPrice(totalUSD)} (${formattedCrypto})`);
 		} catch (error) {
 			console.error('Checkout error:', error);
 		}
@@ -2707,19 +2612,8 @@ const CartSection: React.FC = () => {
 		openPanel('shop');
 	};
 
-	const handleClearCart = async () => {
-		try {
-			// 全ての予約をキャンセル
-			for (const item of cartItemsWithDetails) {
-				if (item.reservationId) {
-					await cancelReservation(item.id, user?.uid, getSessionId());
-				}
-			}
-
-			clearCart();
-		} catch (error) {
-			console.error('Error clearing cart:', error);
-		}
+	const handleClearCart = () => {
+		clearCart();
 	};
 
 	const getDiscountText = (promoCode: string) => {
@@ -2735,21 +2629,65 @@ const CartSection: React.FC = () => {
 		}
 	};
 
-	// Firestore同期待ち
-	if (!isFirestoreSynced()) {
-		return (
-			<div className="space-y-8">
-				<div className="text-center">
-					<h2 className="text-3xl font-heading font-bold text-white mb-2">Shopping Cart</h2>
-					<p className="text-gray-400">Syncing with server...</p>
-				</div>
+	// 価格表示コンポーネント
+	const PriceDisplay = ({
+		usdAmount,
+		showCrypto = true,
+		size = 'md'
+	}: {
+		usdAmount: number;
+		showCrypto?: boolean;
+		size?: 'sm' | 'md' | 'lg'
+	}) => {
+		const cryptoAmount = convertUSDTo(usdAmount, selectedPaymentMethod);
+		const isLoading = pricesLoading;
+		const hasError = pricesError !== null;
 
-				<div className="flex justify-center items-center h-64">
-					<Loader2 className="w-8 h-8 text-neonGreen animate-spin" />
+		const sizeClasses = {
+			sm: 'text-sm',
+			md: 'text-base',
+			lg: 'text-lg font-bold'
+		};
+
+		return (
+			<div className={`${sizeClasses[size]}`}>
+				<div className="text-white font-semibold">
+					{formatUSDPrice(usdAmount)}
 				</div>
+				{showCrypto && (
+					<div className={`text-xs ${hasError ? 'text-red-400' : 'text-gray-400'} flex items-center space-x-1`}>
+						{isLoading ? (
+							<>
+								<RefreshCw className="w-3 h-3 animate-spin" />
+								<span>Loading...</span>
+							</>
+						) : hasError ? (
+							<span>Price unavailable</span>
+						) : (
+							<span>≈ {formatCryptoPrice(cryptoAmount, selectedPaymentMethod)}</span>
+						)}
+					</div>
+				)}
 			</div>
 		);
-	}
+	};
+
+	// 24時間変動表示コンポーネント
+	const PriceChangeIndicator = ({ currency }: { currency: string }) => {
+		const rate = exchangeRates[currency];
+		if (!rate) return null;
+
+		// ここでは仮の変動率を表示（実際のデータは価格フックから取得可能）
+		const change = 2.34; // 実際の実装では価格データから取得
+		const isPositive = change >= 0;
+
+		return (
+			<div className={`flex items-center space-x-1 text-xs ${isPositive ? 'text-green-400' : 'text-red-400'}`}>
+				{isPositive ? <TrendingUp className="w-3 h-3" /> : <TrendingDown className="w-3 h-3" />}
+				<span>{isPositive ? '+' : ''}{change.toFixed(2)}%</span>
+			</div>
+		);
+	};
 
 	if (cartItems.length === 0) {
 		return (
@@ -2781,181 +2719,72 @@ const CartSection: React.FC = () => {
 				<p className="text-gray-400">
 					Review your items and proceed to checkout
 				</p>
-				{!isFirestoreSynced() && (
-					<p className="text-yellow-400 text-sm mt-1">
-						<Loader2 className="w-3 h-3 animate-spin inline mr-1" />
-						Syncing with server...
-					</p>
-				)}
 			</div>
-
-			{/* Promo Error */}
-			{showPromoError && (
-				<div className="fixed top-24 right-4 z-50 p-4 bg-red-600/10 border border-red-600 rounded-sm backdrop-blur-sm animate-pulse">
-					<div className="flex items-center space-x-2">
-						<AlertCircle className="w-5 h-5 text-red-400" />
-						<span className="text-red-400 font-medium">Invalid promo code</span>
-					</div>
-				</div>
-			)}
 
 			<div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
 				{/* Cart Items */}
 				<div className="lg:col-span-2 space-y-4">
 					<CyberCard title={`Cart Items (${getCartItemCount()})`} showEffects={false}>
 						<div className="space-y-4">
-							{cartItemsWithDetails.map((item) => {
-								const isItemUpdating = isUpdating[item.id];
-								const stockWarning = stockWarnings[item.id];
+							{cartItemsWithDetails.map((item) => (
+								<div key={item.id} className="flex items-center space-x-4 p-4 border border-dark-300 rounded-sm">
+									{/* Product Image */}
+									<div className="w-16 h-16 bg-gradient-to-br from-neonGreen to-neonOrange rounded-sm flex items-center justify-center">
+										<Package className="w-8 h-8 text-black" />
+									</div>
 
-								return (
-									<div key={item.id} className="flex items-center space-x-4 p-4 border border-dark-300 rounded-sm relative">
-										{/* Loading Overlay */}
-										{isItemUpdating && (
-											<div className="absolute inset-0 bg-black/50 flex items-center justify-center rounded-sm z-10">
-												<Loader2 className="w-5 h-5 text-neonGreen animate-spin" />
-											</div>
-										)}
+									{/* Product Info */}
+									<div className="flex-1">
+										<h3 className="text-white font-semibold">{item.name}</h3>
+										<p className="text-sm text-gray-400">Premium whey protein blend</p>
+										<PriceDisplay usdAmount={item.price} showCrypto={true} size="sm" />
 
-										{/* Product Image */}
-										<div className="w-16 h-16 bg-gradient-to-br from-neonGreen to-neonOrange rounded-sm flex items-center justify-center">
-											<Package className="w-8 h-8 text-black" />
-										</div>
-
-										{/* Product Info */}
-										<div className="flex-1">
-											<h3 className="text-white font-semibold">{item.name}</h3>
-											<p className="text-sm text-gray-400">Premium whey protein blend</p>
-											<div className="text-neonGreen font-bold">
-												{formatPrice(item.price)}
-												<span className="text-xs text-gray-400 ml-2">per item</span>
-											</div>
-
-											{/* Reservation Info */}
-											<div className="flex items-center space-x-2 mt-1">
-												{item.reservationId && (
-													<div className="flex items-center space-x-1">
-														<Shield className="w-3 h-3 text-neonGreen" />
-														<span className="text-xs text-neonGreen">Reserved</span>
-													</div>
-												)}
-												{item.timeLeft && (
-													<div className="flex items-center space-x-1">
-														<Clock className="w-3 h-3 text-yellow-400" />
-														<span className="text-xs text-yellow-400">{item.timeLeft}</span>
-													</div>
-												)}
-											</div>
-
-											{/* Stock Warning */}
-											{stockWarning && (
-												<div className="text-xs text-red-400 mt-1">
-													{stockWarning}
+										{/* Item Info */}
+										<div className="flex items-center space-x-2 mt-1">
+											{item.timeLeft && (
+												<div className="flex items-center space-x-1">
+													<Clock className="w-3 h-3 text-yellow-400" />
+													<span className="text-xs text-yellow-400">{item.timeLeft}</span>
 												</div>
 											)}
 										</div>
+									</div>
 
-										{/* Quantity Controls */}
-										<div className="flex items-center space-x-2">
-											<button
-												onClick={() => updateItemQuantity(item.id, item.quantity - 1)}
-												className="w-8 h-8 border border-dark-300 rounded-sm flex items-center justify-center text-white hover:bg-dark-200 transition-colors disabled:opacity-50"
-												disabled={isItemUpdating}
-											>
-												<Minus className="w-4 h-4" />
-											</button>
-											<span className="w-12 text-center text-white font-medium">{item.quantity}</span>
-											<button
-												onClick={() => updateItemQuantity(item.id, item.quantity + 1)}
-												className="w-8 h-8 border border-dark-300 rounded-sm flex items-center justify-center text-white hover:bg-dark-200 transition-colors disabled:opacity-50"
-												disabled={isItemUpdating}
-											>
-												<Plus className="w-4 h-4" />
-											</button>
-										</div>
-
-										{/* Item Total */}
-										<div className="text-right">
-											<div className="text-white font-bold">
-												{formatPrice(item.price * item.quantity)}
-											</div>
-											<div className="text-xs text-gray-400">
-												{item.quantity} × {formatPrice(item.price)}
-											</div>
-										</div>
-
-										{/* Remove Button */}
+									{/* Quantity Controls */}
+									<div className="flex items-center space-x-2">
 										<button
-											onClick={() => handleRemoveItem(item.id)}
-											className="p-2 text-red-400 hover:text-red-300 hover:bg-red-900/20 rounded-sm transition-colors disabled:opacity-50"
-											title="Remove from cart"
-											disabled={isItemUpdating}
+											onClick={() => updateItemQuantity(item.id, item.quantity - 1)}
+											className="w-8 h-8 border border-dark-300 rounded-sm flex items-center justify-center text-white hover:bg-dark-200 transition-colors"
 										>
-											<Trash2 className="w-4 h-4" />
+											<Minus className="w-4 h-4" />
+										</button>
+										<span className="w-12 text-center text-white font-medium">{item.quantity}</span>
+										<button
+											onClick={() => updateItemQuantity(item.id, item.quantity + 1)}
+											className="w-8 h-8 border border-dark-300 rounded-sm flex items-center justify-center text-white hover:bg-dark-200 transition-colors"
+										>
+											<Plus className="w-4 h-4" />
 										</button>
 									</div>
-								);
-							})}
-						</div>
-					</CyberCard>
 
-					{/* Promo Code */}
-					<CyberCard title="Promo Code" showEffects={false}>
-						<div className="space-y-4">
-							{appliedPromo ? (
-								<div className="flex items-center justify-between p-3 border border-neonGreen/30 rounded-sm bg-neonGreen/5">
-									<div className="flex items-center space-x-2">
-										<Gift className="w-5 h-5 text-neonGreen" />
-										<span className="text-white font-medium">{appliedPromo} Applied</span>
-										<span className="text-sm text-neonGreen">{getDiscountText(appliedPromo)}</span>
+									{/* Item Total */}
+									<div className="text-right">
+										<PriceDisplay usdAmount={item.price * item.quantity} showCrypto={true} size="md" />
+										<div className="text-xs text-gray-400">
+											{item.quantity} × {formatUSDPrice(item.price)}
+										</div>
 									</div>
+
+									{/* Remove Button */}
 									<button
-										onClick={removePromoCode}
-										className="text-red-400 hover:text-red-300 transition-colors"
-										title="Remove promo code"
+										onClick={() => handleRemoveItem(item.id)}
+										className="p-2 text-red-400 hover:text-red-300 hover:bg-red-900/20 rounded-sm transition-colors"
+										title="Remove from cart"
 									>
 										<Trash2 className="w-4 h-4" />
 									</button>
 								</div>
-							) : (
-								<div className="space-y-2">
-									<div className="flex space-x-2">
-										<input
-											type="text"
-											value={promoCode}
-											onChange={(e) => setPromoCode(e.target.value)}
-											placeholder="Enter promo code (e.g., PEPE10)"
-											className="flex-1 px-3 py-2 bg-dark-200 border border-dark-300 rounded-sm text-white placeholder-gray-400 focus:border-neonGreen focus:outline-none"
-											onKeyPress={(e) => e.key === 'Enter' && applyPromoCode()}
-										/>
-										<CyberButton
-											variant="outline"
-											onClick={applyPromoCode}
-											disabled={!promoCode.trim()}
-										>
-											Apply
-										</CyberButton>
-									</div>
-									<div className="text-xs text-gray-400">
-										Try: PEPE10, BLOCKCHAIN15, WEB3SAVE
-									</div>
-								</div>
-							)}
-						</div>
-					</CyberCard>
-
-					{/* Cart Actions */}
-					<CyberCard showEffects={false}>
-						<div className="flex items-center justify-between">
-							<div className="text-sm text-gray-400">
-								Cart reservations expire in 15 minutes • Items expire in 30 days
-							</div>
-							<button
-								onClick={handleClearCart}
-								className="text-red-400 hover:text-red-300 text-sm transition-colors"
-							>
-								Clear Cart
-							</button>
+							))}
 						</div>
 					</CyberCard>
 				</div>
@@ -2964,6 +2793,16 @@ const CartSection: React.FC = () => {
 				<div className="lg:col-span-1">
 					<CyberCard title="Order Summary" showEffects={false}>
 						<div className="space-y-4">
+							{/* 価格データの状態表示 */}
+							{pricesError && (
+								<div className="p-3 border border-red-600/30 rounded-sm bg-red-600/5">
+									<div className="flex items-center space-x-2">
+										<AlertCircle className="w-4 h-4 text-red-400" />
+										<span className="text-xs text-red-400">Price data unavailable</span>
+									</div>
+								</div>
+							)}
+
 							{/* Authentication Notice */}
 							{!user && (
 								<div className="p-3 border border-yellow-600/30 rounded-sm bg-yellow-600/5">
@@ -2974,59 +2813,49 @@ const CartSection: React.FC = () => {
 								</div>
 							)}
 
-							{/* Payment Method Selection */}
 							<div>
 								<label className="block text-sm font-medium text-white mb-2">Payment Method</label>
 								<div className="space-y-2">
-									{(['ETH', 'USDC', 'USDT'] as const).map((method) => (
-										<label key={method} className="flex items-center space-x-2 cursor-pointer">
-											<input
-												type="radio"
-												name="paymentMethod"
-												value={method}
-												checked={selectedPaymentMethod === method}
-												onChange={(e) => setSelectedPaymentMethod(e.target.value as any)}
-												className="text-neonGreen focus:ring-neonGreen"
-											/>
-											<span className="text-white">{method}</span>
-											{method === 'ETH' && <span className="text-xs text-gray-400">(Recommended)</span>}
-										</label>
-									))}
+									{(Object.keys(PAYMENT_METHODS) as PaymentMethodKey[]).map((methodKey) => {
+										const method = PAYMENT_METHODS[methodKey];
+										return (
+											<label key={methodKey} className="flex items-center justify-between p-2 border border-dark-300 rounded-sm hover:bg-dark-200/50 cursor-pointer transition-colors">
+												<div className="flex items-center space-x-2">
+													<input
+														type="radio"
+														name="paymentMethod"
+														value={methodKey}
+														checked={selectedPaymentMethod === methodKey}
+														onChange={(e) => setSelectedPaymentMethod(e.target.value as PaymentMethodKey)}
+														className="text-neonGreen focus:ring-neonGreen"
+													/>
+													<span className="text-white">{method.name}</span>
+												</div>
+											</label>
+										);
+									})}
 								</div>
+								{lastUpdated && (
+									<div className="text-xs text-gray-400 mt-2 flex items-center space-x-1">
+										<RefreshCw className="w-3 h-3" />
+										<span>Updated {new Date(lastUpdated).toLocaleTimeString()}</span>
+									</div>
+								)}
 							</div>
 
 							{/* Price Breakdown */}
-							<div className="space-y-3 pt-4 border-t border-dark-300">
-								<div className="flex justify-between">
-									<span className="text-gray-400">Subtotal ({getCartItemCount()} items)</span>
-									<span className="text-white">{formatPrice(calculateSubtotal())}</span>
-								</div>
-
+							<div className="space-y-3 pt-4">
 								{appliedPromo && (
 									<div className="flex justify-between">
 										<span className="text-gray-400">Discount ({appliedPromo})</span>
-										<span className="text-neonGreen">-{formatPrice(calculateDiscount())}</span>
+										<PriceDisplay usdAmount={-calculateDiscount()} showCrypto={true} size="sm" />
 									</div>
 								)}
 
-								<div className="flex justify-between">
-									<div className="flex items-center space-x-1">
-										<span className="text-gray-400">Network Fee</span>
-										<Info className="w-3 h-3 text-gray-400" />
-									</div>
-									<span className="text-gray-400">{formatPrice(gasFeeEstimate)}</span>
-								</div>
 
 								<div className="flex justify-between pt-3 border-t border-dark-300">
 									<span className="text-white font-semibold">Total</span>
-									<div className="text-right">
-										<div className="text-neonGreen font-bold text-lg">
-											{formatPrice(calculateTotal())}
-										</div>
-										<div className="text-xs text-gray-400">
-											≈ ${convertToUSD(calculateTotal())} USD
-										</div>
-									</div>
+									<PriceDisplay usdAmount={calculateTotal()} showCrypto={true} size="lg" />
 								</div>
 							</div>
 
@@ -3036,26 +2865,12 @@ const CartSection: React.FC = () => {
 									variant="primary"
 									className="w-full flex items-center justify-center space-x-2"
 									onClick={handleCheckout}
+									disabled={pricesLoading && !pricesError || !selectedPaymentMethod}
 								>
-									<Zap className="w-4 h-4" />
-									<span>Checkout with {selectedPaymentMethod}</span>
+									<span>
+										{!selectedPaymentMethod ? 'Select payment method...' : 'Proceed to checkout'}
+									</span>
 								</CyberButton>
-
-								<CyberButton
-									variant="outline"
-									className="w-full"
-									onClick={handleContinueShopping}
-								>
-									Continue Shopping
-								</CyberButton>
-							</div>
-
-							{/* Security Notice */}
-							<div className="flex items-start space-x-2 p-3 border border-yellow-600/30 rounded-sm bg-yellow-600/5">
-								<AlertCircle className="w-4 h-4 text-yellow-400 flex-shrink-0 mt-0.5" />
-								<div className="text-xs text-gray-300">
-									Secure checkout with blockchain verification. Items are reserved during checkout process.
-								</div>
 							</div>
 						</div>
 					</CyberCard>
@@ -5117,34 +4932,25 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
 
 import React, { createContext, useContext, useReducer, useEffect } from 'react';
 import { DashboardState, CartItem, UserProfile, SectionType } from '../../../../types/dashboard';
-import { 
-	cancelReservation, 
-	generateSessionId, 
-	getUserReservations,
-	startPeriodicCleanup,
-	stopPeriodicCleanup 
-} from '@/lib/firestore/inventory';
 import { useAuth } from '@/contexts/AuthContext';
 
 // カート有効期限（30日）
 const CART_EXPIRY_DAYS = 30;
 const CART_EXPIRY_MS = CART_EXPIRY_DAYS * 24 * 60 * 60 * 1000;
 
-// 拡張されたCartItemの型（有効期限付き）
+// 簡素化されたCartItemの型（有効期限のみ）
 interface CartItemWithExpiry extends CartItem {
 	addedAt: string; // ISO string
-	reservationId?: string; // Firestore予約ID
 }
 
 // Actions
 type DashboardAction =
 	| { type: 'SET_USER_PROFILE'; payload: UserProfile | null }
-	| { type: 'ADD_TO_CART'; payload: CartItem & { maxStock?: number; reservationId?: string } }
+	| { type: 'ADD_TO_CART'; payload: CartItem & { maxStock?: number } }
 	| { type: 'REMOVE_FROM_CART'; payload: string }
 	| { type: 'UPDATE_CART_QUANTITY'; payload: { id: string; quantity: number; maxStock?: number } }
 	| { type: 'CLEAR_CART' }
 	| { type: 'CLEAR_EXPIRED_ITEMS' }
-	| { type: 'SYNC_WITH_RESERVATIONS'; payload: CartItemWithExpiry[] }
 	| { type: 'LOAD_FROM_STORAGE'; payload: Partial<DashboardState> }
 	| { type: 'SET_HYDRATED'; payload: boolean }
 	| { type: 'SET_ACTIVE_SECTION'; payload: SectionType | null }
@@ -5166,11 +4972,9 @@ const removeExpiredItems = (items: CartItemWithExpiry[]): CartItemWithExpiry[] =
 	return items.filter(item => !isItemExpired(item.addedAt));
 };
 
-//拡張されたDashboardStateの型
+// 拡張されたDashboardStateの型
 interface ExtendedDashboardState extends DashboardState {
-	sessionId: string;
-	isFirestoreSynced: boolean;
-	isHydrated: boolean; // ハイドレーション完了フラグを追加
+	isHydrated: boolean; // ハイドレーション完了フラグ
 }
 
 // Initial state
@@ -5180,8 +4984,6 @@ const initialState: ExtendedDashboardState = {
 	cartItems: [],
 	userProfile: null,
 	walletConnected: false,
-	sessionId: generateSessionId(),
-	isFirestoreSynced: false,
 	isHydrated: false, // 初期状態では false
 };
 
@@ -5192,25 +4994,24 @@ function dashboardReducer(state: ExtendedDashboardState, action: DashboardAction
 			return { ...state, userProfile: action.payload };
 
 		case 'ADD_TO_CART': {
-			const { maxStock, reservationId, ...itemData } = action.payload;
+			const { maxStock, ...itemData } = action.payload;
 			const newItem: CartItemWithExpiry = {
 				...itemData,
-				addedAt: new Date().toISOString(),
-				reservationId
+				addedAt: new Date().toISOString()
 			};
 
 			// 期限切れアイテムを除去
 			const validItems = removeExpiredItems(state.cartItems as CartItemWithExpiry[]);
-			
+
 			const existingItem = validItems.find(item => item.id === newItem.id);
-			
+
 			if (existingItem) {
 				const newQuantity = validateQuantity(existingItem.quantity + newItem.quantity, maxStock);
 				return {
 					...state,
 					cartItems: validItems.map(item =>
 						item.id === newItem.id
-							? { ...item, quantity: newQuantity, reservationId: reservationId || (item as CartItemWithExpiry).reservationId }
+							? { ...item, quantity: newQuantity }
 							: item
 					),
 				};
@@ -5218,7 +5019,7 @@ function dashboardReducer(state: ExtendedDashboardState, action: DashboardAction
 
 			// 新しいアイテムの数量検証
 			const validatedQuantity = validateQuantity(newItem.quantity, maxStock);
-			
+
 			return {
 				...state,
 				cartItems: [...validItems, { ...newItem, quantity: validatedQuantity }],
@@ -5227,14 +5028,7 @@ function dashboardReducer(state: ExtendedDashboardState, action: DashboardAction
 
 		case 'REMOVE_FROM_CART': {
 			const validItems = removeExpiredItems(state.cartItems as CartItemWithExpiry[]);
-			const itemToRemove = validItems.find(item => item.id === action.payload) as CartItemWithExpiry;
-			
-			// Firestore予約もキャンセル（非同期）
-			if (itemToRemove?.reservationId) {
-				cancelReservation(action.payload, undefined, state.sessionId)
-					.catch(error => console.error('Failed to cancel reservation:', error));
-			}
-			
+
 			return {
 				...state,
 				cartItems: validItems.filter(item => item.id !== action.payload),
@@ -5244,16 +5038,8 @@ function dashboardReducer(state: ExtendedDashboardState, action: DashboardAction
 		case 'UPDATE_CART_QUANTITY': {
 			const { id, quantity, maxStock } = action.payload;
 			const validItems = removeExpiredItems(state.cartItems as CartItemWithExpiry[]);
-			
+
 			if (quantity <= 0) {
-				const itemToRemove = validItems.find(item => item.id === id) as CartItemWithExpiry;
-				
-				// Firestore予約もキャンセル（非同期）
-				if (itemToRemove?.reservationId) {
-					cancelReservation(id, undefined, state.sessionId)
-						.catch(error => console.error('Failed to cancel reservation:', error));
-				}
-				
 				return {
 					...state,
 					cartItems: validItems.filter(item => item.id !== id),
@@ -5261,7 +5047,7 @@ function dashboardReducer(state: ExtendedDashboardState, action: DashboardAction
 			}
 
 			const validatedQuantity = validateQuantity(quantity, maxStock);
-			
+
 			return {
 				...state,
 				cartItems: validItems.map(item =>
@@ -5273,27 +5059,12 @@ function dashboardReducer(state: ExtendedDashboardState, action: DashboardAction
 		}
 
 		case 'CLEAR_CART': {
-			// 全ての予約をキャンセル（非同期）
-			const itemsWithReservations = state.cartItems.filter(item => (item as CartItemWithExpiry).reservationId);
-			itemsWithReservations.forEach(item => {
-				cancelReservation(item.id, undefined, state.sessionId)
-					.catch(error => console.error('Failed to cancel reservation:', error));
-			});
-			
 			return { ...state, cartItems: [] };
 		}
 
 		case 'CLEAR_EXPIRED_ITEMS': {
 			const validItems = removeExpiredItems(state.cartItems as CartItemWithExpiry[]);
 			return { ...state, cartItems: validItems };
-		}
-
-		case 'SYNC_WITH_RESERVATIONS': {
-			return { 
-				...state, 
-				cartItems: action.payload,
-				isFirestoreSynced: true 
-			};
 		}
 
 		case 'LOAD_FROM_STORAGE': {
@@ -5334,7 +5105,7 @@ export function DashboardProvider({ children }: { children: React.ReactNode }) {
 	useEffect(() => {
 		// ブラウザ環境でのみ実行
 		if (typeof window === 'undefined') return;
-		
+
 		try {
 			const savedState = localStorage.getItem('dashboard-state');
 			if (savedState) {
@@ -5350,61 +5121,30 @@ export function DashboardProvider({ children }: { children: React.ReactNode }) {
 		}
 	}, []);
 
-	// Firestore予約との同期
+	// 期限切れアイテムの定期クリーンアップ（1時間ごと）
 	useEffect(() => {
-		const syncWithFirestore = async () => {
-			try {
-				const userId = user?.uid;
-				const sessionId = state.sessionId;
-				
-				// Firestore予約を取得
-				const reservations = await getUserReservations(userId, sessionId);
-				
-				if (reservations.length > 0) {
-					// 予約をカートアイテムに変換
-					const reservedItems: CartItemWithExpiry[] = reservations.map(reservation => ({
-						id: reservation.productId,
-						name: `Product ${reservation.productId}`, // 実際は商品データから取得
-						price: 27.8, // 実際は商品データから取得
-						quantity: reservation.quantity,
-						currency: 'ETH' as const,
-						addedAt: reservation.createdAt.toDate().toISOString(),
-						reservationId: reservation.id
-					}));
-					
-					// ローカルカートと予約を同期
-					dispatch({ type: 'SYNC_WITH_RESERVATIONS', payload: reservedItems });
-				}
-			} catch (error) {
-				console.error('Failed to sync with Firestore reservations:', error);
-			}
+		const cleanup = () => {
+			dispatch({ type: 'CLEAR_EXPIRED_ITEMS' });
 		};
 
-		// 初回ロード時にFirestore同期
-		if (!state.isFirestoreSynced) {
-			syncWithFirestore();
-		}
-	}, [user, state.sessionId, state.isFirestoreSynced]);
+		// 初回クリーンアップ
+		cleanup();
 
-	// 定期的なクリーンアップの開始
-	useEffect(() => {
-		startPeriodicCleanup();
-		
-		return () => {
-			stopPeriodicCleanup();
-		};
+		// 1時間ごとにクリーンアップ
+		const interval = setInterval(cleanup, 60 * 60 * 1000);
+
+		return () => clearInterval(interval);
 	}, []);
 
 	// Save to localStorage when state changes (ハイドレーション完了後のみ)
 	useEffect(() => {
 		// ハイドレーション完了前は保存しない
 		if (!state.isHydrated) return;
-		
+
 		try {
 			const stateToSave = {
 				cartItems: state.cartItems,
 				userProfile: state.userProfile,
-				sessionId: state.sessionId,
 				lastUpdated: new Date().toISOString(),
 			};
 			console.log('💾 Saving to localStorage:', stateToSave);
@@ -5412,15 +5152,15 @@ export function DashboardProvider({ children }: { children: React.ReactNode }) {
 		} catch (error) {
 			console.error('Failed to save dashboard state to localStorage:', error);
 		}
-	}, [state.cartItems, state.userProfile, state.sessionId, state.isHydrated]);
+	}, [state.cartItems, state.userProfile, state.isHydrated]);
 
 	// Notify header about cart changes (ハイドレーション完了後のみ)
 	useEffect(() => {
 		// ハイドレーション完了前は通知しない
 		if (!state.isHydrated) return;
-		
+
 		const itemCount = state.cartItems.reduce((count, item) => count + item.quantity, 0);
-		
+
 		// カスタムイベントでヘッダーにカート数を通知
 		const cartUpdateEvent = new CustomEvent('cartUpdated', {
 			detail: { itemCount }
@@ -5488,8 +5228,8 @@ export function usePanel() {
 export function useCart() {
 	const { state, dispatch } = useDashboard();
 
-	const addToCart = (item: CartItem, maxStock?: number, reservationId?: string) => {
-		dispatch({ type: 'ADD_TO_CART', payload: { ...item, maxStock, reservationId } });
+	const addToCart = (item: CartItem, maxStock?: number) => {
+		dispatch({ type: 'ADD_TO_CART', payload: { ...item, maxStock } });
 	};
 
 	const removeFromCart = (id: string) => {
@@ -5517,23 +5257,23 @@ export function useCart() {
 		const addedTime = new Date(addedAt).getTime();
 		const currentTime = Date.now();
 		const timeLeft = CART_EXPIRY_MS - (currentTime - addedTime);
-		
+
 		if (timeLeft <= 0) return null;
-		
+
 		const daysLeft = Math.floor(timeLeft / (24 * 60 * 60 * 1000));
 		const hoursLeft = Math.floor((timeLeft % (24 * 60 * 60 * 1000)) / (60 * 60 * 1000));
-		
+
 		if (daysLeft > 0) return `${daysLeft} day${daysLeft > 1 ? 's' : ''} left`;
 		if (hoursLeft > 0) return `${hoursLeft} hour${hoursLeft > 1 ? 's' : ''} left`;
 		return 'Expires soon';
 	};
 
-	// 在庫チェック機能
+	// 在庫チェック機能（ローカル版）
 	const checkStock = (id: string, requestedQuantity: number, availableStock: number) => {
 		const currentItem = state.cartItems.find(item => item.id === id);
 		const currentQuantity = currentItem ? currentItem.quantity : 0;
 		const totalRequested = currentQuantity + requestedQuantity;
-		
+
 		return {
 			canAdd: totalRequested <= availableStock && totalRequested <= 10,
 			maxCanAdd: Math.min(availableStock - currentQuantity, 10 - currentQuantity),
@@ -5542,24 +5282,17 @@ export function useCart() {
 		};
 	};
 
-	// Firestore予約情報を含むカートアイテムを取得
-	const getCartItemsWithReservations = () => {
+	// カートアイテムの詳細情報を取得（期限情報付き）
+	const getCartItemsWithDetails = () => {
 		return state.cartItems.map(item => {
-			const itemWithReservation = item as CartItemWithExpiry;
+			const itemWithExpiry = item as CartItemWithExpiry;
 			return {
 				...item,
-				reservationId: itemWithReservation.reservationId,
-				addedAt: itemWithReservation.addedAt,
-				timeLeft: getItemTimeLeft(itemWithReservation.addedAt)
+				addedAt: itemWithExpiry.addedAt,
+				timeLeft: getItemTimeLeft(itemWithExpiry.addedAt)
 			};
 		});
 	};
-
-	// セッションIDを取得
-	const getSessionId = () => state.sessionId;
-
-	// Firestore同期状態を取得
-	const isFirestoreSynced = () => state.isFirestoreSynced;
 
 	return {
 		cartItems: state.cartItems,
@@ -5571,9 +5304,7 @@ export function useCart() {
 		getCartItemCount,
 		getItemTimeLeft,
 		checkStock,
-		getCartItemsWithReservations,
-		getSessionId,
-		isFirestoreSynced,
+		getCartItemsWithDetails,
 	};
 }
 
@@ -9089,6 +8820,121 @@ const CyberCard: React.FC<CyberCardProps> = ({
 };
 
 export default CyberCard;-e 
+### FILE: ./src/app/components/common/PriceDisplay.tsx
+
+// src/components/common/PriceDisplay.tsx
+'use client';
+
+import React from 'react';
+import { RefreshCw, AlertTriangle, TrendingUp, TrendingDown } from 'lucide-react';
+import { usePriceConverter } from '@/hooks/usePriceConverter';
+import { PriceDisplayProps } from '../../../../types/dashboard';
+
+export const PriceDisplay: React.FC<PriceDisplayProps> = ({
+	usdAmount,
+	selectedCurrency,
+	showBoth = true,
+	showChange = false,
+	size = 'md',
+	className = ''
+}) => {
+	const {
+		convertUSDTo,
+		formatCryptoPrice,
+		formatUSDPrice,
+		isLoading,
+		error,
+		exchangeRates
+	} = usePriceConverter();
+
+	const cryptoAmount = convertUSDTo(usdAmount, selectedCurrency);
+	const hasError = error !== null;
+
+	// Size classes
+	const sizeClasses = {
+		sm: {
+			primary: 'text-sm',
+			secondary: 'text-xs',
+			icon: 'w-3 h-3'
+		},
+		md: {
+			primary: 'text-base font-semibold',
+			secondary: 'text-sm',
+			icon: 'w-4 h-4'
+		},
+		lg: {
+			primary: 'text-lg font-bold',
+			secondary: 'text-base',
+			icon: 'w-5 h-5'
+		}
+	};
+
+	const classes = sizeClasses[size];
+
+	// Mock price change data (in real implementation, this would come from the price hook)
+	const getPriceChange = (currency: string) => {
+		// This would be real data from the prices hook
+		const mockChanges: Record<string, number> = {
+			BTC: 2.34,
+			ETH: -1.89,
+			SOL: 5.67,
+			AVAX: -2.23,
+			SUI: 8.12
+		};
+		return mockChanges[currency] || 0;
+	};
+
+	const priceChange = showChange ? getPriceChange(selectedCurrency) : 0;
+	const isPositiveChange = priceChange >= 0;
+
+	return (
+		<div className={`space-y-1 ${className}`}>
+			{/* USD Price */}
+			<div className={`text-white ${classes.primary}`}>
+				{formatUSDPrice(usdAmount)}
+			</div>
+
+			{/* Crypto Price */}
+			{showBoth && (
+				<div className="flex items-center space-x-2">
+					<div className={`${hasError ? 'text-red-400' : 'text-gray-400'} ${classes.secondary} flex items-center space-x-1`}>
+						{isLoading ? (
+							<>
+								<RefreshCw className={`${classes.icon} animate-spin`} />
+								<span>Loading...</span>
+							</>
+						) : hasError ? (
+							<>
+								<AlertTriangle className={`${classes.icon} text-red-400`} />
+								<span>Unavailable</span>
+							</>
+						) : (
+							<span>≈ {formatCryptoPrice(cryptoAmount, selectedCurrency)}</span>
+						)}
+					</div>
+
+					{/* Price Change Indicator */}
+					{showChange && !isLoading && !hasError && (
+						<div className={`flex items-center space-x-1 ${classes.secondary} ${
+							isPositiveChange ? 'text-green-400' : 'text-red-400'
+						}`}>
+							{isPositiveChange ? (
+								<TrendingUp className={classes.icon} />
+							) : (
+								<TrendingDown className={classes.icon} />
+							)}
+							<span>
+								{isPositiveChange ? '+' : ''}{priceChange.toFixed(2)}%
+							</span>
+						</div>
+					)}
+				</div>
+			)}
+		</div>
+	);
+};
+
+export default PriceDisplay;-e 
 ### FILE: ./src/app/components/common/CyberButton.tsx
 
 // src/app/components/common/CyberButton.tsx
@@ -9226,6 +9072,393 @@ export default function Home() {
 			<Footer />
 		</main>
 	);
+}-e 
+### FILE: ./src/hooks/usePriceConverter.ts
+
+// hooks/usePriceConverter.ts
+'use client';
+
+import { useMemo, useCallback } from 'react';
+import { useCryptoPrices } from './useCryptoPrices';
+import {
+	SUPPORTED_CRYPTOS,
+	SupportedCryptoSymbol,
+	PriceConversionResult,
+	CRYPTO_DEFAULTS
+} from '../../types/crypto';
+
+interface UsePriceConverterReturn {
+	convertUSDTo: (usdAmount: number, targetCurrency: string) => number;
+	formatCryptoPrice: (amount: number, currency: string) => string;
+	formatUSDPrice: (amount: number) => string;
+	getConversionDetails: (usdAmount: number, targetCurrency: string) => PriceConversionResult | null;
+	isSupported: (currency: string) => boolean;
+	getSupportedCurrencies: () => string[];
+	isLoading: boolean;
+	error: string | null;
+	lastUpdated: Date | null;
+	exchangeRates: Record<string, number>;
+}
+
+export function usePriceConverter(): UsePriceConverterReturn {
+	const { prices, loading, error, lastUpdated } = useCryptoPrices();
+
+	// Memoized exchange rates for performance
+	const exchangeRates = useMemo(() => {
+		const rates: Record<string, number> = {};
+
+		Object.entries(prices).forEach(([symbol, priceData]) => {
+			if (priceData.price_usd > 0) {
+				rates[symbol] = priceData.price_usd;
+			}
+		});
+
+		return rates;
+	}, [prices]);
+
+	// Check if currency is supported
+	const isSupported = useCallback((currency: string): boolean => {
+		return Object.keys(SUPPORTED_CRYPTOS).includes(currency.toUpperCase());
+	}, []);
+
+	// Get list of supported currencies
+	const getSupportedCurrencies = useCallback((): string[] => {
+		return Object.keys(SUPPORTED_CRYPTOS);
+	}, []);
+
+	// Convert USD amount to cryptocurrency
+	const convertUSDTo = useCallback((usdAmount: number, targetCurrency: string | null): number => {
+		if (!usdAmount || usdAmount <= 0) return 0;
+		if (!targetCurrency) return 0; // null チェックを追加
+
+		const currencyUpper = targetCurrency.toUpperCase();
+
+		if (!isSupported(currencyUpper)) {
+			console.warn(`Currency ${currencyUpper} is not supported`);
+			return 0;
+		}
+
+		const exchangeRate = exchangeRates[currencyUpper];
+
+		if (!exchangeRate || exchangeRate <= 0) {
+			console.warn(`No exchange rate available for ${currencyUpper}`);
+			return 0;
+		}
+
+		const convertedAmount = usdAmount / exchangeRate;
+
+		// Round to appropriate decimal places
+		const decimals = CRYPTO_DEFAULTS.DECIMAL_PLACES[currencyUpper as keyof typeof CRYPTO_DEFAULTS.DECIMAL_PLACES] || 4;
+		return Number(convertedAmount.toFixed(decimals));
+	}, [exchangeRates, isSupported]);
+
+	// Get detailed conversion information
+	const getConversionDetails = useCallback((
+		usdAmount: number,
+		targetCurrency: string
+	): PriceConversionResult | null => {
+		if (!usdAmount || usdAmount <= 0) return null;
+
+		const currencyUpper = targetCurrency.toUpperCase();
+
+		if (!isSupported(currencyUpper)) return null;
+
+		const exchangeRate = exchangeRates[currencyUpper];
+
+		if (!exchangeRate || exchangeRate <= 0) return null;
+
+		const convertedAmount = convertUSDTo(usdAmount, currencyUpper);
+
+		return {
+			originalAmount: usdAmount,
+			originalCurrency: 'USD',
+			convertedAmount,
+			targetCurrency: currencyUpper,
+			exchangeRate,
+			lastUpdated: lastUpdated || new Date()
+		};
+	}, [convertUSDTo, exchangeRates, isSupported, lastUpdated]);
+
+	// Format cryptocurrency amount with appropriate precision and symbol
+	const formatCryptoPrice = useCallback((amount: number, currency: string | null): string => {
+		if (!amount || amount <= 0) return '0';
+		if (!currency) return '0'; // null チェックを追加
+
+		const currencyUpper = currency.toUpperCase() as SupportedCryptoSymbol;
+
+		if (!isSupported(currencyUpper)) return amount.toString();
+
+		const cryptoConfig = SUPPORTED_CRYPTOS[currencyUpper];
+		const decimals = cryptoConfig.decimals;
+		const symbol = cryptoConfig.symbol;
+
+		// Format with appropriate decimal places
+		const formattedAmount = amount.toFixed(decimals);
+
+		// Remove trailing zeros for cleaner display
+		const cleanAmount = parseFloat(formattedAmount).toString();
+
+		return `${cleanAmount} ${symbol}`;
+	}, [isSupported]);
+
+	// Format USD amount
+	const formatUSDPrice = useCallback((amount: number): string => {
+		if (!amount || amount <= 0) return '$0.00';
+
+		return new Intl.NumberFormat('en-US', {
+			style: 'currency',
+			currency: 'USD',
+			minimumFractionDigits: 2,
+			maximumFractionDigits: 2
+		}).format(amount);
+	}, []);
+
+	// Determine loading state and error message
+	const isLoading = loading;
+	const errorMessage = error ? error.message : null;
+
+	return {
+		convertUSDTo,
+		formatCryptoPrice,
+		formatUSDPrice,
+		getConversionDetails,
+		isSupported,
+		getSupportedCurrencies,
+		isLoading,
+		error: errorMessage,
+		lastUpdated,
+		exchangeRates
+	};
+}-e 
+### FILE: ./src/hooks/useCryptoPrices.ts
+
+// hooks/useCryptoPrices.ts
+'use client';
+
+import { useState, useEffect, useCallback, useRef } from 'react';
+import { collection, onSnapshot, query, Timestamp } from 'firebase/firestore';
+import { db } from '@/lib/firebase';
+import {
+	CryptoPricesMap,
+	CryptoPriceData,
+	FirestoreCryptoPriceData,
+	CryptoError,
+	CryptoLoadingState,
+	CRYPTO_DEFAULTS,
+	SUPPORTED_CRYPTOS
+} from '../../types/crypto';
+
+interface UseCryptoPricesOptions {
+	enableRealtime?: boolean;
+	staleDataThreshold?: number;
+	maxRetries?: number;
+}
+
+interface UseCryptoPricesReturn {
+	prices: CryptoPricesMap;
+	loading: boolean;
+	error: CryptoError | null;
+	lastUpdated: Date | null;
+	isStale: boolean;
+	refreshPrices: () => void;
+	retryCount: number;
+}
+
+export function useCryptoPrices(options: UseCryptoPricesOptions = {}): UseCryptoPricesReturn {
+	const {
+		enableRealtime = true,
+		staleDataThreshold = CRYPTO_DEFAULTS.STALE_DATA_THRESHOLD,
+		maxRetries = CRYPTO_DEFAULTS.MAX_RETRIES
+	} = options;
+
+	// State management
+	const [prices, setPrices] = useState<CryptoPricesMap>({});
+	const [loadingState, setLoadingState] = useState<CryptoLoadingState>({
+		isLoading: true,
+		isRefreshing: false,
+		lastFetch: null,
+		retryCount: 0,
+		maxRetries
+	});
+	const [error, setError] = useState<CryptoError | null>(null);
+	const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
+
+	// Refs for cleanup and avoiding memory leaks
+	const unsubscribeRef = useRef<(() => void) | null>(null);
+	const retryTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+	// Convert Firestore data to frontend format
+	const convertFirestoreData = useCallback((firestoreData: FirestoreCryptoPriceData): CryptoPriceData => {
+		return {
+			id: firestoreData.id,
+			symbol: firestoreData.symbol,
+			name: firestoreData.name,
+			price_usd: firestoreData.price_usd,
+			price_change_24h: firestoreData.price_change_24h,
+			price_change_percentage_24h: firestoreData.price_change_percentage_24h,
+			market_cap_usd: firestoreData.market_cap_usd,
+			volume_24h_usd: firestoreData.volume_24h_usd,
+			last_updated: firestoreData.last_updated instanceof Timestamp 
+				? firestoreData.last_updated.toDate() 
+				: new Date(firestoreData.last_updated as any),
+			source: firestoreData.source
+		};
+	}, []);
+
+	// Check if data is stale
+	const isStale = useCallback((dataTimestamp: Date): boolean => {
+		const now = new Date();
+		const timeDiff = now.getTime() - dataTimestamp.getTime();
+		return timeDiff > staleDataThreshold;
+	}, [staleDataThreshold]);
+
+	// Create error object
+	const createError = useCallback((code: CryptoError['code'], message: string, details?: any): CryptoError => {
+		return {
+			code,
+			message,
+			details,
+			timestamp: new Date()
+		};
+	}, []);
+
+	// Setup Firestore listener
+	const setupFirestoreListener = useCallback(() => {
+		try {
+			setLoadingState(prev => ({ ...prev, isLoading: true }));
+			setError(null);
+
+			const cryptoPricesQuery = query(collection(db, 'crypto_prices'));
+
+			const unsubscribe = onSnapshot(
+				cryptoPricesQuery,
+				(snapshot) => {
+					try {
+						const newPrices: CryptoPricesMap = {};
+						let mostRecentUpdate: Date | null = null;
+
+						snapshot.docs.forEach((doc) => {
+							const data = { id: doc.id, ...doc.data() } as FirestoreCryptoPriceData;
+							
+							// Only process supported cryptocurrencies
+							if (Object.keys(SUPPORTED_CRYPTOS).includes(data.symbol)) {
+								const convertedData = convertFirestoreData(data);
+								newPrices[data.symbol] = convertedData;
+
+								// Track most recent update
+								if (!mostRecentUpdate || convertedData.last_updated > mostRecentUpdate) {
+									mostRecentUpdate = convertedData.last_updated;
+								}
+							}
+						});
+
+						// Update state
+						setPrices(newPrices);
+						setLastUpdated(mostRecentUpdate);
+						setLoadingState(prev => ({
+							...prev,
+							isLoading: false,
+							isRefreshing: false,
+							lastFetch: new Date(),
+							retryCount: 0
+						}));
+
+						console.log('📊 Crypto prices updated:', Object.keys(newPrices));
+					} catch (processingError) {
+						console.error('Error processing crypto price data:', processingError);
+						const error = createError(
+							'fetch-failed',
+							'Failed to process price data',
+							processingError
+						);
+						setError(error);
+						setLoadingState(prev => ({ ...prev, isLoading: false, isRefreshing: false }));
+					}
+				},
+				(firestoreError) => {
+					console.error('Firestore subscription error:', firestoreError);
+					const error = createError(
+						'network-error',
+						'Failed to connect to price data',
+						firestoreError
+					);
+					setError(error);
+					setLoadingState(prev => ({
+						...prev,
+						isLoading: false,
+						isRefreshing: false,
+						retryCount: prev.retryCount + 1
+					}));
+
+					// Auto-retry logic
+					if (loadingState.retryCount < maxRetries) {
+						console.log(`🔄 Retrying crypto prices fetch (${loadingState.retryCount + 1}/${maxRetries})`);
+						retryTimeoutRef.current = setTimeout(() => {
+							setupFirestoreListener();
+						}, Math.pow(2, loadingState.retryCount) * 1000); // Exponential backoff
+					}
+				}
+			);
+
+			unsubscribeRef.current = unsubscribe;
+		} catch (setupError) {
+			console.error('Error setting up Firestore listener:', setupError);
+			const error = createError(
+				'fetch-failed',
+				'Failed to setup price data connection',
+				setupError
+			);
+			setError(error);
+			setLoadingState(prev => ({ ...prev, isLoading: false }));
+		}
+	}, [convertFirestoreData, createError, loadingState.retryCount, maxRetries]);
+
+	// Manual refresh function
+	const refreshPrices = useCallback(() => {
+		console.log('🔄 Manual refresh triggered');
+		setLoadingState(prev => ({ ...prev, isRefreshing: true, retryCount: 0 }));
+		
+		// Clean up existing listener
+		if (unsubscribeRef.current) {
+			unsubscribeRef.current();
+			unsubscribeRef.current = null;
+		}
+
+		// Setup new listener
+		setupFirestoreListener();
+	}, [setupFirestoreListener]);
+
+	// Initialize listener on mount
+	useEffect(() => {
+		if (enableRealtime) {
+			setupFirestoreListener();
+		}
+
+		// Cleanup on unmount
+		return () => {
+			if (unsubscribeRef.current) {
+				unsubscribeRef.current();
+				unsubscribeRef.current = null;
+			}
+			if (retryTimeoutRef.current) {
+				clearTimeout(retryTimeoutRef.current);
+				retryTimeoutRef.current = null;
+			}
+		};
+	}, [enableRealtime, setupFirestoreListener]);
+
+	// Check for stale data
+	const dataIsStale = lastUpdated ? isStale(lastUpdated) : false;
+
+	return {
+		prices,
+		loading: loadingState.isLoading,
+		error,
+		lastUpdated,
+		isStale: dataIsStale,
+		refreshPrices,
+		retryCount: loadingState.retryCount
+	};
 }-e 
 ### FILE: ./src/utils/errorHandling.ts
 
@@ -10285,6 +10518,159 @@ declare global {
 }
 
 export {}-e 
+### FILE: ./types/crypto.ts
+
+// types/crypto.ts
+import { Timestamp } from 'firebase/firestore';
+
+// Firestore crypto_prices コレクションの型定義
+export interface FirestoreCryptoPriceData {
+	id: string;
+	symbol: string;
+	name: string;
+	price_usd: number;
+	price_change_24h: number;
+	price_change_percentage_24h: number;
+	market_cap_usd: number;
+	volume_24h_usd: number;
+	last_updated: Timestamp;
+	source: 'coingecko';
+}
+
+// フロントエンド用に変換された価格データ
+export interface CryptoPriceData {
+	id: string;
+	symbol: string;
+	name: string;
+	price_usd: number;
+	price_change_24h: number;
+	price_change_percentage_24h: number;
+	market_cap_usd: number;
+	volume_24h_usd: number;
+	last_updated: Date;
+	source: string;
+}
+
+// 価格データのマップ型
+export interface CryptoPricesMap {
+	[symbol: string]: CryptoPriceData;
+}
+
+// 暗号通貨メタデータ
+export interface CryptoMetadata {
+	supported_currencies: string[];
+	update_frequency_minutes: number;
+	last_sync_timestamp: Timestamp;
+	sync_status: 'success' | 'error' | 'in_progress';
+	error_message?: string;
+	coingecko_rate_limit_remaining?: number;
+	total_api_calls_today?: number;
+}
+
+// サポートされている暗号通貨の設定
+export const SUPPORTED_CRYPTOS = {
+	BTC: {
+		id: 'bitcoin',
+		symbol: 'BTC',
+		name: 'Bitcoin',
+		icon: '₿',
+		decimals: 6,
+		color: '#F7931A'
+	},
+	ETH: {
+		id: 'ethereum',
+		symbol: 'ETH',
+		name: 'Ethereum',
+		icon: 'Ξ',
+		decimals: 4,
+		color: '#627EEA'
+	},
+	SOL: {
+		id: 'solana',
+		symbol: 'SOL',
+		name: 'Solana',
+		icon: '◎',
+		decimals: 4,
+		color: '#14F195'
+	},
+	AVAX: {
+		id: 'avalanche-2',
+		symbol: 'AVAX',
+		name: 'Avalanche',
+		icon: '🔺',
+		decimals: 4,
+		color: '#E84142'
+	},
+	SUI: {
+		id: 'sui',
+		symbol: 'SUI',
+		name: 'Sui Network',
+		icon: '💧',
+		decimals: 4,
+		color: '#4DA2FF'
+	}
+} as const;
+
+export type SupportedCryptoSymbol = keyof typeof SUPPORTED_CRYPTOS;
+
+// Firestore操作の結果型
+export interface CryptoFetchResult {
+	success: boolean;
+	data?: CryptoPricesMap;
+	error?: string;
+	lastUpdated?: Date;
+}
+
+// 価格変換の結果型
+export interface PriceConversionResult {
+	originalAmount: number;
+	originalCurrency: 'USD';
+	convertedAmount: number;
+	targetCurrency: string;
+	exchangeRate: number;
+	lastUpdated: Date;
+}
+
+// エラーハンドリング用の型
+export interface CryptoError {
+	code: 'fetch-failed' | 'conversion-failed' | 'unsupported-currency' | 'stale-data' | 'network-error';
+	message: string;
+	details?: any;
+	timestamp: Date;
+}
+
+// ローディング状態の管理
+export interface CryptoLoadingState {
+	isLoading: boolean;
+	isRefreshing: boolean;
+	lastFetch: Date | null;
+	retryCount: number;
+	maxRetries: number;
+}
+
+// リアルタイム購読の設定
+export interface CryptoSubscriptionOptions {
+	enableRealtime: boolean;
+	refreshInterval?: number; // milliseconds
+	staleDataThreshold?: number; // milliseconds
+	autoRetry: boolean;
+	maxRetries?: number;
+}
+
+// デフォルトの設定値
+export const CRYPTO_DEFAULTS = {
+	REFRESH_INTERVAL: 30000, // 30秒
+	STALE_DATA_THRESHOLD: 300000, // 5分
+	MAX_RETRIES: 3,
+	DECIMAL_PLACES: {
+		BTC: 6,
+		ETH: 4,
+		SOL: 4,
+		AVAX: 4,
+		SUI: 4,
+		USD: 2
+	}
+} as const;-e 
 ### FILE: ./types/dashboard.ts
 
 // types/dashboard.ts
@@ -10314,7 +10700,7 @@ export interface CartItem {
 	name: string;
 	price: number;
 	quantity: number;
-	currency: 'ETH' | 'USDC' | 'USDT';
+	currency: 'BTC' | 'ETH' | 'SOL' | 'AVAX' | 'SUI'; // 更新: 新しい暗号通貨に対応
 	image?: string;
 }
 
@@ -10355,7 +10741,62 @@ export interface FilterOptions {
 	maxAmount?: number;
 	sortBy: 'amount' | 'count' | 'date';
 	sortOrder: 'asc' | 'desc';
-}-e 
+}
+
+// 新規追加: 暗号通貨価格関連の型定義
+export interface CryptoPriceData {
+	id: string;
+	symbol: string;
+	name: string;
+	price_usd: number;
+	price_change_24h: number;
+	price_change_percentage_24h: number;
+	market_cap_usd: number;
+	volume_24h_usd: number;
+	last_updated: Date;
+	source: string;
+}
+
+export interface CryptoPricesMap {
+	[symbol: string]: CryptoPriceData;
+}
+
+export interface UseCryptoPricesReturn {
+	prices: CryptoPricesMap;
+	loading: boolean;
+	error: string | null;
+	lastUpdated: Date | null;
+	refreshPrices: () => void;
+}
+
+export interface UsePriceConverterReturn {
+	convertUSDTo: (usdAmount: number, targetCurrency: string) => number;
+	formatCryptoPrice: (amount: number, currency: string) => string;
+	formatUSDPrice: (amount: number) => string;
+	isSupported: (currency: string) => boolean;
+	isLoading: boolean;
+	error: string | null;
+}
+
+export interface PriceDisplayProps {
+	usdAmount: number;
+	selectedCurrency: string;
+	showBoth?: boolean;
+	showChange?: boolean;
+	size?: 'sm' | 'md' | 'lg';
+	className?: string;
+}
+
+// 支払い方法のマッピング
+export const PAYMENT_METHODS = {
+	SOL: { name: 'Solana', symbol: 'SOL', icon: '◎' },
+	BTC: { name: 'Lightning', symbol: 'BTC', icon: '₿' },
+	AVAX: { name: 'Avalanche c-chain', symbol: 'AVAX', icon: '🔺' },
+	SUI: { name: 'Sui', symbol: 'SUI', icon: '💧' },
+	ETH: { name: 'Ethereum mainnet', symbol: 'ETH', icon: 'Ξ' },
+} as const;
+
+export type PaymentMethodKey = keyof typeof PAYMENT_METHODS;-e 
 ### FILE: ./types/user.ts
 
 // types/user.ts

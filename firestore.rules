@@ -1,26 +1,36 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-  
-      // 商品コレクションは誰でも読み取り可能、管理者のみ書き込み可能
-    match /products/{productId} {
-      allow read: if true;
-      allow write: if true; // 一時的に誰でも書き込み可能（後で変更）
+    
+    // 既存のルール（ユーザー関連）
+    match /users/{userId} {
+      allow read, write: if request.auth != null && request.auth.uid == userId;
     }
     
-    // カート予約は認証ユーザーのみ
+    match /products/{productId} {
+      allow read: if true;
+      allow write: if request.auth != null;
+    }
+    
     match /cart_reservations/{reservationId} {
       allow read, write: if request.auth != null;
     }
-  
-    // ユーザーは自分のドキュメントのみアクセス可能
-    match /users/{userId} {
-      allow read, write: if request.auth != null && request.auth.uid == userId;
-      
-      // ユーザーの注文履歴
-      match /orders/{orderId} {
-        allow read, write: if request.auth != null && request.auth.uid == userId;
-      }
+    
+    // 暗号通貨価格データ: 読み取り専用（認証不要）
+    match /crypto_prices/{symbol} {
+      allow read: if true;  // 全ユーザーが読み取り可能
+      allow write: if false; // Cloud Functions のみ書き込み可能
+    }
+    
+    // 暗号通貨メタデータ: 読み取り専用
+    match /crypto_metadata/{document} {
+      allow read: if true;  // 全ユーザーが読み取り可能
+      allow write: if false; // Cloud Functions のみ書き込み可能
+    }
+    
+    // その他のドキュメントはデフォルトで拒否
+    match /{document=**} {
+      allow read, write: if false;
     }
   }
 }

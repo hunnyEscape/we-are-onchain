@@ -49,7 +49,7 @@ const HowToBuySection: React.FC = () => {
 	const paymentMethods: PaymentMethod[] = [
 		{
 			id: 'solana',
-			symbol: '$SOL, $USDT',
+			symbol: '$SOL',
 			chain: 'Solana'
 		},
 		{
@@ -59,8 +59,8 @@ const HowToBuySection: React.FC = () => {
 		},
 		{
 			id: 'avalanche',
-			symbol: '$AVAX, $USDC, $USDT',
-			chain: 'Avalanche'
+			symbol: '$AVAX',
+			chain: 'Avalanche c-chain'
 		},
 		{
 			id: 'sui',
@@ -69,23 +69,8 @@ const HowToBuySection: React.FC = () => {
 		},
 		{
 			id: 'eth',
-			symbol: '$ETH, $USDC, $USDT',
+			symbol: '$ETH',
 			chain: 'ETH'
-		},
-		{
-			id: 'arbitrum',
-			symbol: '$ETH, $USDT',
-			chain: 'Arbitrum'
-		},
-		{
-			id: 'optimism',
-			symbol: '$ETH, $USDT',
-			chain: 'Optimism'
-		},
-		{
-			id: 'bnb',
-			symbol: '$BNB',
-			chain: 'BNB'
 		}
 	];
 
@@ -121,7 +106,7 @@ const HowToBuySection: React.FC = () => {
 			id: 1,
 			title: 'Cart & Checkout',
 			description: 'Add products and set preferences',
-			details:`When you checkout. (1) Selact your payment currency. (2) Set shipping address. International shipping available.`
+			details: `When you checkout. (1) Selact your payment currency. (2) Set shipping address. International shipping available.`
 		},
 		{
 			id: 2,
@@ -151,31 +136,13 @@ const HowToBuySection: React.FC = () => {
 					How to Buy
 				</h2>
 				<p className="text-gray-400">
-					Your complete guide to purchasing with cryptocurrency
+					Only{' '}
+					<span className="text-purple-300 font-semibold">Solana</span>,{' '}
+					<span className="text-yellow-300 font-semibold">Lightning</span>,{' '}
+					<span className="text-red-400 font-semibold">Avalanche c-chain</span>,{' '}
+					<span className="text-gray-300 font-semibold">Ethereum mainnet</span>{' '}
+					and <span className="text-sky-300 font-semibold">Sui</span> are accepted.
 				</p>
-
-				{/* Concept Highlights */}
-				<div className="grid grid-cols-1 md:grid-cols-2 gap-4 max-w-4xl mx-auto">
-					<div className="p-4 border border-neonGreen/30 rounded-sm bg-neonGreen/5">
-						<div className="flex items-center space-x-3 mb-2">
-							<TrendingUp className="w-6 h-6 text-neonGreen" />
-							<h3 className="text-neonGreen font-semibold">Web2.0 + Web3.0 Hybrid</h3>
-						</div>
-						<p className="text-sm text-gray-300">
-							Combining web2.0 usability with cryptocurrency payments
-						</p>
-					</div>
-
-					<div className="p-4 border border-neonOrange/30 rounded-sm bg-neonOrange/5">
-						<div className="flex items-center space-x-3 mb-2">
-							<QrCode className="w-6 h-6 text-neonOrange" />
-							<h3 className="text-neonOrange font-semibold">Invoice Method</h3>
-						</div>
-						<p className="text-sm text-gray-300">
-							No wallet connection required, simple payment via QR codes and URLs with your wallet
-						</p>
-					</div>
-				</div>
 			</div>
 
 			{/* Step-by-Step Guide */}

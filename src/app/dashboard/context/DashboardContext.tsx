@@ -3,34 +3,25 @@
 
 import React, { createContext, useContext, useReducer, useEffect } from 'react';
 import { DashboardState, CartItem, UserProfile, SectionType } from '../../../../types/dashboard';
-import { 
-	cancelReservation, 
-	generateSessionId, 
-	getUserReservations,
-	startPeriodicCleanup,
-	stopPeriodicCleanup 
-} from '@/lib/firestore/inventory';
 import { useAuth } from '@/contexts/AuthContext';
 
 // カート有効期限（30日）
 const CART_EXPIRY_DAYS = 30;
 const CART_EXPIRY_MS = CART_EXPIRY_DAYS * 24 * 60 * 60 * 1000;
 
-// 拡張されたCartItemの型（有効期限付き）
+// 簡素化されたCartItemの型（有効期限のみ）
 interface CartItemWithExpiry extends CartItem {
 	addedAt: string; // ISO string
-	reservationId?: string; // Firestore予約ID
 }
 
 // Actions
 type DashboardAction =
 	| { type: 'SET_USER_PROFILE'; payload: UserProfile | null }
-	| { type: 'ADD_TO_CART'; payload: CartItem & { maxStock?: number; reservationId?: string } }
+	| { type: 'ADD_TO_CART'; payload: CartItem & { maxStock?: number } }
 	| { type: 'REMOVE_FROM_CART'; payload: string }
 	| { type: 'UPDATE_CART_QUANTITY'; payload: { id: string; quantity: number; maxStock?: number } }
 	| { type: 'CLEAR_CART' }
 	| { type: 'CLEAR_EXPIRED_ITEMS' }
-	| { type: 'SYNC_WITH_RESERVATIONS'; payload: CartItemWithExpiry[] }
 	| { type: 'LOAD_FROM_STORAGE'; payload: Partial<DashboardState> }
 	| { type: 'SET_HYDRATED'; payload: boolean }
 	| { type: 'SET_ACTIVE_SECTION'; payload: SectionType | null }
@@ -52,11 +43,9 @@ const removeExpiredItems = (items: CartItemWithExpiry[]): CartItemWithExpiry[] =
 	return items.filter(item => !isItemExpired(item.addedAt));
 };
 
-//拡張されたDashboardStateの型
+// 拡張されたDashboardStateの型
 interface ExtendedDashboardState extends DashboardState {
-	sessionId: string;
-	isFirestoreSynced: boolean;
-	isHydrated: boolean; // ハイドレーション完了フラグを追加
+	isHydrated: boolean; // ハイドレーション完了フラグ
 }
 
 // Initial state
@@ -66,8 +55,6 @@ const initialState: ExtendedDashboardState = {
 	cartItems: [],
 	userProfile: null,
 	walletConnected: false,
-	sessionId: generateSessionId(),
-	isFirestoreSynced: false,
 	isHydrated: false, // 初期状態では false
 };
 
@@ -78,25 +65,24 @@ function dashboardReducer(state: ExtendedDashboardState, action: DashboardAction
 			return { ...state, userProfile: action.payload };
 
 		case 'ADD_TO_CART': {
-			const { maxStock, reservationId, ...itemData } = action.payload;
+			const { maxStock, ...itemData } = action.payload;
 			const newItem: CartItemWithExpiry = {
 				...itemData,
-				addedAt: new Date().toISOString(),
-				reservationId
+				addedAt: new Date().toISOString()
 			};
 
 			// 期限切れアイテムを除去
 			const validItems = removeExpiredItems(state.cartItems as CartItemWithExpiry[]);
-			
+
 			const existingItem = validItems.find(item => item.id === newItem.id);
-			
+
 			if (existingItem) {
 				const newQuantity = validateQuantity(existingItem.quantity + newItem.quantity, maxStock);
 				return {
 					...state,
 					cartItems: validItems.map(item =>
 						item.id === newItem.id
-							? { ...item, quantity: newQuantity, reservationId: reservationId || (item as CartItemWithExpiry).reservationId }
+							? { ...item, quantity: newQuantity }
 							: item
 					),
 				};
@@ -104,7 +90,7 @@ function dashboardReducer(state: ExtendedDashboardState, action: DashboardAction
 
 			// 新しいアイテムの数量検証
 			const validatedQuantity = validateQuantity(newItem.quantity, maxStock);
-			
+
 			return {
 				...state,
 				cartItems: [...validItems, { ...newItem, quantity: validatedQuantity }],
@@ -113,14 +99,7 @@ function dashboardReducer(state: ExtendedDashboardState, action: DashboardAction
 
 		case 'REMOVE_FROM_CART': {
 			const validItems = removeExpiredItems(state.cartItems as CartItemWithExpiry[]);
-			const itemToRemove = validItems.find(item => item.id === action.payload) as CartItemWithExpiry;
-			
-			// Firestore予約もキャンセル（非同期）
-			if (itemToRemove?.reservationId) {
-				cancelReservation(action.payload, undefined, state.sessionId)
-					.catch(error => console.error('Failed to cancel reservation:', error));
-			}
-			
+
 			return {
 				...state,
 				cartItems: validItems.filter(item => item.id !== action.payload),
@@ -130,16 +109,8 @@ function dashboardReducer(state: ExtendedDashboardState, action: DashboardAction
 		case 'UPDATE_CART_QUANTITY': {
 			const { id, quantity, maxStock } = action.payload;
 			const validItems = removeExpiredItems(state.cartItems as CartItemWithExpiry[]);
-			
+
 			if (quantity <= 0) {
-				const itemToRemove = validItems.find(item => item.id === id) as CartItemWithExpiry;
-				
-				// Firestore予約もキャンセル（非同期）
-				if (itemToRemove?.reservationId) {
-					cancelReservation(id, undefined, state.sessionId)
-						.catch(error => console.error('Failed to cancel reservation:', error));
-				}
-				
 				return {
 					...state,
 					cartItems: validItems.filter(item => item.id !== id),
@@ -147,7 +118,7 @@ function dashboardReducer(state: ExtendedDashboardState, action: DashboardAction
 			}
 
 			const validatedQuantity = validateQuantity(quantity, maxStock);
-			
+
 			return {
 				...state,
 				cartItems: validItems.map(item =>
@@ -159,27 +130,12 @@ function dashboardReducer(state: ExtendedDashboardState, action: DashboardAction
 		}
 
 		case 'CLEAR_CART': {
-			// 全ての予約をキャンセル（非同期）
-			const itemsWithReservations = state.cartItems.filter(item => (item as CartItemWithExpiry).reservationId);
-			itemsWithReservations.forEach(item => {
-				cancelReservation(item.id, undefined, state.sessionId)
-					.catch(error => console.error('Failed to cancel reservation:', error));
-			});
-			
 			return { ...state, cartItems: [] };
 		}
 
 		case 'CLEAR_EXPIRED_ITEMS': {
 			const validItems = removeExpiredItems(state.cartItems as CartItemWithExpiry[]);
 			return { ...state, cartItems: validItems };
-		}
-
-		case 'SYNC_WITH_RESERVATIONS': {
-			return { 
-				...state, 
-				cartItems: action.payload,
-				isFirestoreSynced: true 
-			};
 		}
 
 		case 'LOAD_FROM_STORAGE': {
@@ -220,7 +176,7 @@ export function DashboardProvider({ children }: { children: React.ReactNode }) {
 	useEffect(() => {
 		// ブラウザ環境でのみ実行
 		if (typeof window === 'undefined') return;
-		
+
 		try {
 			const savedState = localStorage.getItem('dashboard-state');
 			if (savedState) {
@@ -236,61 +192,30 @@ export function DashboardProvider({ children }: { children: React.ReactNode }) {
 		}
 	}, []);
 
-	// Firestore予約との同期
+	// 期限切れアイテムの定期クリーンアップ（1時間ごと）
 	useEffect(() => {
-		const syncWithFirestore = async () => {
-			try {
-				const userId = user?.uid;
-				const sessionId = state.sessionId;
-				
-				// Firestore予約を取得
-				const reservations = await getUserReservations(userId, sessionId);
-				
-				if (reservations.length > 0) {
-					// 予約をカートアイテムに変換
-					const reservedItems: CartItemWithExpiry[] = reservations.map(reservation => ({
-						id: reservation.productId,
-						name: `Product ${reservation.productId}`, // 実際は商品データから取得
-						price: 27.8, // 実際は商品データから取得
-						quantity: reservation.quantity,
-						currency: 'ETH' as const,
-						addedAt: reservation.createdAt.toDate().toISOString(),
-						reservationId: reservation.id
-					}));
-					
-					// ローカルカートと予約を同期
-					dispatch({ type: 'SYNC_WITH_RESERVATIONS', payload: reservedItems });
-				}
-			} catch (error) {
-				console.error('Failed to sync with Firestore reservations:', error);
-			}
+		const cleanup = () => {
+			dispatch({ type: 'CLEAR_EXPIRED_ITEMS' });
 		};
 
-		// 初回ロード時にFirestore同期
-		if (!state.isFirestoreSynced) {
-			syncWithFirestore();
-		}
-	}, [user, state.sessionId, state.isFirestoreSynced]);
+		// 初回クリーンアップ
+		cleanup();
 
-	// 定期的なクリーンアップの開始
-	useEffect(() => {
-		startPeriodicCleanup();
-		
-		return () => {
-			stopPeriodicCleanup();
-		};
+		// 1時間ごとにクリーンアップ
+		const interval = setInterval(cleanup, 60 * 60 * 1000);
+
+		return () => clearInterval(interval);
 	}, []);
 
 	// Save to localStorage when state changes (ハイドレーション完了後のみ)
 	useEffect(() => {
 		// ハイドレーション完了前は保存しない
 		if (!state.isHydrated) return;
-		
+
 		try {
 			const stateToSave = {
 				cartItems: state.cartItems,
 				userProfile: state.userProfile,
-				sessionId: state.sessionId,
 				lastUpdated: new Date().toISOString(),
 			};
 			console.log('💾 Saving to localStorage:', stateToSave);
@@ -298,15 +223,15 @@ export function DashboardProvider({ children }: { children: React.ReactNode }) {
 		} catch (error) {
 			console.error('Failed to save dashboard state to localStorage:', error);
 		}
-	}, [state.cartItems, state.userProfile, state.sessionId, state.isHydrated]);
+	}, [state.cartItems, state.userProfile, state.isHydrated]);
 
 	// Notify header about cart changes (ハイドレーション完了後のみ)
 	useEffect(() => {
 		// ハイドレーション完了前は通知しない
 		if (!state.isHydrated) return;
-		
+
 		const itemCount = state.cartItems.reduce((count, item) => count + item.quantity, 0);
-		
+
 		// カスタムイベントでヘッダーにカート数を通知
 		const cartUpdateEvent = new CustomEvent('cartUpdated', {
 			detail: { itemCount }
@@ -374,8 +299,8 @@ export function usePanel() {
 export function useCart() {
 	const { state, dispatch } = useDashboard();
 
-	const addToCart = (item: CartItem, maxStock?: number, reservationId?: string) => {
-		dispatch({ type: 'ADD_TO_CART', payload: { ...item, maxStock, reservationId } });
+	const addToCart = (item: CartItem, maxStock?: number) => {
+		dispatch({ type: 'ADD_TO_CART', payload: { ...item, maxStock } });
 	};
 
 	const removeFromCart = (id: string) => {
@@ -403,23 +328,23 @@ export function useCart() {
 		const addedTime = new Date(addedAt).getTime();
 		const currentTime = Date.now();
 		const timeLeft = CART_EXPIRY_MS - (currentTime - addedTime);
-		
+
 		if (timeLeft <= 0) return null;
-		
+
 		const daysLeft = Math.floor(timeLeft / (24 * 60 * 60 * 1000));
 		const hoursLeft = Math.floor((timeLeft % (24 * 60 * 60 * 1000)) / (60 * 60 * 1000));
-		
+
 		if (daysLeft > 0) return `${daysLeft} day${daysLeft > 1 ? 's' : ''} left`;
 		if (hoursLeft > 0) return `${hoursLeft} hour${hoursLeft > 1 ? 's' : ''} left`;
 		return 'Expires soon';
 	};
 
-	// 在庫チェック機能
+	// 在庫チェック機能（ローカル版）
 	const checkStock = (id: string, requestedQuantity: number, availableStock: number) => {
 		const currentItem = state.cartItems.find(item => item.id === id);
 		const currentQuantity = currentItem ? currentItem.quantity : 0;
 		const totalRequested = currentQuantity + requestedQuantity;
-		
+
 		return {
 			canAdd: totalRequested <= availableStock && totalRequested <= 10,
 			maxCanAdd: Math.min(availableStock - currentQuantity, 10 - currentQuantity),
@@ -428,24 +353,17 @@ export function useCart() {
 		};
 	};
 
-	// Firestore予約情報を含むカートアイテムを取得
-	const getCartItemsWithReservations = () => {
+	// カートアイテムの詳細情報を取得（期限情報付き）
+	const getCartItemsWithDetails = () => {
 		return state.cartItems.map(item => {
-			const itemWithReservation = item as CartItemWithExpiry;
+			const itemWithExpiry = item as CartItemWithExpiry;
 			return {
 				...item,
-				reservationId: itemWithReservation.reservationId,
-				addedAt: itemWithReservation.addedAt,
-				timeLeft: getItemTimeLeft(itemWithReservation.addedAt)
+				addedAt: itemWithExpiry.addedAt,
+				timeLeft: getItemTimeLeft(itemWithExpiry.addedAt)
 			};
 		});
 	};
-
-	// セッションIDを取得
-	const getSessionId = () => state.sessionId;
-
-	// Firestore同期状態を取得
-	const isFirestoreSynced = () => state.isFirestoreSynced;
 
 	return {
 		cartItems: state.cartItems,
@@ -457,9 +375,7 @@ export function useCart() {
 		getCartItemCount,
 		getItemTimeLeft,
 		checkStock,
-		getCartItemsWithReservations,
-		getSessionId,
-		isFirestoreSynced,
+		getCartItemsWithDetails,
 	};
 }
 

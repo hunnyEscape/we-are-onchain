@@ -413,6 +413,13 @@ const HowToBuySection: React.FC = () => {
 					</div>
 				</div>
 			</CyberCard>
+
+			{/* CTA */}
+			<div className="text-center">
+				<CyberButton variant="primary" className="px-8 py-4 text-lg">
+					Start Shopping Now
+				</CyberButton>
+			</div>
 		</div>
 	);
 };

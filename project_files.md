@@ -574,6 +574,970 @@ export const firestoreUserToUserProfile = (firestoreUser: FirestoreUser): UserPr
 			: new Date(firestoreUser.createdAt as any)
 	};
 };-e 
+### FILE: ./src/lib/firestore/inventory.ts
+
+// src/lib/firestore/inventory.ts
+import {
+	doc,
+	collection,
+	getDocs,
+	getDoc,
+	setDoc,
+	updateDoc,
+	deleteDoc,
+	query,
+	where,
+	orderBy,
+	limit as firestoreLimit,
+	writeBatch,
+	runTransaction,
+	serverTimestamp,
+	Timestamp,
+	addDoc
+} from 'firebase/firestore';
+import { db } from '@/lib/firebase';
+import {
+	CartReservation,
+	StockCheckResult,
+	UpdateInventoryData,
+	BatchInventoryUpdate,
+	ProductError
+} from '../../../types/product';
+import { getProductById } from './products';
+import { handleAsyncOperation } from '@/utils/errorHandling';
+
+// コレクション名
+const RESERVATIONS_COLLECTION = 'cart_reservations';
+const PRODUCTS_COLLECTION = 'products';
+
+// 予約の有効期限（15分）
+const RESERVATION_EXPIRY_MINUTES = 15;
+const RESERVATION_EXPIRY_MS = RESERVATION_EXPIRY_MINUTES * 60 * 1000;
+
+/**
+ * セッションIDを生成（匿名ユーザー用）
+ */
+export const generateSessionId = (): string => {
+	return `session_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+};
+
+/**
+ * 予約期限を計算
+ */
+const calculateExpiryTime = (): Timestamp => {
+	const expiryTime = new Date(Date.now() + RESERVATION_EXPIRY_MS);
+	return Timestamp.fromDate(expiryTime);
+};
+
+/**
+ * 在庫チェック（詳細情報付き）
+ */
+export const checkStockAvailability = async (
+	productId: string,
+	requestedQuantity: number,
+	userId?: string,
+	sessionId?: string
+): Promise<StockCheckResult> => {
+	const result = await handleAsyncOperation(async () => {
+		const product = await getProductById(productId);
+
+		if (!product) {
+			throw new Error(`Product not found: ${productId}`);
+		}
+
+		// 既存予約を確認
+		let existingReservation: StockCheckResult['existingReservation'] = undefined;
+
+		if (userId || sessionId) {
+			const reservationQuery = query(
+				collection(db, RESERVATIONS_COLLECTION),
+				where('productId', '==', productId),
+				where('status', '==', 'active'),
+				userId ? where('userId', '==', userId) : where('sessionId', '==', sessionId)
+			);
+
+			const reservationSnapshot = await getDocs(reservationQuery);
+
+			if (!reservationSnapshot.empty) {
+				const reservation = reservationSnapshot.docs[0].data() as CartReservation;
+				existingReservation = {
+					quantity: reservation.quantity,
+					expiresAt: reservation.expiresAt
+				};
+			}
+		}
+
+		// 利用可能数量を計算（既存予約は除外）
+		const availableForUser = product.inventory.availableStock + (existingReservation?.quantity || 0);
+		const maxOrderQuantity = product.settings.maxOrderQuantity;
+		const maxCanReserve = Math.min(availableForUser, maxOrderQuantity);
+
+		// 制限理由をチェック
+		const limitReasons = {
+			exceedsStock: requestedQuantity > availableForUser,
+			exceedsOrderLimit: requestedQuantity > maxOrderQuantity,
+			productInactive: !product.settings.isActive
+		};
+
+		const canReserve = requestedQuantity <= maxCanReserve &&
+			product.settings.isActive &&
+			!limitReasons.exceedsStock &&
+			!limitReasons.exceedsOrderLimit;
+
+		return {
+			productId,
+			requestedQuantity,
+			totalStock: product.inventory.totalStock,
+			availableStock: product.inventory.availableStock,
+			reservedStock: product.inventory.reservedStock,
+			canReserve,
+			maxCanReserve: Math.max(0, maxCanReserve),
+			limitReasons,
+			existingReservation
+		};
+	}, 'stock-check');
+
+	if (result.error) {
+		console.error('Error checking stock availability:', result.error);
+		// エラー時は安全側に倒す
+		return {
+			productId,
+			requestedQuantity,
+			totalStock: 0,
+			availableStock: 0,
+			reservedStock: 0,
+			canReserve: false,
+			maxCanReserve: 0,
+			limitReasons: {
+				exceedsStock: true,
+				exceedsOrderLimit: false,
+				productInactive: false
+			}
+		};
+	}
+
+	return result.data!;
+};
+
+/**
+ * 在庫を予約
+ */
+export const reserveStock = async (
+	productId: string,
+	quantity: number,
+	userId?: string,
+	sessionId?: string
+): Promise<{ success: boolean; reservationId?: string; error?: ProductError }> => {
+	if (!userId && !sessionId) {
+		return {
+			success: false,
+			error: {
+				code: 'validation-error',
+				message: 'Either userId or sessionId is required',
+				productId
+			}
+		};
+	}
+
+	const result = await handleAsyncOperation(async () => {
+		return await runTransaction(db, async (transaction) => {
+			// 1. 在庫チェック
+			const stockCheck = await checkStockAvailability(productId, quantity, userId, sessionId);
+
+			if (!stockCheck.canReserve) {
+				let errorCode: ProductError['code'] = 'insufficient-stock';
+				let message = 'Cannot reserve stock';
+
+				if (stockCheck.limitReasons.productInactive) {
+					errorCode = 'product-inactive';
+					message = 'Product is not available';
+				} else if (stockCheck.limitReasons.exceedsStock) {
+					errorCode = 'insufficient-stock';
+					message = `Only ${stockCheck.maxCanReserve} items available`;
+				}
+
+				throw new Error(`${errorCode}:${message}`);
+			}
+
+			// 2. 既存予約を処理
+			if (stockCheck.existingReservation) {
+				// 既存予約を更新
+				const existingReservationQuery = query(
+					collection(db, RESERVATIONS_COLLECTION),
+					where('productId', '==', productId),
+					where('status', '==', 'active'),
+					userId ? where('userId', '==', userId) : where('sessionId', '==', sessionId)
+				);
+
+				const existingSnapshot = await getDocs(existingReservationQuery);
+				if (!existingSnapshot.empty) {
+					const existingReservationDoc = existingSnapshot.docs[0];
+					const existingReservation = existingReservationDoc.data() as CartReservation;
+
+					// 予約数量を更新
+					transaction.update(existingReservationDoc.ref, {
+						quantity,
+						expiresAt: calculateExpiryTime()
+					});
+
+					// 商品の予約在庫を更新
+					const productRef = doc(db, PRODUCTS_COLLECTION, productId);
+					const stockDiff = quantity - existingReservation.quantity;
+
+					transaction.update(productRef, {
+						'inventory.availableStock': stockCheck.availableStock - stockDiff,
+						'inventory.reservedStock': stockCheck.reservedStock + stockDiff,
+						'timestamps.updatedAt': serverTimestamp()
+					});
+
+					return { reservationId: existingReservationDoc.id };
+				}
+			}
+
+			// 3. 新規予約を作成
+			const reservationData: Omit<CartReservation, 'id'> = {
+				userId,
+				sessionId: sessionId || `session_${Date.now()}`,
+				productId,
+				quantity,
+				createdAt: serverTimestamp() as Timestamp,
+				expiresAt: calculateExpiryTime(),
+				status: 'active'
+			};
+
+			const reservationRef = doc(collection(db, RESERVATIONS_COLLECTION));
+			transaction.set(reservationRef, reservationData);
+
+			// 4. 商品の在庫を更新
+			const productRef = doc(db, PRODUCTS_COLLECTION, productId);
+			transaction.update(productRef, {
+				'inventory.availableStock': stockCheck.availableStock - quantity,
+				'inventory.reservedStock': stockCheck.reservedStock + quantity,
+				'timestamps.updatedAt': serverTimestamp()
+			});
+
+			return { reservationId: reservationRef.id };
+		});
+	}, 'stock-reservation');
+
+	if (result.error) {
+		console.error('Error reserving stock:', result.error);
+
+		// エラーメッセージからエラーコードを抽出
+		const errorMessage = result.error.message;
+		if (errorMessage.includes('insufficient-stock')) {
+			return {
+				success: false,
+				error: {
+					code: 'insufficient-stock',
+					message: errorMessage.split(':')[1] || 'Insufficient stock',
+					productId,
+					requestedQuantity: quantity
+				}
+			};
+		}
+
+		if (errorMessage.includes('product-inactive')) {
+			return {
+				success: false,
+				error: {
+					code: 'product-inactive',
+					message: 'Product is not available',
+					productId
+				}
+			};
+		}
+
+		return {
+			success: false,
+			error: {
+				code: 'validation-error',
+				message: 'Failed to reserve stock',
+				productId,
+				requestedQuantity: quantity
+			}
+		};
+	}
+
+	return {
+		success: true,
+		reservationId: result.data!.reservationId
+	};
+};
+
+/**
+ * 予約をキャンセル（在庫を解放）
+ */
+export const cancelReservation = async (
+	productId: string,
+	userId?: string,
+	sessionId?: string
+): Promise<{ success: boolean; error?: ProductError }> => {
+	const result = await handleAsyncOperation(async () => {
+		return await runTransaction(db, async (transaction) => {
+			// 1. 予約を検索
+			const reservationQuery = query(
+				collection(db, RESERVATIONS_COLLECTION),
+				where('productId', '==', productId),
+				where('status', '==', 'active'),
+				userId ? where('userId', '==', userId) : where('sessionId', '==', sessionId)
+			);
+
+			const reservationSnapshot = await getDocs(reservationQuery);
+
+			if (reservationSnapshot.empty) {
+				throw new Error('Reservation not found');
+			}
+
+			const reservationDoc = reservationSnapshot.docs[0];
+			const reservation = reservationDoc.data() as CartReservation;
+
+			// 2. 予約をキャンセル状態に更新
+			transaction.update(reservationDoc.ref, {
+				status: 'cancelled'
+			});
+
+			// 3. 商品の在庫を復元
+			const productRef = doc(db, PRODUCTS_COLLECTION, productId);
+			const productSnapshot = await transaction.get(productRef);
+
+			if (productSnapshot.exists()) {
+				const currentStock = productSnapshot.data().inventory;
+
+				transaction.update(productRef, {
+					'inventory.availableStock': currentStock.availableStock + reservation.quantity,
+					'inventory.reservedStock': currentStock.reservedStock - reservation.quantity,
+					'timestamps.updatedAt': serverTimestamp()
+				});
+			}
+
+			return { success: true };
+		});
+	}, 'cancel-reservation');
+
+	if (result.error) {
+		console.error('Error cancelling reservation:', result.error);
+		return {
+			success: false,
+			error: {
+				code: 'not-found',
+				message: 'Reservation not found or already processed',
+				productId
+			}
+		};
+	}
+
+	return result.data || { success: false };
+};
+
+/**
+ * 期限切れ予約を自動削除
+ */
+export const cleanupExpiredReservations = async (): Promise<number> => {
+	const result = await handleAsyncOperation(async () => {
+		const now = Timestamp.now();
+		const expiredQuery = query(
+			collection(db, RESERVATIONS_COLLECTION),
+			where('status', '==', 'active'),
+			where('expiresAt', '<=', now)
+		);
+
+		const expiredSnapshot = await getDocs(expiredQuery);
+
+		if (expiredSnapshot.empty) {
+			return 0;
+		}
+
+		const batch = writeBatch(db);
+		const productUpdates: { [productId: string]: number } = {};
+
+		// 期限切れ予約を処理
+		expiredSnapshot.docs.forEach((doc) => {
+			const reservation = doc.data() as CartReservation;
+
+			// 予約を期限切れ状態に更新
+			batch.update(doc.ref, { status: 'expired' });
+
+			// 商品ごとの復元数量を集計
+			if (!productUpdates[reservation.productId]) {
+				productUpdates[reservation.productId] = 0;
+			}
+			productUpdates[reservation.productId] += reservation.quantity;
+		});
+
+		// 商品の在庫を復元
+		for (const [productId, quantity] of Object.entries(productUpdates)) {
+			const productRef = doc(db, PRODUCTS_COLLECTION, productId);
+
+			// トランザクションではなくバッチで処理（パフォーマンス優先）
+			batch.update(productRef, {
+				'inventory.availableStock': serverTimestamp(), // FieldValue.increment(quantity) の代替
+				'inventory.reservedStock': serverTimestamp(), // FieldValue.increment(-quantity) の代替
+				'timestamps.updatedAt': serverTimestamp()
+			});
+		}
+
+		await batch.commit();
+
+		// 実際の在庫更新（increment処理）
+		for (const [productId, quantity] of Object.entries(productUpdates)) {
+			const productRef = doc(db, PRODUCTS_COLLECTION, productId);
+			const productDoc = await getDoc(productRef);
+
+			if (productDoc.exists()) {
+				const currentInventory = productDoc.data().inventory;
+				await updateDoc(productRef, {
+					'inventory.availableStock': currentInventory.availableStock + quantity,
+					'inventory.reservedStock': Math.max(0, currentInventory.reservedStock - quantity)
+				});
+			}
+		}
+
+		return expiredSnapshot.docs.length;
+	}, 'cleanup-expired-reservations');
+
+	if (result.error) {
+		console.error('Error cleaning up expired reservations:', result.error);
+		return 0;
+	}
+
+	return result.data || 0;
+};
+
+/**
+ * ユーザー/セッションの全予約を取得
+ */
+export const getUserReservations = async (
+	userId?: string,
+	sessionId?: string
+): Promise<CartReservation[]> => {
+	const result = await handleAsyncOperation(async () => {
+		if (!userId && !sessionId) {
+			return [];
+		}
+
+		const reservationQuery = query(
+			collection(db, RESERVATIONS_COLLECTION),
+			where('status', '==', 'active'),
+			userId ? where('userId', '==', userId) : where('sessionId', '==', sessionId),
+			orderBy('createdAt', 'desc')
+		);
+
+		const snapshot = await getDocs(reservationQuery);
+		const reservations: CartReservation[] = [];
+
+		snapshot.forEach((doc) => {
+			reservations.push({ id: doc.id, ...doc.data() } as CartReservation);
+		});
+
+		return reservations;
+	}, 'get-user-reservations');
+
+	return result.data || [];
+};
+
+/**
+ * 予約を確定（チェックアウト時）
+ */
+export const confirmReservations = async (
+	reservationIds: string[]
+): Promise<{ success: boolean; confirmedIds: string[]; errors: ProductError[] }> => {
+	const result = await handleAsyncOperation(async () => {
+		const confirmedIds: string[] = [];
+		const errors: ProductError[] = [];
+
+		const batch = writeBatch(db);
+
+		for (const reservationId of reservationIds) {
+			try {
+				const reservationRef = doc(db, RESERVATIONS_COLLECTION, reservationId);
+				const reservationDoc = await getDoc(reservationRef);
+
+				if (!reservationDoc.exists()) {
+					errors.push({
+						code: 'not-found',
+						message: `Reservation ${reservationId} not found`
+					});
+					continue;
+				}
+
+				const reservation = reservationDoc.data() as CartReservation;
+
+				// 期限チェック
+				if (reservation.expiresAt.toMillis() < Date.now()) {
+					errors.push({
+						code: 'reservation-expired',
+						message: `Reservation ${reservationId} has expired`,
+						productId: reservation.productId
+					});
+					continue;
+				}
+
+				// 予約を確定状態に更新
+				batch.update(reservationRef, { status: 'confirmed' });
+				confirmedIds.push(reservationId);
+
+			} catch (error) {
+				errors.push({
+					code: 'validation-error',
+					message: `Error processing reservation ${reservationId}: ${error}`
+				});
+			}
+		}
+
+		await batch.commit();
+
+		return {
+			success: confirmedIds.length > 0,
+			confirmedIds,
+			errors
+		};
+	}, 'confirm-reservations');
+
+	if (result.error) {
+		return {
+			success: false,
+			confirmedIds: [],
+			errors: [{
+				code: 'validation-error',
+				message: 'Failed to confirm reservations'
+			}]
+		};
+	}
+
+	return result.data!;
+};
+
+// 定期クリーンアップを設定（ブラウザ環境で定期実行）
+let cleanupInterval: NodeJS.Timeout | null = null;
+
+export const startPeriodicCleanup = () => {
+	if (cleanupInterval) return;
+
+	// 10分ごとに期限切れ予約をクリーンアップ
+	cleanupInterval = setInterval(() => {
+		cleanupExpiredReservations()
+			.then((cleaned) => {
+				if (cleaned > 0) {
+					console.log(`🧹 Cleaned up ${cleaned} expired reservations`);
+				}
+			})
+			.catch((error) => {
+				console.error('Error in periodic cleanup:', error);
+			});
+	}, 10 * 60 * 1000);
+};
+
+export const stopPeriodicCleanup = () => {
+	if (cleanupInterval) {
+		clearInterval(cleanupInterval);
+		cleanupInterval = null;
+	}
+};-e 
+### FILE: ./src/lib/firestore/products.ts
+
+// src/lib/firestore/products.ts
+import {
+	doc,
+	collection,
+	getDocs,
+	getDoc,
+	query,
+	where,
+	orderBy,
+	limit as firestoreLimit,
+	onSnapshot,
+	serverTimestamp,
+	Timestamp,
+	Query,
+	DocumentSnapshot
+} from 'firebase/firestore';
+import { db } from '@/lib/firebase';
+import {
+	FirestoreProduct,
+	CreateProductData,
+	UpdateProductData,
+	ProductFilters,
+	ProductSortOptions,
+	GetProductsOptions,
+	ProductSummary,
+	ProductDetails,
+	ProductError
+} from '../../../types/product';
+import { handleAsyncOperation } from '@/utils/errorHandling';
+
+// コレクション名
+const PRODUCTS_COLLECTION = 'products';
+
+/**
+ * 商品が存在するかチェック
+ */
+export const checkProductExists = async (productId: string): Promise<boolean> => {
+	try {
+		const productRef = doc(db, PRODUCTS_COLLECTION, productId);
+		const productSnap = await getDoc(productRef);
+		return productSnap.exists();
+	} catch (error) {
+		console.error('Error checking product existence:', error);
+		return false;
+	}
+};
+
+/**
+ * 商品IDで商品データを取得
+ */
+export const getProductById = async (productId: string): Promise<FirestoreProduct | null> => {
+	const result = await handleAsyncOperation(async () => {
+		const productRef = doc(db, PRODUCTS_COLLECTION, productId);
+		const productSnap = await getDoc(productRef);
+
+		if (productSnap.exists()) {
+			return { id: productSnap.id, ...productSnap.data() } as FirestoreProduct;
+		}
+		return null;
+	}, 'product-fetch');
+
+	if (result.error) {
+		console.error('Error getting product:', result.error);
+		return null;
+	}
+
+	return result.data || null;
+};
+
+/**
+ * 複数商品を取得（フィルター・ソート対応）
+ */
+export const getProducts = async (options: GetProductsOptions = {}): Promise<FirestoreProduct[]> => {
+	const result = await handleAsyncOperation(async () => {
+		let q: Query = collection(db, PRODUCTS_COLLECTION);
+
+		// フィルター適用
+		if (options.filters) {
+			const { category, isActive, minPrice, maxPrice, inStock, tags } = options.filters;
+
+			if (category) {
+				q = query(q, where('settings.category', '==', category));
+			}
+
+			if (isActive !== undefined) {
+				q = query(q, where('settings.isActive', '==', isActive));
+			}
+
+			if (minPrice !== undefined) {
+				q = query(q, where('price.usd', '>=', minPrice));
+			}
+
+			if (maxPrice !== undefined) {
+				q = query(q, where('price.usd', '<=', maxPrice));
+			}
+
+			if (inStock) {
+				q = query(q, where('inventory.availableStock', '>', 0));
+			}
+
+			if (tags && tags.length > 0) {
+				q = query(q, where('metadata.tags', 'array-contains-any', tags));
+			}
+		}
+
+		// ソート適用
+		if (options.sort) {
+			q = query(q, orderBy(options.sort.field, options.sort.direction));
+		} else {
+			// デフォルトソート: アクティブ → 在庫あり → 作成日新しい順
+			q = query(q, orderBy('settings.isActive', 'desc'), orderBy('inventory.availableStock', 'desc'));
+		}
+
+		// 制限適用
+		if (options.limit) {
+			q = query(q, firestoreLimit(options.limit));
+		}
+
+		const querySnapshot = await getDocs(q);
+		const products: FirestoreProduct[] = [];
+
+		querySnapshot.forEach((doc) => {
+			products.push({ id: doc.id, ...doc.data() } as FirestoreProduct);
+		});
+
+		// クライアントサイドでの追加フィルタリング（Firestoreの制限対応）
+		let filteredProducts = products;
+
+		if (options.filters?.searchQuery) {
+			const searchQuery = options.filters.searchQuery.toLowerCase();
+			filteredProducts = products.filter(product =>
+				product.name.toLowerCase().includes(searchQuery) ||
+				product.description.toLowerCase().includes(searchQuery) ||
+				product.metadata.tags.some(tag => tag.toLowerCase().includes(searchQuery))
+			);
+		}
+
+		return filteredProducts;
+	}, 'products-fetch');
+
+	if (result.error) {
+		console.error('Error getting products:', result.error);
+		return [];
+	}
+
+	return result.data || [];
+};
+
+/**
+ * アクティブな商品のみを取得
+ */
+export const getActiveProducts = async (limit?: number): Promise<FirestoreProduct[]> => {
+	return getProducts({
+		filters: { isActive: true, inStock: true },
+		sort: { field: 'metadata.rating', direction: 'desc' },
+		limit
+	});
+};
+
+/**
+ * 商品をサマリー形式で取得
+ */
+export const getProductsSummary = async (options: GetProductsOptions = {}): Promise<ProductSummary[]> => {
+	const products = await getProducts(options);
+
+	return products.map(product => ({
+		id: product.id,
+		name: product.name,
+		price: product.price.usd,
+		availableStock: product.inventory.availableStock,
+		isActive: product.settings.isActive,
+		category: product.settings.category,
+		rating: product.metadata.rating,
+		image: product.metadata.images[0] || undefined
+	}));
+};
+
+/**
+ * 商品詳細を表示用フォーマットで取得
+ */
+export const getProductDetails = async (productId: string): Promise<ProductDetails | null> => {
+	const product = await getProductById(productId);
+
+	if (!product) return null;
+
+	// 在庫レベルを計算
+	const getStockLevel = (available: number, total: number): 'high' | 'medium' | 'low' | 'out' => {
+		if (available === 0) return 'out';
+		const ratio = available / total;
+		if (ratio > 0.5) return 'high';
+		if (ratio > 0.2) return 'medium';
+		return 'low';
+	};
+
+	return {
+		id: product.id,
+		name: product.name,
+		description: product.description,
+		price: {
+			usd: product.price.usd,
+			formatted: `$${product.price.usd.toFixed(2)}`
+		},
+		inventory: {
+			inStock: product.inventory.availableStock,
+			isAvailable: product.inventory.availableStock > 0,
+			stockLevel: getStockLevel(product.inventory.availableStock, product.inventory.totalStock)
+		},
+		metadata: {
+			rating: product.metadata.rating,
+			reviewCount: product.metadata.reviewCount,
+			features: product.metadata.features,
+			nutritionFacts: product.metadata.nutritionFacts,
+			images: product.metadata.images,
+			tags: product.metadata.tags
+		},
+		settings: {
+			maxOrderQuantity: product.settings.maxOrderQuantity,
+			minOrderQuantity: product.settings.minOrderQuantity
+		},
+		timestamps: {
+			createdAt: product.timestamps.createdAt instanceof Timestamp
+				? product.timestamps.createdAt.toDate()
+				: new Date(product.timestamps.createdAt as any),
+			updatedAt: product.timestamps.updatedAt instanceof Timestamp
+				? product.timestamps.updatedAt.toDate()
+				: new Date(product.timestamps.updatedAt as any)
+		}
+	};
+};
+
+/**
+ * 商品をリアルタイムで監視
+ */
+export const subscribeToProduct = (
+	productId: string,
+	callback: (product: FirestoreProduct | null) => void
+): (() => void) => {
+	const productRef = doc(db, PRODUCTS_COLLECTION, productId);
+
+	return onSnapshot(productRef, (doc) => {
+		if (doc.exists()) {
+			callback({ id: doc.id, ...doc.data() } as FirestoreProduct);
+		} else {
+			callback(null);
+		}
+	}, (error) => {
+		console.error('Error subscribing to product:', error);
+		callback(null);
+	});
+};
+
+/**
+ * 商品リストをリアルタイムで監視
+ */
+export const subscribeToProducts = (
+	options: GetProductsOptions = {},
+	callback: (products: FirestoreProduct[]) => void
+): (() => void) => {
+	let q: Query = collection(db, PRODUCTS_COLLECTION);
+
+	// フィルター適用（subscribeToProductsでは基本的なもののみ）
+	if (options.filters?.isActive !== undefined) {
+		q = query(q, where('settings.isActive', '==', options.filters.isActive));
+	}
+
+	if (options.filters?.category) {
+		q = query(q, where('settings.category', '==', options.filters.category));
+	}
+
+	// ソート適用
+	if (options.sort) {
+		q = query(q, orderBy(options.sort.field, options.sort.direction));
+	} else {
+		q = query(q, orderBy('settings.isActive', 'desc'), orderBy('inventory.availableStock', 'desc'));
+	}
+
+	// 制限適用
+	if (options.limit) {
+		q = query(q, firestoreLimit(options.limit));
+	}
+
+	return onSnapshot(q, (querySnapshot) => {
+		const products: FirestoreProduct[] = [];
+		querySnapshot.forEach((doc) => {
+			products.push({ id: doc.id, ...doc.data() } as FirestoreProduct);
+		});
+
+		// クライアントサイドフィルタリング
+		let filteredProducts = products;
+
+		if (options.filters?.searchQuery) {
+			const searchQuery = options.filters.searchQuery.toLowerCase();
+			filteredProducts = products.filter(product =>
+				product.name.toLowerCase().includes(searchQuery) ||
+				product.description.toLowerCase().includes(searchQuery)
+			);
+		}
+
+		if (options.filters?.inStock) {
+			filteredProducts = filteredProducts.filter(product => product.inventory.availableStock > 0);
+		}
+
+		callback(filteredProducts);
+	}, (error) => {
+		console.error('Error subscribing to products:', error);
+		callback([]);
+	});
+};
+
+/**
+ * カテゴリ一覧を取得
+ */
+export const getProductCategories = async (): Promise<string[]> => {
+	const result = await handleAsyncOperation(async () => {
+		const products = await getProducts({ filters: { isActive: true } });
+		const categories = new Set(products.map(product => product.settings.category));
+		return Array.from(categories).sort();
+	}, 'categories-fetch');
+
+	return result.data || [];
+};
+
+/**
+ * 商品の在庫状況をチェック
+ */
+export const checkProductStock = async (
+	productId: string,
+	requestedQuantity: number
+): Promise<{ available: boolean; stock: number; maxAllowed: number }> => {
+	const product = await getProductById(productId);
+
+	if (!product) {
+		return { available: false, stock: 0, maxAllowed: 0 };
+	}
+
+	if (!product.settings.isActive) {
+		return { available: false, stock: product.inventory.availableStock, maxAllowed: 0 };
+	}
+
+	const maxAllowed = Math.min(
+		product.inventory.availableStock,
+		product.settings.maxOrderQuantity
+	);
+
+	return {
+		available: requestedQuantity <= maxAllowed,
+		stock: product.inventory.availableStock,
+		maxAllowed
+	};
+};
+
+/**
+ * 商品検索（全文検索対応）
+ */
+export const searchProducts = async (
+	searchQuery: string,
+	options: Omit<GetProductsOptions, 'filters'> & { filters?: Omit<ProductFilters, 'searchQuery'> } = {}
+): Promise<FirestoreProduct[]> => {
+	return getProducts({
+		...options,
+		filters: {
+			...options.filters,
+			searchQuery,
+			isActive: true // 検索時はアクティブな商品のみ
+		}
+	});
+};
+
+/**
+ * エラーハンドリング用のヘルパー関数
+ */
+export const createProductError = (
+	code: ProductError['code'],
+	message: string,
+	productId?: string,
+	requestedQuantity?: number,
+	availableStock?: number
+): ProductError => {
+	return {
+		code,
+		message,
+		productId,
+		requestedQuantity,
+		availableStock
+	};
+};
+
+// 商品関連の定数
+export const PRODUCT_CONSTANTS = {
+	MAX_PRODUCTS_PER_PAGE: 20,
+	DEFAULT_MAX_ORDER_QUANTITY: 10,
+	DEFAULT_MIN_ORDER_QUANTITY: 1,
+	STOCK_LEVELS: {
+		HIGH_THRESHOLD: 0.5,
+		MEDIUM_THRESHOLD: 0.2
+	},
+	CATEGORIES: {
+		PROTEIN: 'protein',
+		SUPPLEMENTS: 'supplements',
+		MERCHANDISE: 'merchandise'
+	}
+} as const;-e 
 ### FILE: ./src/app/dashboard/components/sections/ProfileSection.tsx
 
 // src/app/dashboard/components/sections/ProfileSection.tsx
@@ -1139,13 +2103,6 @@ interface PaymentMethod {
 	chain: string;
 }
 
-interface LoginOption {
-	name: string;
-	description: string;
-	icon: React.ReactNode;
-	available: boolean;
-}
-
 interface WalletOption {
 	name: string;
 	description: string;
@@ -1156,39 +2113,6 @@ interface WalletOption {
 const HowToBuySection: React.FC = () => {
 	const [activeStep, setActiveStep] = useState(1);
 	const [isPaymentTableOpen, setIsPaymentTableOpen] = useState(false);
-
-	const loginOptions: LoginOption[] = [
-		{
-			name: 'Google',
-			description: 'Sign in with your Google account',
-			icon: <Globe className="w-6 h-6 text-red-500" />,
-			available: true
-		},
-		{
-			name: 'Twitter/X',
-			description: 'Sign in with your X account',
-			icon: <Twitter className="w-6 h-6 text-blue-400" />,
-			available: true
-		},
-		{
-			name: 'Discord',
-			description: 'Sign in with your Discord account',
-			icon: <MessageCircle className="w-6 h-6 text-indigo-500" />,
-			available: true
-		},
-		{
-			name: 'GitHub',
-			description: 'Sign in with your GitHub account',
-			icon: <Github className="w-6 h-6 text-gray-300" />,
-			available: true
-		},
-		{
-			name: 'Email',
-			description: 'Traditional email + password',
-			icon: <Mail className="w-6 h-6 text-green-500" />,
-			available: true
-		}
-	];
 
 	const paymentMethods: PaymentMethod[] = [
 		{
@@ -1263,24 +2187,18 @@ const HowToBuySection: React.FC = () => {
 	const steps = [
 		{
 			id: 1,
-			title: 'Web2 Account Login',
-			description: 'Simple login like traditional websites',
-			details: '(1) Create an account using social login. No crypto wallet required for this step.'
-		},
-		{
-			id: 2,
 			title: 'Cart & Checkout',
 			description: 'Add products and set preferences',
 			details:`When you checkout. (1) Selact your payment currency. (2) Set shipping address. International shipping available.`
 		},
 		{
-			id: 3,
+			id: 2,
 			title: 'Invoice Payment',
 			description: 'Pay using generated invoice URL',
 			details: 'Receive an invoice with QR code and payment address. Use any compatible wallet to send the exact amount to complete your purchase.'
 		},
 		{
-			id: 4,
+			id: 3,
 			title: 'Order Completion',
 			description: 'Automatic processing and shipping',
 			details: 'Transaction reflects in our system within seconds. Shipping process begins immediately after payment confirmation.'
@@ -1376,36 +2294,8 @@ const HowToBuySection: React.FC = () => {
 										</p>
 									</div>
 
-									{/* Step 1: Login Options */}
+									{/* Step 1: Checkout Process */}
 									{step.id === 1 && (
-										<div className="space-y-4">
-											<div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-												{loginOptions.map((login, index) => (
-													<div key={index} className="p-4 border border-dark-300 rounded-sm flex items-center space-x-3">
-														{login.icon}
-														<div>
-															<div className="text-white font-medium">{login.name}</div>
-														</div>
-														{login.available && (
-															<CheckCircle className="w-5 h-5 text-neonGreen ml-auto" />
-														)}
-													</div>
-												))}
-											</div>
-
-											{/* Placeholder for Login Demo */}
-											<div className="p-4 border border-dark-300 rounded-sm bg-dark-200/30">
-												<div className="text-center text-gray-400 text-sm">
-													📱 Login Screen Demo Area
-													<br />
-													<span className="text-xs">(Interactive login mockup will be displayed here)</span>
-												</div>
-											</div>
-										</div>
-									)}
-
-									{/* Step 2: Checkout Process */}
-									{step.id === 2 && (
 										<div className="space-y-6">
 											{/* Important Notice */}
 											<div className="p-4 border border-yellow-600/30 rounded-sm bg-yellow-600/5">
@@ -1463,20 +2353,11 @@ const HowToBuySection: React.FC = () => {
 													</div>
 												)}
 											</div>
-
-											{/* Checkout Demo Area */}
-											<div className="p-4 border border-dark-300 rounded-sm bg-dark-200/30">
-												<div className="text-center text-gray-400 text-sm">
-													🛒 Checkout Process Demo Area
-													<br />
-													<span className="text-xs">(Interactive checkout flow will be displayed here)</span>
-												</div>
-											</div>
 										</div>
 									)}
 
-									{/* Step 3: Invoice Payment */}
-									{step.id === 3 && (
+									{/* Step 2: Invoice Payment */}
+									{step.id === 2 && (
 										<div className="space-y-6">
 											{/* Payment Process */}
 											<div>
@@ -1526,8 +2407,8 @@ const HowToBuySection: React.FC = () => {
 										</div>
 									)}
 
-									{/* Step 4: Order Completion */}
-									{step.id === 4 && (
+									{/* Step 3: Order Completion */}
+									{step.id === 3 && (
 										<div className="space-y-6">
 											<div className="grid grid-cols-1 md:grid-cols-2 gap-4">
 												<div className="p-4 border border-dark-300 rounded-sm">
@@ -1552,14 +2433,6 @@ const HowToBuySection: React.FC = () => {
 												</div>
 											</div>
 
-											{/* Order Completion Demo Area */}
-											<div className="p-4 border border-dark-300 rounded-sm bg-dark-200/30">
-												<div className="text-center text-gray-400 text-sm">
-													📦 Order Confirmation Demo Area
-													<br />
-													<span className="text-xs">(Order status and tracking interface will be displayed here)</span>
-												</div>
-											</div>
 										</div>
 									)}
 								</div>
@@ -1625,332 +2498,571 @@ export default HowToBuySection;-e
 // src/app/dashboard/components/sections/CartSection.tsx
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import CyberCard from '../../../components/common/CyberCard';
 import CyberButton from '../../../components/common/CyberButton';
-import { CartItem } from '../../../../../types/dashboard';
-import { 
-  ShoppingCart, 
-  Trash2, 
-  Plus, 
-  Minus, 
-  Zap, 
-  AlertCircle,
-  Gift,
+import { useCart, usePanel } from '../../context/DashboardContext';
+import { useAuth } from '@/contexts/AuthContext';
+import {
+	ShoppingCart,
+	Trash2,
+	Plus,
+	Minus,
+	Zap,
+	AlertCircle,
+	Gift,
+	Clock,
+	Package,
+	Loader2,
+	Shield
 } from 'lucide-react';
+import {
+	checkStockAvailability,
+	cancelReservation,
+	confirmReservations
+} from '@/lib/firestore/inventory';
 
 const Info = ({ className = "w-4 h-4" }: { className?: string }) => (
-  <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-  </svg>
+	<svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+		<path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+	</svg>
 );
 
 const CartSection: React.FC = () => {
-  const [cartItems, setCartItems] = useState<CartItem[]>([
-    {
-      id: 'pepe-protein-1',
-      name: 'Pepe Flavor Protein',
-      price: 0.025,
-      quantity: 2,
-      currency: 'ETH',
-      image: '/images/pepe-protein.webp'
-    }
-  ]);
+	const {
+		cartItems,
+		removeFromCart,
+		updateQuantity,
+		clearCart,
+		getCartTotal,
+		getCartItemCount,
+		getItemTimeLeft,
+		getCartItemsWithReservations,
+		getSessionId,
+		isFirestoreSynced
+	} = useCart();
 
-  const [promoCode, setPromoCode] = useState('');
-  const [appliedPromo, setAppliedPromo] = useState<string | null>(null);
-  const [gasFeeEstimate] = useState(0.003); // ETH
-  const [selectedPaymentMethod, setSelectedPaymentMethod] = useState<'ETH' | 'USDC' | 'USDT'>('ETH');
+	const { openPanel } = usePanel();
+	const { user } = useAuth();
 
-  const updateQuantity = (id: string, newQuantity: number) => {
-    if (newQuantity <= 0) {
-      removeItem(id);
-      return;
-    }
-    setCartItems(prev => 
-      prev.map(item => 
-        item.id === id ? { ...item, quantity: Math.min(newQuantity, 10) } : item
-      )
-    );
-  };
+	const [promoCode, setPromoCode] = useState('');
+	const [appliedPromo, setAppliedPromo] = useState<string | null>(null);
+	const [gasFeeEstimate] = useState(0.003); // ETH
+	const [selectedPaymentMethod, setSelectedPaymentMethod] = useState<'ETH' | 'USDC' | 'USDT'>('ETH');
+	const [showPromoError, setShowPromoError] = useState(false);
+	const [isUpdating, setIsUpdating] = useState<{ [itemId: string]: boolean }>({});
+	const [stockWarnings, setStockWarnings] = useState<{ [itemId: string]: string }>({});
 
-  const removeItem = (id: string) => {
-    setCartItems(prev => prev.filter(item => item.id !== id));
-  };
+	// カートアイテムの詳細情報を取得
+	const cartItemsWithDetails = getCartItemsWithReservations();
 
-  const applyPromoCode = () => {
-    if (promoCode.toLowerCase() === 'pepe10') {
-      setAppliedPromo('PEPE10');
-      setPromoCode('');
-    } else {
-      // Handle invalid promo code
-      console.log('Invalid promo code');
-    }
-  };
+	const updateItemQuantity = async (id: string, newQuantity: number) => {
+		setIsUpdating(prev => ({ ...prev, [id]: true }));
 
-  const removePromoCode = () => {
-    setAppliedPromo(null);
-  };
+		try {
+			if (newQuantity <= 0) {
+				await handleRemoveItem(id);
+				return;
+			}
 
-  const calculateSubtotal = () => {
-    return cartItems.reduce((total, item) => total + (item.price * item.quantity), 0);
-  };
+			// Firestore在庫チェック
+			const stockCheck = await checkStockAvailability(
+				id,
+				newQuantity,
+				user?.uid,
+				getSessionId()
+			);
 
-  const calculateDiscount = () => {
-    if (appliedPromo === 'PEPE10') {
-      return calculateSubtotal() * 0.1; // 10% discount
-    }
-    return 0;
-  };
+			if (!stockCheck.canReserve) {
+				let warningMessage = 'Cannot update quantity';
+				if (stockCheck.limitReasons.exceedsStock) {
+					warningMessage = `Only ${stockCheck.maxCanReserve} items available`;
+				} else if (stockCheck.limitReasons.exceedsOrderLimit) {
+					warningMessage = 'Exceeds order limit';
+				}
 
-  const calculateTotal = () => {
-    return calculateSubtotal() - calculateDiscount() + gasFeeEstimate;
-  };
+				setStockWarnings(prev => ({ ...prev, [id]: warningMessage }));
+				setTimeout(() => {
+					setStockWarnings(prev => ({ ...prev, [id]: '' }));
+				}, 3000);
+				return;
+			}
 
-  const formatPrice = (price: number, currency: string = 'ETH') => {
-    if (currency === 'ETH') {
-      return `Ξ ${price.toFixed(4)}`;
-    }
-    return `${price.toFixed(2)} ${currency}`;
-  };
+			// ローカル更新
+			updateQuantity(id, newQuantity, stockCheck.availableStock);
 
-  const convertToUSD = (ethAmount: number) => {
-    const ethToUSD = 3359.50; // Mock exchange rate
-    return (ethAmount * ethToUSD).toFixed(2);
-  };
+		} catch (error) {
+			console.error('Error updating quantity:', error);
+			setStockWarnings(prev => ({ ...prev, [id]: 'Update failed' }));
+			setTimeout(() => {
+				setStockWarnings(prev => ({ ...prev, [id]: '' }));
+			}, 3000);
+		} finally {
+			setIsUpdating(prev => ({ ...prev, [id]: false }));
+		}
+	};
 
-  const handleCheckout = () => {
-    // Checkout logic (Phase 4で実装)
-    console.log('Checkout initiated', { cartItems, total: calculateTotal(), paymentMethod: selectedPaymentMethod });
-  };
+	const handleRemoveItem = async (id: string) => {
+		setIsUpdating(prev => ({ ...prev, [id]: true }));
 
-  const handleContinueShopping = () => {
-    // Navigate back to shop (Phase 4で実装)
-    console.log('Continue shopping');
-  };
+		try {
+			// Firestore予約をキャンセル
+			await cancelReservation(id, user?.uid, getSessionId());
 
-  if (cartItems.length === 0) {
-    return (
-      <div className="space-y-8">
-        <div className="text-center">
-          <h2 className="text-3xl font-heading font-bold text-white mb-2">Shopping Cart</h2>
-          <p className="text-gray-400">Your cart is currently empty</p>
-        </div>
+			// ローカルカートから削除
+			removeFromCart(id);
 
-        <CyberCard showEffects={false} className="text-center py-12">
-          <ShoppingCart className="w-16 h-16 text-gray-400 mx-auto mb-4" />
-          <h3 className="text-xl font-semibold text-white mb-2">Your cart is empty</h3>
-          <p className="text-gray-400 mb-6">Add some premium protein to get started</p>
-          <CyberButton variant="primary" onClick={handleContinueShopping}>
-            Start Shopping
-          </CyberButton>
-        </CyberCard>
-      </div>
-    );
-  }
+		} catch (error) {
+			console.error('Error removing item:', error);
+		} finally {
+			setIsUpdating(prev => ({ ...prev, [id]: false }));
+		}
+	};
 
-  return (
-    <div className="space-y-8">
-      {/* Header */}
-      <div className="text-center">
-        <h2 className="text-3xl font-heading font-bold text-white mb-2">
-          Shopping Cart
-        </h2>
-        <p className="text-gray-400">
-          Review your items and proceed to checkout
-        </p>
-      </div>
+	const applyPromoCode = () => {
+		const validPromoCodes = ['pepe10', 'blockchain15', 'web3save'];
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-        {/* Cart Items */}
-        <div className="lg:col-span-2 space-y-4">
-          <CyberCard title={`Cart Items (${cartItems.length})`} showEffects={false}>
-            <div className="space-y-4">
-              {cartItems.map((item) => (
-                <div key={item.id} className="flex items-center space-x-4 p-4 border border-dark-300 rounded-sm">
-                  {/* Product Image */}
-                  <div className="w-16 h-16 bg-gradient-to-br from-neonGreen to-neonOrange rounded-sm flex items-center justify-center">
-                    <ShoppingCart className="w-8 h-8 text-black" />
-                  </div>
+		if (validPromoCodes.includes(promoCode.toLowerCase())) {
+			setAppliedPromo(promoCode.toUpperCase());
+			setPromoCode('');
+			setShowPromoError(false);
+		} else {
+			setShowPromoError(true);
+			setTimeout(() => setShowPromoError(false), 3000);
+		}
+	};
 
-                  {/* Product Info */}
-                  <div className="flex-1">
-                    <h3 className="text-white font-semibold">{item.name}</h3>
-                    <p className="text-sm text-gray-400">Premium whey protein blend</p>
-                    <div className="text-neonGreen font-bold">
-                      {formatPrice(item.price, item.currency)}
-                      <span className="text-xs text-gray-400 ml-2">
-                        (≈ ${convertToUSD(item.price)})
-                      </span>
-                    </div>
-                  </div>
+	const removePromoCode = () => {
+		setAppliedPromo(null);
+	};
 
-                  {/* Quantity Controls */}
-                  <div className="flex items-center space-x-2">
-                    <button
-                      onClick={() => updateQuantity(item.id, item.quantity - 1)}
-                      className="w-8 h-8 border border-dark-300 rounded-sm flex items-center justify-center text-white hover:bg-dark-200 transition-colors"
-                    >
-                      <Minus className="w-4 h-4" />
-                    </button>
-                    <span className="w-12 text-center text-white font-medium">{item.quantity}</span>
-                    <button
-                      onClick={() => updateQuantity(item.id, item.quantity + 1)}
-                      className="w-8 h-8 border border-dark-300 rounded-sm flex items-center justify-center text-white hover:bg-dark-200 transition-colors"
-                    >
-                      <Plus className="w-4 h-4" />
-                    </button>
-                  </div>
+	const calculateSubtotal = () => {
+		return getCartTotal();
+	};
 
-                  {/* Item Total */}
-                  <div className="text-right">
-                    <div className="text-white font-bold">
-                      {formatPrice(item.price * item.quantity, item.currency)}
-                    </div>
-                    <div className="text-xs text-gray-400">
-                      ≈ ${convertToUSD(item.price * item.quantity)}
-                    </div>
-                  </div>
+	const calculateDiscount = () => {
+		const subtotal = calculateSubtotal();
+		switch (appliedPromo) {
+			case 'PEPE10':
+				return subtotal * 0.1; // 10% discount
+			case 'BLOCKCHAIN15':
+				return subtotal * 0.15; // 15% discount
+			case 'WEB3SAVE':
+				return Math.min(subtotal * 0.05, 5); // 5% discount, max $5
+			default:
+				return 0;
+		}
+	};
 
-                  {/* Remove Button */}
-                  <button
-                    onClick={() => removeItem(item.id)}
-                    className="p-2 text-red-400 hover:text-red-300 hover:bg-red-900/20 rounded-sm transition-colors"
-                  >
-                    <Trash2 className="w-4 h-4" />
-                  </button>
-                </div>
-              ))}
-            </div>
-          </CyberCard>
+	const calculateTotal = () => {
+		return calculateSubtotal() - calculateDiscount() + gasFeeEstimate;
+	};
 
-          {/* Promo Code */}
-          <CyberCard title="Promo Code" showEffects={false}>
-            <div className="space-y-4">
-              {appliedPromo ? (
-                <div className="flex items-center justify-between p-3 border border-neonGreen/30 rounded-sm bg-neonGreen/5">
-                  <div className="flex items-center space-x-2">
-                    <Gift className="w-5 h-5 text-neonGreen" />
-                    <span className="text-white font-medium">{appliedPromo} Applied</span>
-                    <span className="text-sm text-neonGreen">10% off</span>
-                  </div>
-                  <button
-                    onClick={removePromoCode}
-                    className="text-red-400 hover:text-red-300 transition-colors"
-                  >
-                    <Trash2 className="w-4 h-4" />
-                  </button>
-                </div>
-              ) : (
-                <div className="flex space-x-2">
-                  <input
-                    type="text"
-                    value={promoCode}
-                    onChange={(e) => setPromoCode(e.target.value)}
-                    placeholder="Enter promo code"
-                    className="flex-1 px-3 py-2 bg-dark-200 border border-dark-300 rounded-sm text-white placeholder-gray-400 focus:border-neonGreen focus:outline-none"
-                  />
-                  <CyberButton variant="outline" onClick={applyPromoCode}>
-                    Apply
-                  </CyberButton>
-                </div>
-              )}
-            </div>
-          </CyberCard>
-        </div>
+	const formatPrice = (price: number, currency: string = 'USD') => {
+		if (currency === 'ETH') {
+			return `Ξ ${price.toFixed(4)}`;
+		}
+		return `$${price.toFixed(2)} ${currency}`;
+	};
 
-        {/* Order Summary */}
-        <div className="lg:col-span-1">
-          <CyberCard title="Order Summary" showEffects={false}>
-            <div className="space-y-4">
-              {/* Payment Method Selection */}
-              <div>
-                <label className="block text-sm font-medium text-white mb-2">Payment Method</label>
-                <div className="space-y-2">
-                  {(['ETH', 'USDC', 'USDT'] as const).map((method) => (
-                    <label key={method} className="flex items-center space-x-2 cursor-pointer">
-                      <input
-                        type="radio"
-                        name="paymentMethod"
-                        value={method}
-                        checked={selectedPaymentMethod === method}
-                        onChange={(e) => setSelectedPaymentMethod(e.target.value as any)}
-                        className="text-neonGreen"
-                      />
-                      <span className="text-white">{method}</span>
-                    </label>
-                  ))}
-                </div>
-              </div>
+	const convertToUSD = (amount: number) => {
+		const ethToUSD = 3359.50; // Mock exchange rate
+		return (amount * ethToUSD).toFixed(2);
+	};
 
-              {/* Price Breakdown */}
-              <div className="space-y-3 pt-4 border-t border-dark-300">
-                <div className="flex justify-between">
-                  <span className="text-gray-400">Subtotal</span>
-                  <span className="text-white">{formatPrice(calculateSubtotal())}</span>
-                </div>
+	const handleCheckout = async () => {
+		try {
+			if (!user) {
+				// ログインが必要
+				window.dispatchEvent(new CustomEvent('openAuthModal'));
+				return;
+			}
 
-                {appliedPromo && (
-                  <div className="flex justify-between">
-                    <span className="text-gray-400">Discount ({appliedPromo})</span>
-                    <span className="text-neonGreen">-{formatPrice(calculateDiscount())}</span>
-                  </div>
-                )}
+			// 予約を確定
+			const reservationIds = cartItemsWithDetails
+				.map(item => item.reservationId)
+				.filter(Boolean) as string[];
 
-                <div className="flex justify-between">
-                  <div className="flex items-center space-x-1">
-                    <span className="text-gray-400">Gas Fee</span>
-                    <Info className="w-3 h-3 text-gray-400" />
-                  </div>
-                  <span className="text-gray-400">{formatPrice(gasFeeEstimate)}</span>
-                </div>
+			if (reservationIds.length > 0) {
+				const confirmResult = await confirmReservations(reservationIds);
 
-                <div className="flex justify-between pt-3 border-t border-dark-300">
-                  <span className="text-white font-semibold">Total</span>
-                  <div className="text-right">
-                    <div className="text-neonGreen font-bold text-lg">
-                      {formatPrice(calculateTotal())}
-                    </div>
-                    <div className="text-xs text-gray-400">
-                      ≈ ${convertToUSD(calculateTotal())}
-                    </div>
-                  </div>
-                </div>
-              </div>
+				if (!confirmResult.success || confirmResult.errors.length > 0) {
+					console.error('Some reservations could not be confirmed:', confirmResult.errors);
+				}
+			}
 
-              {/* Action Buttons */}
-              <div className="space-y-3 pt-4">
-                <CyberButton
-                  variant="primary"
-                  className="w-full flex items-center justify-center space-x-2"
-                  onClick={handleCheckout}
-                >
-                  <Zap className="w-4 h-4" />
-                  <span>Checkout with {selectedPaymentMethod}</span>
-                </CyberButton>
+			console.log('Checkout initiated', {
+				cartItems,
+				total: calculateTotal(),
+				paymentMethod: selectedPaymentMethod,
+				appliedPromo,
+				confirmedReservations: reservationIds
+			});
+		} catch (error) {
+			console.error('Checkout error:', error);
+		}
+	};
 
-                <CyberButton
-                  variant="outline"
-                  className="w-full"
-                  onClick={handleContinueShopping}
-                >
-                  Continue Shopping
-                </CyberButton>
-              </div>
+	const handleContinueShopping = () => {
+		openPanel('shop');
+	};
 
-              {/* Security Notice */}
-              <div className="flex items-start space-x-2 p-3 border border-yellow-600/30 rounded-sm bg-yellow-600/5">
-                <AlertCircle className="w-4 h-4 text-yellow-400 flex-shrink-0 mt-0.5" />
-                <div className="text-xs text-gray-300">
-                  All transactions are secured by smart contracts. Always verify the recipient address before confirming.
-                </div>
-              </div>
-            </div>
-          </CyberCard>
-        </div>
-      </div>
-    </div>
-  );
+	const handleClearCart = async () => {
+		try {
+			// 全ての予約をキャンセル
+			for (const item of cartItemsWithDetails) {
+				if (item.reservationId) {
+					await cancelReservation(item.id, user?.uid, getSessionId());
+				}
+			}
+
+			clearCart();
+		} catch (error) {
+			console.error('Error clearing cart:', error);
+		}
+	};
+
+	const getDiscountText = (promoCode: string) => {
+		switch (promoCode) {
+			case 'PEPE10':
+				return '10% off';
+			case 'BLOCKCHAIN15':
+				return '15% off';
+			case 'WEB3SAVE':
+				return '5% off (max $5)';
+			default:
+				return '';
+		}
+	};
+
+	// Firestore同期待ち
+	if (!isFirestoreSynced()) {
+		return (
+			<div className="space-y-8">
+				<div className="text-center">
+					<h2 className="text-3xl font-heading font-bold text-white mb-2">Shopping Cart</h2>
+					<p className="text-gray-400">Syncing with server...</p>
+				</div>
+
+				<div className="flex justify-center items-center h-64">
+					<Loader2 className="w-8 h-8 text-neonGreen animate-spin" />
+				</div>
+			</div>
+		);
+	}
+
+	if (cartItems.length === 0) {
+		return (
+			<div className="space-y-8">
+				<div className="text-center">
+					<h2 className="text-3xl font-heading font-bold text-white mb-2">Shopping Cart</h2>
+					<p className="text-gray-400">Your cart is currently empty</p>
+				</div>
+
+				<CyberCard showEffects={false} className="text-center py-12">
+					<ShoppingCart className="w-16 h-16 text-gray-400 mx-auto mb-4" />
+					<h3 className="text-xl font-semibold text-white mb-2">Your cart is empty</h3>
+					<p className="text-gray-400 mb-6">Add some premium protein to get started</p>
+					<CyberButton variant="primary" onClick={handleContinueShopping}>
+						Start Shopping
+					</CyberButton>
+				</CyberCard>
+			</div>
+		);
+	}
+
+	return (
+		<div className="space-y-8">
+			{/* Header */}
+			<div className="text-center">
+				<h2 className="text-3xl font-heading font-bold text-white mb-2">
+					Shopping Cart
+				</h2>
+				<p className="text-gray-400">
+					Review your items and proceed to checkout
+				</p>
+				{!isFirestoreSynced() && (
+					<p className="text-yellow-400 text-sm mt-1">
+						<Loader2 className="w-3 h-3 animate-spin inline mr-1" />
+						Syncing with server...
+					</p>
+				)}
+			</div>
+
+			{/* Promo Error */}
+			{showPromoError && (
+				<div className="fixed top-24 right-4 z-50 p-4 bg-red-600/10 border border-red-600 rounded-sm backdrop-blur-sm animate-pulse">
+					<div className="flex items-center space-x-2">
+						<AlertCircle className="w-5 h-5 text-red-400" />
+						<span className="text-red-400 font-medium">Invalid promo code</span>
+					</div>
+				</div>
+			)}
+
+			<div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+				{/* Cart Items */}
+				<div className="lg:col-span-2 space-y-4">
+					<CyberCard title={`Cart Items (${getCartItemCount()})`} showEffects={false}>
+						<div className="space-y-4">
+							{cartItemsWithDetails.map((item) => {
+								const isItemUpdating = isUpdating[item.id];
+								const stockWarning = stockWarnings[item.id];
+
+								return (
+									<div key={item.id} className="flex items-center space-x-4 p-4 border border-dark-300 rounded-sm relative">
+										{/* Loading Overlay */}
+										{isItemUpdating && (
+											<div className="absolute inset-0 bg-black/50 flex items-center justify-center rounded-sm z-10">
+												<Loader2 className="w-5 h-5 text-neonGreen animate-spin" />
+											</div>
+										)}
+
+										{/* Product Image */}
+										<div className="w-16 h-16 bg-gradient-to-br from-neonGreen to-neonOrange rounded-sm flex items-center justify-center">
+											<Package className="w-8 h-8 text-black" />
+										</div>
+
+										{/* Product Info */}
+										<div className="flex-1">
+											<h3 className="text-white font-semibold">{item.name}</h3>
+											<p className="text-sm text-gray-400">Premium whey protein blend</p>
+											<div className="text-neonGreen font-bold">
+												{formatPrice(item.price)}
+												<span className="text-xs text-gray-400 ml-2">per item</span>
+											</div>
+
+											{/* Reservation Info */}
+											<div className="flex items-center space-x-2 mt-1">
+												{item.reservationId && (
+													<div className="flex items-center space-x-1">
+														<Shield className="w-3 h-3 text-neonGreen" />
+														<span className="text-xs text-neonGreen">Reserved</span>
+													</div>
+												)}
+												{item.timeLeft && (
+													<div className="flex items-center space-x-1">
+														<Clock className="w-3 h-3 text-yellow-400" />
+														<span className="text-xs text-yellow-400">{item.timeLeft}</span>
+													</div>
+												)}
+											</div>
+
+											{/* Stock Warning */}
+											{stockWarning && (
+												<div className="text-xs text-red-400 mt-1">
+													{stockWarning}
+												</div>
+											)}
+										</div>
+
+										{/* Quantity Controls */}
+										<div className="flex items-center space-x-2">
+											<button
+												onClick={() => updateItemQuantity(item.id, item.quantity - 1)}
+												className="w-8 h-8 border border-dark-300 rounded-sm flex items-center justify-center text-white hover:bg-dark-200 transition-colors disabled:opacity-50"
+												disabled={isItemUpdating}
+											>
+												<Minus className="w-4 h-4" />
+											</button>
+											<span className="w-12 text-center text-white font-medium">{item.quantity}</span>
+											<button
+												onClick={() => updateItemQuantity(item.id, item.quantity + 1)}
+												className="w-8 h-8 border border-dark-300 rounded-sm flex items-center justify-center text-white hover:bg-dark-200 transition-colors disabled:opacity-50"
+												disabled={isItemUpdating}
+											>
+												<Plus className="w-4 h-4" />
+											</button>
+										</div>
+
+										{/* Item Total */}
+										<div className="text-right">
+											<div className="text-white font-bold">
+												{formatPrice(item.price * item.quantity)}
+											</div>
+											<div className="text-xs text-gray-400">
+												{item.quantity} × {formatPrice(item.price)}
+											</div>
+										</div>
+
+										{/* Remove Button */}
+										<button
+											onClick={() => handleRemoveItem(item.id)}
+											className="p-2 text-red-400 hover:text-red-300 hover:bg-red-900/20 rounded-sm transition-colors disabled:opacity-50"
+											title="Remove from cart"
+											disabled={isItemUpdating}
+										>
+											<Trash2 className="w-4 h-4" />
+										</button>
+									</div>
+								);
+							})}
+						</div>
+					</CyberCard>
+
+					{/* Promo Code */}
+					<CyberCard title="Promo Code" showEffects={false}>
+						<div className="space-y-4">
+							{appliedPromo ? (
+								<div className="flex items-center justify-between p-3 border border-neonGreen/30 rounded-sm bg-neonGreen/5">
+									<div className="flex items-center space-x-2">
+										<Gift className="w-5 h-5 text-neonGreen" />
+										<span className="text-white font-medium">{appliedPromo} Applied</span>
+										<span className="text-sm text-neonGreen">{getDiscountText(appliedPromo)}</span>
+									</div>
+									<button
+										onClick={removePromoCode}
+										className="text-red-400 hover:text-red-300 transition-colors"
+										title="Remove promo code"
+									>
+										<Trash2 className="w-4 h-4" />
+									</button>
+								</div>
+							) : (
+								<div className="space-y-2">
+									<div className="flex space-x-2">
+										<input
+											type="text"
+											value={promoCode}
+											onChange={(e) => setPromoCode(e.target.value)}
+											placeholder="Enter promo code (e.g., PEPE10)"
+											className="flex-1 px-3 py-2 bg-dark-200 border border-dark-300 rounded-sm text-white placeholder-gray-400 focus:border-neonGreen focus:outline-none"
+											onKeyPress={(e) => e.key === 'Enter' && applyPromoCode()}
+										/>
+										<CyberButton
+											variant="outline"
+											onClick={applyPromoCode}
+											disabled={!promoCode.trim()}
+										>
+											Apply
+										</CyberButton>
+									</div>
+									<div className="text-xs text-gray-400">
+										Try: PEPE10, BLOCKCHAIN15, WEB3SAVE
+									</div>
+								</div>
+							)}
+						</div>
+					</CyberCard>
+
+					{/* Cart Actions */}
+					<CyberCard showEffects={false}>
+						<div className="flex items-center justify-between">
+							<div className="text-sm text-gray-400">
+								Cart reservations expire in 15 minutes • Items expire in 30 days
+							</div>
+							<button
+								onClick={handleClearCart}
+								className="text-red-400 hover:text-red-300 text-sm transition-colors"
+							>
+								Clear Cart
+							</button>
+						</div>
+					</CyberCard>
+				</div>
+
+				{/* Order Summary */}
+				<div className="lg:col-span-1">
+					<CyberCard title="Order Summary" showEffects={false}>
+						<div className="space-y-4">
+							{/* Authentication Notice */}
+							{!user && (
+								<div className="p-3 border border-yellow-600/30 rounded-sm bg-yellow-600/5">
+									<div className="flex items-center space-x-2">
+										<AlertCircle className="w-4 h-4 text-yellow-400" />
+										<span className="text-xs text-yellow-400">Login required for checkout</span>
+									</div>
+								</div>
+							)}
+
+							{/* Payment Method Selection */}
+							<div>
+								<label className="block text-sm font-medium text-white mb-2">Payment Method</label>
+								<div className="space-y-2">
+									{(['ETH', 'USDC', 'USDT'] as const).map((method) => (
+										<label key={method} className="flex items-center space-x-2 cursor-pointer">
+											<input
+												type="radio"
+												name="paymentMethod"
+												value={method}
+												checked={selectedPaymentMethod === method}
+												onChange={(e) => setSelectedPaymentMethod(e.target.value as any)}
+												className="text-neonGreen focus:ring-neonGreen"
+											/>
+											<span className="text-white">{method}</span>
+											{method === 'ETH' && <span className="text-xs text-gray-400">(Recommended)</span>}
+										</label>
+									))}
+								</div>
+							</div>
+
+							{/* Price Breakdown */}
+							<div className="space-y-3 pt-4 border-t border-dark-300">
+								<div className="flex justify-between">
+									<span className="text-gray-400">Subtotal ({getCartItemCount()} items)</span>
+									<span className="text-white">{formatPrice(calculateSubtotal())}</span>
+								</div>
+
+								{appliedPromo && (
+									<div className="flex justify-between">
+										<span className="text-gray-400">Discount ({appliedPromo})</span>
+										<span className="text-neonGreen">-{formatPrice(calculateDiscount())}</span>
+									</div>
+								)}
+
+								<div className="flex justify-between">
+									<div className="flex items-center space-x-1">
+										<span className="text-gray-400">Network Fee</span>
+										<Info className="w-3 h-3 text-gray-400" />
+									</div>
+									<span className="text-gray-400">{formatPrice(gasFeeEstimate)}</span>
+								</div>
+
+								<div className="flex justify-between pt-3 border-t border-dark-300">
+									<span className="text-white font-semibold">Total</span>
+									<div className="text-right">
+										<div className="text-neonGreen font-bold text-lg">
+											{formatPrice(calculateTotal())}
+										</div>
+										<div className="text-xs text-gray-400">
+											≈ ${convertToUSD(calculateTotal())} USD
+										</div>
+									</div>
+								</div>
+							</div>
+
+							{/* Action Buttons */}
+							<div className="space-y-3 pt-4">
+								<CyberButton
+									variant="primary"
+									className="w-full flex items-center justify-center space-x-2"
+									onClick={handleCheckout}
+								>
+									<Zap className="w-4 h-4" />
+									<span>Checkout with {selectedPaymentMethod}</span>
+								</CyberButton>
+
+								<CyberButton
+									variant="outline"
+									className="w-full"
+									onClick={handleContinueShopping}
+								>
+									Continue Shopping
+								</CyberButton>
+							</div>
+
+							{/* Security Notice */}
+							<div className="flex items-start space-x-2 p-3 border border-yellow-600/30 rounded-sm bg-yellow-600/5">
+								<AlertCircle className="w-4 h-4 text-yellow-400 flex-shrink-0 mt-0.5" />
+								<div className="text-xs text-gray-300">
+									Secure checkout with blockchain verification. Items are reserved during checkout process.
+								</div>
+							</div>
+						</div>
+					</CyberCard>
+				</div>
+			</div>
+		</div>
+	);
 };
 
 export default CartSection;-e 
@@ -3013,97 +4125,264 @@ const WhitepaperSection: React.FC = () => {
 export default WhitepaperSection;-e 
 ### FILE: ./src/app/dashboard/components/sections/ShopSection.tsx
 
-// src/app/dashboard/components/sections/ShopSection.tsx
+// src/app/dashboard/components/sections/ShopSection.tsx (簡易版)
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import CyberCard from '../../../components/common/CyberCard';
 import CyberButton from '../../../components/common/CyberButton';
 import ProteinModel from '../../../components/home/glowing-3d-text/ProteinModel';
 import { useCart } from '../../context/DashboardContext';
-import { ShoppingCart, Star, Shield, Zap, Check } from 'lucide-react';
-
-interface Product {
-	id: string;
-	name: string;
-	description: string;
-	price: {
-		usd: number;
-	};
-	inStock: number;
-	rating: number;
-	features: string[];
-	nutritionFacts: {
-		protein: string;
-		fat: string;
-		carbs: string;
-		minerals: string;
-		allergen: string;
-	};
-}
+import { ShoppingCart, Star, Shield, Zap, Check, AlertTriangle, Clock, Loader2 } from 'lucide-react';
+import { ProductDetails } from '../../../../../types/product';
+import { getProductDetails, subscribeToProduct } from '@/lib/firestore/products';
 
 const ShopSection: React.FC = () => {
 	const [quantity, setQuantity] = useState(1);
 	const [selectedCurrency, setSelectedCurrency] = useState<'ETH' | 'USDC' | 'USDT'>('ETH');
 	const [showSuccessMessage, setShowSuccessMessage] = useState(false);
+	const [showStockWarning, setShowStockWarning] = useState(false);
+	const [stockWarningMessage, setStockWarningMessage] = useState('');
+	const [loading, setLoading] = useState(true);
+	const [product, setProduct] = useState<ProductDetails | null>(null);
+	const [isAddingToCart, setIsAddingToCart] = useState(false);
 
 	const { addToCart, cartItems } = useCart();
 
-	// 商品データ
-	const product: Product = {
-		id: 'pepe-protein-1',
-		name: 'Pepe Flavor Protein 1kg',
-		description: 'Premium whey protein with the legendary Pepe flavor. Built for the blockchain generation.',
-		price: {
-			usd: 27.8
-		},
-		inStock: 45,
-		rating: 4.9,
-		features: [
-			'Blockchain Verified Quality',
-			'Community Approved Formula',
-			'Meme-Powered Gains',
-			'Web3 Native Nutrition'
-		],
-		nutritionFacts: {
-			protein: '25g',
-			fat: '1.5g',
-			carbs: '2g',
-			minerals: '1g',
-			allergen: 'Milk'
-		}
-	};
+	// 固定の商品ID
+	const PRODUCT_ID = 'pepe-protein-1';
+
+	// 商品データをリアルタイムで取得
+	useEffect(() => {
+		let unsubscribe: (() => void) | null = null;
+
+		const loadProduct = async () => {
+			try {
+				setLoading(true);
+				
+				// 初回データ取得
+				const productData = await getProductDetails(PRODUCT_ID);
+				if (productData) {
+					setProduct(productData);
+				}
+				
+				// リアルタイム監視を開始
+				unsubscribe = subscribeToProduct(PRODUCT_ID, (firestoreProduct) => {
+					if (firestoreProduct) {
+						// FirestoreProductをProductDetailsに変換
+						const getStockLevel = (available: number, total: number): 'high' | 'medium' | 'low' | 'out' => {
+							if (available === 0) return 'out';
+							const ratio = available / total;
+							if (ratio > 0.5) return 'high';
+							if (ratio > 0.2) return 'medium';
+							return 'low';
+						};
+
+						const productDetails: ProductDetails = {
+							id: firestoreProduct.id,
+							name: firestoreProduct.name,
+							description: firestoreProduct.description,
+							price: {
+								usd: firestoreProduct.price.usd,
+								formatted: `$${firestoreProduct.price.usd.toFixed(2)}`
+							},
+							inventory: {
+								inStock: firestoreProduct.inventory.availableStock,
+								isAvailable: firestoreProduct.inventory.availableStock > 0,
+								stockLevel: getStockLevel(firestoreProduct.inventory.availableStock, firestoreProduct.inventory.totalStock)
+							},
+							metadata: firestoreProduct.metadata,
+							settings: firestoreProduct.settings,
+							timestamps: {
+								createdAt: firestoreProduct.timestamps.createdAt.toDate(),
+								updatedAt: firestoreProduct.timestamps.updatedAt.toDate()
+							}
+						};
+						
+						setProduct(productDetails);
+					} else {
+						setProduct(null);
+					}
+				});
+				
+			} catch (error) {
+				console.error('Error loading product:', error);
+				setProduct(null);
+			} finally {
+				setLoading(false);
+			}
+		};
+
+		loadProduct();
+
+		return () => {
+			if (unsubscribe) {
+				unsubscribe();
+			}
+		};
+	}, [PRODUCT_ID]);
 
 	// カート内の商品数量を取得
 	const getCartQuantity = () => {
-		const cartItem = cartItems.find(item => item.id === product.id);
+		const cartItem = cartItems.find(item => item.id === PRODUCT_ID);
 		return cartItem ? cartItem.quantity : 0;
 	};
 
-
-	const handleAddToCart = () => {
-		const cartItem = {
-			id: product.id,
-			name: product.name,
-			price: product.price.usd,
-			quantity: quantity,
-			currency: selectedCurrency,
-		};
-
-		addToCart(cartItem);
-		setShowSuccessMessage(true);
-
-		setTimeout(() => {
-			setShowSuccessMessage(false);
-		}, 3000);
+	// 簡易在庫チェック（Firestoreトランザクションなし）
+	const checkSimpleStock = (requestedQuantity: number) => {
+		if (!product) return { canAdd: false, message: 'Product not found' };
+		
+		const currentCartQuantity = getCartQuantity();
+		const totalRequested = currentCartQuantity + requestedQuantity;
+		
+		// 在庫チェック
+		if (totalRequested > product.inventory.inStock) {
+			return { 
+				canAdd: false, 
+				message: `Only ${product.inventory.inStock - currentCartQuantity} items available` 
+			};
+		}
+		
+		// 注文制限チェック
+		if (totalRequested > product.settings.maxOrderQuantity) {
+			return { 
+				canAdd: false, 
+				message: `Maximum ${product.settings.maxOrderQuantity} items per order` 
+			};
+		}
+		
+		// 商品アクティブチェック
+		if (!product.settings.isActive) {
+			return { 
+				canAdd: false, 
+				message: 'Product is currently unavailable' 
+			};
+		}
+		
+		return { canAdd: true, message: '' };
 	};
 
-	const handleBuyNow = () => {
-		handleAddToCart();
-		console.log(`Generate invoice for: ${quantity}x ${product.name}`);
+	// 数量変更時のバリデーション
+	const handleQuantityChange = (newQuantity: number) => {
+		if (!product) return;
+
+		if (newQuantity < 1) {
+			setQuantity(1);
+			return;
+		}
+
+		const stockCheck = checkSimpleStock(newQuantity - quantity);
+		
+		if (!stockCheck.canAdd && newQuantity > quantity) {
+			setStockWarningMessage(stockCheck.message);
+			setShowStockWarning(true);
+			setTimeout(() => setShowStockWarning(false), 3000);
+			return;
+		}
+
+		const maxAllowed = Math.min(
+			product.inventory.inStock - getCartQuantity(),
+			product.settings.maxOrderQuantity - getCartQuantity(),
+			product.settings.maxOrderQuantity
+		);
+
+		setQuantity(Math.min(newQuantity, Math.max(1, maxAllowed)));
 	};
+
+	const handleAddToCart = async () => {
+		if (!product || isAddingToCart) return;
+
+		try {
+			setIsAddingToCart(true);
+
+			// 簡易在庫チェック
+			const stockCheck = checkSimpleStock(quantity);
+			
+			if (!stockCheck.canAdd) {
+				setStockWarningMessage(stockCheck.message);
+				setShowStockWarning(true);
+				setTimeout(() => setShowStockWarning(false), 3000);
+				return;
+			}
+
+			// ローカルカートに追加（Firestore予約なし）
+			const cartItem = {
+				id: product.id,
+				name: product.name,
+				price: product.price.usd,
+				quantity: quantity,
+				currency: selectedCurrency,
+			};
+
+			addToCart(cartItem, product.inventory.inStock);
+			setShowSuccessMessage(true);
+
+			setTimeout(() => {
+				setShowSuccessMessage(false);
+			}, 3000);
+
+			// 追加後は数量を1にリセット
+			setQuantity(1);
+
+		} catch (error) {
+			console.error('Error adding to cart:', error);
+			setStockWarningMessage('An error occurred. Please try again.');
+			setShowStockWarning(true);
+			setTimeout(() => setShowStockWarning(false), 3000);
+		} finally {
+			setIsAddingToCart(false);
+		}
+	};
+
+	// ローディング状態
+	if (loading) {
+		return (
+			<div className="space-y-8">
+				<div className="text-center">
+					<h2 className="text-3xl font-heading font-bold text-white mb-2">
+						Premium Protein Store
+					</h2>
+					<p className="text-gray-400">
+						Loading product information...
+					</p>
+				</div>
+				
+				<div className="flex justify-center items-center h-64">
+					<Loader2 className="w-8 h-8 text-neonGreen animate-spin" />
+				</div>
+			</div>
+		);
+	}
+
+	// 商品が見つからない場合
+	if (!product) {
+		return (
+			<div className="space-y-8">
+				<div className="text-center">
+					<h2 className="text-3xl font-heading font-bold text-white mb-2">
+						Premium Protein Store
+					</h2>
+					<p className="text-gray-400">
+						Product not found or currently unavailable
+					</p>
+				</div>
+				
+				<CyberCard showEffects={false} className="text-center py-12">
+					<AlertTriangle className="w-16 h-16 text-yellow-400 mx-auto mb-4" />
+					<h3 className="text-xl font-semibold text-white mb-2">Product Unavailable</h3>
+					<p className="text-gray-400 mb-6">This product is currently not available</p>
+				</CyberCard>
+			</div>
+		);
+	}
 
 	const currentCartQuantity = getCartQuantity();
+	const isOutOfStock = !product.inventory.isAvailable;
+	const isAtOrderLimit = currentCartQuantity >= product.settings.maxOrderQuantity;
+	const availableToAdd = Math.min(
+		product.inventory.inStock - currentCartQuantity,
+		product.settings.maxOrderQuantity - currentCartQuantity
+	);
 
 	return (
 		<div className="space-y-8">
@@ -3127,17 +4406,25 @@ const ShopSection: React.FC = () => {
 				</div>
 			)}
 
+			{/* Stock Warning */}
+			{showStockWarning && (
+				<div className="fixed top-24 right-4 z-50 p-4 bg-yellow-600/10 border border-yellow-600 rounded-sm backdrop-blur-sm animate-pulse">
+					<div className="flex items-center space-x-2">
+						<AlertTriangle className="w-5 h-5 text-yellow-400" />
+						<span className="text-yellow-400 font-medium">{stockWarningMessage}</span>
+					</div>
+				</div>
+			)}
+
 			{/* Product Display */}
 			<div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
 				{/* 3D Model */}
 				<CyberCard
 					variant="default"
 					showEffects={false}
-					className="h-[500px] w-full" // Increased height and padding
+					className="h-[500px] w-full"
 				>
-					{/* Model Container - Takes up most of the card space */}
 					<div className="h-full w-full flex flex-col">
-						{/* 3D Model - Expanded to fill most of the container */}
 						<div className="w-full h-[400px] pointer-events-auto">
 							<ProteinModel
 								scale={1}
@@ -3165,12 +4452,24 @@ const ShopSection: React.FC = () => {
 								{[...Array(5)].map((_, i) => (
 									<Star
 										key={i}
-										className={`w-4 h-4 ${i < Math.floor(product.rating) ? 'text-neonOrange fill-current' : 'text-gray-400'}`}
+										className={`w-4 h-4 ${i < Math.floor(product.metadata.rating) ? 'text-neonOrange fill-current' : 'text-gray-400'}`}
 									/>
 								))}
-								<span className="text-sm text-gray-400 ml-2">({product.rating})</span>
+								<span className="text-sm text-gray-400 ml-2">({product.metadata.rating})</span>
+								{product.metadata.reviewCount > 0 && (
+									<span className="text-sm text-gray-400">• {product.metadata.reviewCount} reviews</span>
+								)}
 							</div>
-							<span className="text-sm text-neonGreen">{product.inStock} in stock</span>
+							<span className={`text-sm ${
+								product.inventory.stockLevel === 'high' ? 'text-neonGreen' : 
+								product.inventory.stockLevel === 'medium' ? 'text-yellow-400' : 
+								product.inventory.stockLevel === 'low' ? 'text-orange-400' : 'text-red-400'
+							}`}>
+								{product.inventory.isAvailable ? 
+									`${product.inventory.inStock} in stock` : 
+									'Out of stock'
+								}
+							</span>
 						</div>
 						<p className="text-gray-400 leading-relaxed">
 							{product.description}
@@ -3182,7 +4481,7 @@ const ShopSection: React.FC = () => {
 						<div className="flex items-center justify-between">
 							<div>
 								<div className="text-sm text-gray-400">
-									$ {product.price.usd} USD
+									{product.price.formatted}
 								</div>
 							</div>
 							<div className="text-right">
@@ -3192,13 +4491,48 @@ const ShopSection: React.FC = () => {
 						</div>
 					</div>
 
+					{/* Cart Status */}
+					{currentCartQuantity > 0 && (
+						<div className="flex items-center space-x-2 p-3 border border-neonGreen/30 rounded-sm bg-neonGreen/5">
+							<ShoppingCart className="w-4 h-4 text-neonGreen" />
+							<span className="text-sm text-neonGreen">
+								{currentCartQuantity} item{currentCartQuantity > 1 ? 's' : ''} in cart
+							</span>
+						</div>
+					)}
+
+					{/* Stock Level Indicator */}
+					{product.inventory.isAvailable && (
+						<div className={`flex items-center space-x-2 p-2 rounded-sm ${
+							product.inventory.stockLevel === 'high' ? 'bg-neonGreen/5 border border-neonGreen/20' :
+							product.inventory.stockLevel === 'medium' ? 'bg-yellow-400/5 border border-yellow-400/20' :
+							'bg-orange-400/5 border border-orange-400/20'
+						}`}>
+							<div className={`w-2 h-2 rounded-full ${
+								product.inventory.stockLevel === 'high' ? 'bg-neonGreen' :
+								product.inventory.stockLevel === 'medium' ? 'bg-yellow-400' :
+								'bg-orange-400'
+							}`}></div>
+							<span className={`text-xs ${
+								product.inventory.stockLevel === 'high' ? 'text-neonGreen' :
+								product.inventory.stockLevel === 'medium' ? 'text-yellow-400' :
+								'text-orange-400'
+							}`}>
+								{product.inventory.stockLevel === 'high' ? 'In Stock' :
+								 product.inventory.stockLevel === 'medium' ? 'Limited Stock' :
+								 'Low Stock'}
+							</span>
+						</div>
+					)}
+
 					{/* Quantity Selector */}
 					<div className="flex items-center space-x-4">
 						<label className="text-sm font-medium text-white">Quantity:</label>
 						<div className="flex items-center border border-dark-300 rounded-sm">
 							<button
-								onClick={() => setQuantity(Math.max(1, quantity - 1))}
-								className="px-3 py-2 text-white hover:bg-dark-200 transition-colors"
+								onClick={() => handleQuantityChange(quantity - 1)}
+								className="px-3 py-2 text-white hover:bg-dark-200 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+								disabled={quantity <= 1 || isAddingToCart}
 							>
 								-
 							</button>
@@ -3206,27 +4540,44 @@ const ShopSection: React.FC = () => {
 								{quantity}
 							</span>
 							<button
-								onClick={() => setQuantity(Math.min(10, quantity + 1))}
-								className="px-3 py-2 text-white hover:bg-dark-200 transition-colors"
+								onClick={() => handleQuantityChange(quantity + 1)}
+								className="px-3 py-2 text-white hover:bg-dark-200 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+								disabled={availableToAdd <= 0 || isOutOfStock || isAtOrderLimit || isAddingToCart}
 							>
 								+
 							</button>
 						</div>
-						{currentCartQuantity > 0 && (
-							<span className="text-sm text-neonGreen">
-								{currentCartQuantity} in cart
-							</span>
-						)}
+						<div className="text-xs text-gray-400">
+							{isOutOfStock ? 'Out of stock' : 
+							 isAtOrderLimit ? 'Max limit reached' :
+							 `Max ${product.settings.maxOrderQuantity}`}
+						</div>
 					</div>
+
+					{/* Stock/Order Warnings */}
+					{(isOutOfStock || isAtOrderLimit) && (
+						<div className="flex items-start space-x-2 p-3 border border-yellow-600/30 rounded-sm bg-yellow-600/5">
+							<AlertTriangle className="w-4 h-4 text-yellow-400 flex-shrink-0 mt-0.5" />
+							<div className="text-xs text-gray-300">
+								{isOutOfStock ? 'This item is currently out of stock.' :
+								 `Maximum order limit (${product.settings.maxOrderQuantity} items) reached for this product.`}
+							</div>
+						</div>
+					)}
 
 					<div className="space-y-3">
 						<CyberButton
 							variant="outline"
 							className="w-full flex items-center justify-center space-x-2"
 							onClick={handleAddToCart}
+							disabled={isOutOfStock || isAtOrderLimit || isAddingToCart || availableToAdd <= 0}
 						>
-							<ShoppingCart className="w-4 h-4" />
-							<span>Add to Cart</span>
+							{isAddingToCart ? (
+								<Loader2 className="w-4 h-4 animate-spin" />
+							) : (
+								<ShoppingCart className="w-4 h-4" />
+							)}
+							<span>{isAddingToCart ? 'Adding...' : 'Add to Cart'}</span>
 						</CyberButton>
 					</div>
 
@@ -3234,7 +4585,7 @@ const ShopSection: React.FC = () => {
 					<div className="space-y-3">
 						<h4 className="text-lg font-semibold text-white">Key Features</h4>
 						<div className="grid grid-cols-1 gap-2">
-							{product.features.map((feature, index) => (
+							{product.metadata.features.map((feature, index) => (
 								<div key={index} className="flex items-center space-x-2">
 									<div className="w-2 h-2 bg-neonGreen rounded-full"></div>
 									<span className="text-sm text-gray-300">{feature}</span>
@@ -3242,25 +4593,96 @@ const ShopSection: React.FC = () => {
 							))}
 						</div>
 					</div>
+
+					{/* Tags */}
+					{product.metadata.tags.length > 0 && (
+						<div className="space-y-3">
+							<h4 className="text-lg font-semibold text-white">Tags</h4>
+							<div className="flex flex-wrap gap-2">
+								{product.metadata.tags.map((tag, index) => (
+									<span 
+										key={index}
+										className="px-2 py-1 text-xs bg-dark-200 text-neonGreen border border-neonGreen/30 rounded-sm"
+									>
+										{tag}
+									</span>
+								))}
+							</div>
+						</div>
+					)}
 				</div>
-			</div >
+			</div>
 
 			{/* Nutrition Facts */}
-			< CyberCard
+			<CyberCard
 				title="Nutrition Facts"
 				description="Per 50g serving"
 				showEffects={false}
 			>
 				<div className="grid grid-cols-2 md:grid-cols-5 gap-4">
-					{Object.entries(product.nutritionFacts).map(([key, value]) => (
+					{Object.entries(product.metadata.nutritionFacts).map(([key, value]) => (
 						<div key={key} className="text-center">
 							<div className="text-lg font-bold text-neonGreen">{value}</div>
 							<div className="text-xs text-gray-400 capitalize">{key}</div>
 						</div>
 					))}
 				</div>
-			</CyberCard >
-		</div >
+			</CyberCard>
+
+			{/* Product Info */}
+			<div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+				<CyberCard
+					title="Product Information"
+					showEffects={false}
+				>
+					<div className="space-y-4">
+						<div className="flex justify-between">
+							<span className="text-gray-400">SKU:</span>
+							<span className="text-white">{product.id}</span>
+						</div>
+						<div className="flex justify-between">
+							<span className="text-gray-400">Category:</span>
+							<span className="text-white capitalize">{product.settings.category || 'Protein'}</span>
+						</div>
+						<div className="flex justify-between">
+							<span className="text-gray-400">Min Order:</span>
+							<span className="text-white">{product.settings.minOrderQuantity}</span>
+						</div>
+						<div className="flex justify-between">
+							<span className="text-gray-400">Max Order:</span>
+							<span className="text-white">{product.settings.maxOrderQuantity}</span>
+						</div>
+						<div className="flex justify-between">
+							<span className="text-gray-400">Updated:</span>
+							<span className="text-white">{product.timestamps.updatedAt.toLocaleDateString()}</span>
+						</div>
+					</div>
+				</CyberCard>
+
+				<CyberCard
+					title="Shipping & Returns"
+					showEffects={false}
+				>
+					<div className="space-y-4 text-sm text-gray-300">
+						<div className="flex items-center space-x-2">
+							<Zap className="w-4 h-4 text-neonGreen" />
+							<span>Fast shipping worldwide</span>
+						</div>
+						<div className="flex items-center space-x-2">
+							<Shield className="w-4 h-4 text-neonGreen" />
+							<span>30-day return guarantee</span>
+						</div>
+						<div className="flex items-center space-x-2">
+							<Check className="w-4 h-4 text-neonGreen" />
+							<span>Quality assured</span>
+						</div>
+						<p className="text-xs text-gray-400 mt-4">
+							All products are verified on the blockchain for authenticity and quality assurance.
+						</p>
+					</div>
+				</CyberCard>
+			</div>
+		</div>
 	);
 };
 
@@ -3451,14 +4873,6 @@ const DashboardGrid: React.FC<DashboardGridProps> = ({ onCardClick }) => {
       description: 'Manage your account and view history',
       icon: <User className="w-8 h-8 text-neonGreen" />,
       stats: 'Rank #42'
-    },
-    {
-      id: 'cart' as SectionType,
-      title: 'Cart',
-      description: 'Review and checkout your items',
-      icon: <ShoppingCart className="w-8 h-8 text-neonOrange" />,
-      stats: cartItemCount > 0 ? `${cartItemCount} Items` : '0 Items',
-      badge: cartItemCount > 0 ? 'Ready' : undefined
     }
   ];
 
@@ -3703,72 +5117,196 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
 
 import React, { createContext, useContext, useReducer, useEffect } from 'react';
 import { DashboardState, CartItem, UserProfile, SectionType } from '../../../../types/dashboard';
+import { 
+	cancelReservation, 
+	generateSessionId, 
+	getUserReservations,
+	startPeriodicCleanup,
+	stopPeriodicCleanup 
+} from '@/lib/firestore/inventory';
+import { useAuth } from '@/contexts/AuthContext';
+
+// カート有効期限（30日）
+const CART_EXPIRY_DAYS = 30;
+const CART_EXPIRY_MS = CART_EXPIRY_DAYS * 24 * 60 * 60 * 1000;
+
+// 拡張されたCartItemの型（有効期限付き）
+interface CartItemWithExpiry extends CartItem {
+	addedAt: string; // ISO string
+	reservationId?: string; // Firestore予約ID
+}
 
 // Actions
 type DashboardAction =
 	| { type: 'SET_USER_PROFILE'; payload: UserProfile | null }
-	| { type: 'ADD_TO_CART'; payload: CartItem }
+	| { type: 'ADD_TO_CART'; payload: CartItem & { maxStock?: number; reservationId?: string } }
 	| { type: 'REMOVE_FROM_CART'; payload: string }
-	| { type: 'UPDATE_CART_QUANTITY'; payload: { id: string; quantity: number } }
+	| { type: 'UPDATE_CART_QUANTITY'; payload: { id: string; quantity: number; maxStock?: number } }
 	| { type: 'CLEAR_CART' }
+	| { type: 'CLEAR_EXPIRED_ITEMS' }
+	| { type: 'SYNC_WITH_RESERVATIONS'; payload: CartItemWithExpiry[] }
 	| { type: 'LOAD_FROM_STORAGE'; payload: Partial<DashboardState> }
+	| { type: 'SET_HYDRATED'; payload: boolean }
 	| { type: 'SET_ACTIVE_SECTION'; payload: SectionType | null }
 	| { type: 'SET_SLIDE_OPEN'; payload: boolean };
 
+// Helper functions for cart management
+const isItemExpired = (addedAt: string): boolean => {
+	const addedTime = new Date(addedAt).getTime();
+	const currentTime = Date.now();
+	return currentTime - addedTime > CART_EXPIRY_MS;
+};
+
+const validateQuantity = (quantity: number, maxStock?: number): number => {
+	const validQuantity = Math.max(1, Math.min(quantity, 10)); // 最低1個、最大10個
+	return maxStock ? Math.min(validQuantity, maxStock) : validQuantity;
+};
+
+const removeExpiredItems = (items: CartItemWithExpiry[]): CartItemWithExpiry[] => {
+	return items.filter(item => !isItemExpired(item.addedAt));
+};
+
+//拡張されたDashboardStateの型
+interface ExtendedDashboardState extends DashboardState {
+	sessionId: string;
+	isFirestoreSynced: boolean;
+	isHydrated: boolean; // ハイドレーション完了フラグを追加
+}
+
 // Initial state
-const initialState: DashboardState = {
+const initialState: ExtendedDashboardState = {
 	activeSection: null,
 	isSlideOpen: false,
 	cartItems: [],
 	userProfile: null,
 	walletConnected: false,
+	sessionId: generateSessionId(),
+	isFirestoreSynced: false,
+	isHydrated: false, // 初期状態では false
 };
 
 // Reducer
-function dashboardReducer(state: DashboardState, action: DashboardAction): DashboardState {
+function dashboardReducer(state: ExtendedDashboardState, action: DashboardAction): ExtendedDashboardState {
 	switch (action.type) {
 		case 'SET_USER_PROFILE':
 			return { ...state, userProfile: action.payload };
 
 		case 'ADD_TO_CART': {
-			const existingItem = state.cartItems.find(item => item.id === action.payload.id);
+			const { maxStock, reservationId, ...itemData } = action.payload;
+			const newItem: CartItemWithExpiry = {
+				...itemData,
+				addedAt: new Date().toISOString(),
+				reservationId
+			};
+
+			// 期限切れアイテムを除去
+			const validItems = removeExpiredItems(state.cartItems as CartItemWithExpiry[]);
+			
+			const existingItem = validItems.find(item => item.id === newItem.id);
+			
 			if (existingItem) {
+				const newQuantity = validateQuantity(existingItem.quantity + newItem.quantity, maxStock);
 				return {
 					...state,
-					cartItems: state.cartItems.map(item =>
-						item.id === action.payload.id
-							? { ...item, quantity: item.quantity + action.payload.quantity }
+					cartItems: validItems.map(item =>
+						item.id === newItem.id
+							? { ...item, quantity: newQuantity, reservationId: reservationId || (item as CartItemWithExpiry).reservationId }
 							: item
 					),
 				};
 			}
+
+			// 新しいアイテムの数量検証
+			const validatedQuantity = validateQuantity(newItem.quantity, maxStock);
+			
 			return {
 				...state,
-				cartItems: [...state.cartItems, action.payload],
+				cartItems: [...validItems, { ...newItem, quantity: validatedQuantity }],
 			};
 		}
 
-		case 'REMOVE_FROM_CART':
+		case 'REMOVE_FROM_CART': {
+			const validItems = removeExpiredItems(state.cartItems as CartItemWithExpiry[]);
+			const itemToRemove = validItems.find(item => item.id === action.payload) as CartItemWithExpiry;
+			
+			// Firestore予約もキャンセル（非同期）
+			if (itemToRemove?.reservationId) {
+				cancelReservation(action.payload, undefined, state.sessionId)
+					.catch(error => console.error('Failed to cancel reservation:', error));
+			}
+			
 			return {
 				...state,
-				cartItems: state.cartItems.filter(item => item.id !== action.payload),
+				cartItems: validItems.filter(item => item.id !== action.payload),
 			};
+		}
 
-		case 'UPDATE_CART_QUANTITY':
+		case 'UPDATE_CART_QUANTITY': {
+			const { id, quantity, maxStock } = action.payload;
+			const validItems = removeExpiredItems(state.cartItems as CartItemWithExpiry[]);
+			
+			if (quantity <= 0) {
+				const itemToRemove = validItems.find(item => item.id === id) as CartItemWithExpiry;
+				
+				// Firestore予約もキャンセル（非同期）
+				if (itemToRemove?.reservationId) {
+					cancelReservation(id, undefined, state.sessionId)
+						.catch(error => console.error('Failed to cancel reservation:', error));
+				}
+				
+				return {
+					...state,
+					cartItems: validItems.filter(item => item.id !== id),
+				};
+			}
+
+			const validatedQuantity = validateQuantity(quantity, maxStock);
+			
 			return {
 				...state,
-				cartItems: state.cartItems.map(item =>
-					item.id === action.payload.id
-						? { ...item, quantity: Math.max(0, action.payload.quantity) }
+				cartItems: validItems.map(item =>
+					item.id === id
+						? { ...item, quantity: validatedQuantity }
 						: item
-				).filter(item => item.quantity > 0),
+				),
 			};
+		}
 
-		case 'CLEAR_CART':
+		case 'CLEAR_CART': {
+			// 全ての予約をキャンセル（非同期）
+			const itemsWithReservations = state.cartItems.filter(item => (item as CartItemWithExpiry).reservationId);
+			itemsWithReservations.forEach(item => {
+				cancelReservation(item.id, undefined, state.sessionId)
+					.catch(error => console.error('Failed to cancel reservation:', error));
+			});
+			
 			return { ...state, cartItems: [] };
+		}
 
-		case 'LOAD_FROM_STORAGE':
-			return { ...state, ...action.payload };
+		case 'CLEAR_EXPIRED_ITEMS': {
+			const validItems = removeExpiredItems(state.cartItems as CartItemWithExpiry[]);
+			return { ...state, cartItems: validItems };
+		}
+
+		case 'SYNC_WITH_RESERVATIONS': {
+			return { 
+				...state, 
+				cartItems: action.payload,
+				isFirestoreSynced: true 
+			};
+		}
+
+		case 'LOAD_FROM_STORAGE': {
+			// ストレージからロード時も期限チェック
+			const loadedData = { ...action.payload };
+			if (loadedData.cartItems) {
+				loadedData.cartItems = removeExpiredItems(loadedData.cartItems as CartItemWithExpiry[]);
+			}
+			return { ...state, ...loadedData };
+		}
+
+		case 'SET_HYDRATED':
+			return { ...state, isHydrated: action.payload };
 
 		case 'SET_ACTIVE_SECTION':
 			return { ...state, activeSection: action.payload };
@@ -3783,39 +5321,127 @@ function dashboardReducer(state: DashboardState, action: DashboardAction): Dashb
 
 // Context
 const DashboardContext = createContext<{
-	state: DashboardState;
+	state: ExtendedDashboardState;
 	dispatch: React.Dispatch<DashboardAction>;
 } | null>(null);
 
 // Provider
 export function DashboardProvider({ children }: { children: React.ReactNode }) {
 	const [state, dispatch] = useReducer(dashboardReducer, initialState);
+	const { user } = useAuth();
 
-	// Load from localStorage on mount
+	// Load from localStorage on mount (クライアントサイドのみ)
 	useEffect(() => {
+		// ブラウザ環境でのみ実行
+		if (typeof window === 'undefined') return;
+		
 		try {
 			const savedState = localStorage.getItem('dashboard-state');
 			if (savedState) {
 				const parsed = JSON.parse(savedState);
+				console.log('📦 Loading from localStorage:', parsed);
 				dispatch({ type: 'LOAD_FROM_STORAGE', payload: parsed });
 			}
 		} catch (error) {
 			console.error('Failed to load dashboard state from localStorage:', error);
+		} finally {
+			// ハイドレーション完了をマーク
+			dispatch({ type: 'SET_HYDRATED', payload: true });
 		}
 	}, []);
 
-	// Save to localStorage when state changes
+	// Firestore予約との同期
 	useEffect(() => {
+		const syncWithFirestore = async () => {
+			try {
+				const userId = user?.uid;
+				const sessionId = state.sessionId;
+				
+				// Firestore予約を取得
+				const reservations = await getUserReservations(userId, sessionId);
+				
+				if (reservations.length > 0) {
+					// 予約をカートアイテムに変換
+					const reservedItems: CartItemWithExpiry[] = reservations.map(reservation => ({
+						id: reservation.productId,
+						name: `Product ${reservation.productId}`, // 実際は商品データから取得
+						price: 27.8, // 実際は商品データから取得
+						quantity: reservation.quantity,
+						currency: 'ETH' as const,
+						addedAt: reservation.createdAt.toDate().toISOString(),
+						reservationId: reservation.id
+					}));
+					
+					// ローカルカートと予約を同期
+					dispatch({ type: 'SYNC_WITH_RESERVATIONS', payload: reservedItems });
+				}
+			} catch (error) {
+				console.error('Failed to sync with Firestore reservations:', error);
+			}
+		};
+
+		// 初回ロード時にFirestore同期
+		if (!state.isFirestoreSynced) {
+			syncWithFirestore();
+		}
+	}, [user, state.sessionId, state.isFirestoreSynced]);
+
+	// 定期的なクリーンアップの開始
+	useEffect(() => {
+		startPeriodicCleanup();
+		
+		return () => {
+			stopPeriodicCleanup();
+		};
+	}, []);
+
+	// Save to localStorage when state changes (ハイドレーション完了後のみ)
+	useEffect(() => {
+		// ハイドレーション完了前は保存しない
+		if (!state.isHydrated) return;
+		
 		try {
 			const stateToSave = {
 				cartItems: state.cartItems,
 				userProfile: state.userProfile,
+				sessionId: state.sessionId,
+				lastUpdated: new Date().toISOString(),
 			};
+			console.log('💾 Saving to localStorage:', stateToSave);
 			localStorage.setItem('dashboard-state', JSON.stringify(stateToSave));
 		} catch (error) {
 			console.error('Failed to save dashboard state to localStorage:', error);
 		}
-	}, [state.cartItems, state.userProfile]);
+	}, [state.cartItems, state.userProfile, state.sessionId, state.isHydrated]);
+
+	// Notify header about cart changes (ハイドレーション完了後のみ)
+	useEffect(() => {
+		// ハイドレーション完了前は通知しない
+		if (!state.isHydrated) return;
+		
+		const itemCount = state.cartItems.reduce((count, item) => count + item.quantity, 0);
+		
+		// カスタムイベントでヘッダーにカート数を通知
+		const cartUpdateEvent = new CustomEvent('cartUpdated', {
+			detail: { itemCount }
+		});
+		window.dispatchEvent(cartUpdateEvent);
+		console.log('🔔 Cart updated notification sent:', itemCount);
+	}, [state.cartItems, state.isHydrated]);
+
+	// Set up cart click handler for header
+	useEffect(() => {
+		const cartClickHandler = () => {
+			dispatch({ type: 'SET_ACTIVE_SECTION', payload: 'cart' });
+			dispatch({ type: 'SET_SLIDE_OPEN', payload: true });
+		};
+
+		// カスタムイベントでヘッダーにクリックハンドラーを登録
+		const handlerEvent = new CustomEvent('cartClickHandlerSet', {
+			detail: { clickHandler: cartClickHandler }
+		});
+		window.dispatchEvent(handlerEvent);
+	}, []);
 
 	return (
 		<DashboardContext.Provider value={{ state, dispatch }}>
@@ -3862,16 +5488,16 @@ export function usePanel() {
 export function useCart() {
 	const { state, dispatch } = useDashboard();
 
-	const addToCart = (item: CartItem) => {
-		dispatch({ type: 'ADD_TO_CART', payload: item });
+	const addToCart = (item: CartItem, maxStock?: number, reservationId?: string) => {
+		dispatch({ type: 'ADD_TO_CART', payload: { ...item, maxStock, reservationId } });
 	};
 
 	const removeFromCart = (id: string) => {
 		dispatch({ type: 'REMOVE_FROM_CART', payload: id });
 	};
 
-	const updateQuantity = (id: string, quantity: number) => {
-		dispatch({ type: 'UPDATE_CART_QUANTITY', payload: { id, quantity } });
+	const updateQuantity = (id: string, quantity: number, maxStock?: number) => {
+		dispatch({ type: 'UPDATE_CART_QUANTITY', payload: { id, quantity, maxStock } });
 	};
 
 	const clearCart = () => {
@@ -3886,6 +5512,55 @@ export function useCart() {
 		return state.cartItems.reduce((count, item) => count + item.quantity, 0);
 	};
 
+	// カート内のアイテムの残り有効期限を取得
+	const getItemTimeLeft = (addedAt: string) => {
+		const addedTime = new Date(addedAt).getTime();
+		const currentTime = Date.now();
+		const timeLeft = CART_EXPIRY_MS - (currentTime - addedTime);
+		
+		if (timeLeft <= 0) return null;
+		
+		const daysLeft = Math.floor(timeLeft / (24 * 60 * 60 * 1000));
+		const hoursLeft = Math.floor((timeLeft % (24 * 60 * 60 * 1000)) / (60 * 60 * 1000));
+		
+		if (daysLeft > 0) return `${daysLeft} day${daysLeft > 1 ? 's' : ''} left`;
+		if (hoursLeft > 0) return `${hoursLeft} hour${hoursLeft > 1 ? 's' : ''} left`;
+		return 'Expires soon';
+	};
+
+	// 在庫チェック機能
+	const checkStock = (id: string, requestedQuantity: number, availableStock: number) => {
+		const currentItem = state.cartItems.find(item => item.id === id);
+		const currentQuantity = currentItem ? currentItem.quantity : 0;
+		const totalRequested = currentQuantity + requestedQuantity;
+		
+		return {
+			canAdd: totalRequested <= availableStock && totalRequested <= 10,
+			maxCanAdd: Math.min(availableStock - currentQuantity, 10 - currentQuantity),
+			willExceedStock: totalRequested > availableStock,
+			willExceedLimit: totalRequested > 10
+		};
+	};
+
+	// Firestore予約情報を含むカートアイテムを取得
+	const getCartItemsWithReservations = () => {
+		return state.cartItems.map(item => {
+			const itemWithReservation = item as CartItemWithExpiry;
+			return {
+				...item,
+				reservationId: itemWithReservation.reservationId,
+				addedAt: itemWithReservation.addedAt,
+				timeLeft: getItemTimeLeft(itemWithReservation.addedAt)
+			};
+		});
+	};
+
+	// セッションIDを取得
+	const getSessionId = () => state.sessionId;
+
+	// Firestore同期状態を取得
+	const isFirestoreSynced = () => state.isFirestoreSynced;
+
 	return {
 		cartItems: state.cartItems,
 		addToCart,
@@ -3894,6 +5569,11 @@ export function useCart() {
 		clearCart,
 		getCartTotal,
 		getCartItemCount,
+		getItemTimeLeft,
+		checkStock,
+		getCartItemsWithReservations,
+		getSessionId,
+		isFirestoreSynced,
 	};
 }
 
@@ -6251,16 +7931,21 @@ if (typeof window !== 'undefined' && process.env.NEXT_PUBLIC_CLOUDFRONT_URL) {
 import { useRef } from 'react';
 import { useScroll } from 'framer-motion';
 import GlowingTextScene from './GlowingTextScene';
+import { useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
 import HeroModel from './HeroModel';
+import CyberButton from '../../common/CyberButton';
 const GlowingTextSection = () => {
 	const sectionRef = useRef<HTMLDivElement>(null);
-
+	const router = useRouter();
 	// スクロール位置の検出
 	const { scrollYProgress } = useScroll({
 		target: sectionRef as React.RefObject<HTMLElement>,
 		offset: ["start end", "end start"]
 	});
+	const handleNavigateToDashboard = () => {
+		router.push('/dashboard');
+	};
 
 	return (
 		<section
@@ -6320,8 +8005,11 @@ const GlowingTextSection = () => {
 					</tbody>
 				</table>
 			</div>
-
-
+			<div className="text-center mt-5">
+				<CyberButton variant="primary" className="px-4 py-2 text-l" onClick={handleNavigateToDashboard}>
+					How to buy
+				</CyberButton>
+			</div>
 		</section>
 	);
 };
@@ -6781,6 +8469,39 @@ import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useAuth } from '@/contexts/AuthContext';
 import { AuthModal } from '../auth/AuthModal';
+import { ShoppingCart } from 'lucide-react';
+
+// ダッシュボードページでのみカート機能を使用するためのhook
+const useCartInDashboard = () => {
+	const [cartItemCount, setCartItemCount] = useState(0);
+	const [onCartClick, setOnCartClick] = useState<(() => void) | null>(null);
+	const [isHydrated, setIsHydrated] = useState(false);
+
+	useEffect(() => {
+		// ハイドレーション完了を待つ
+		setIsHydrated(true);
+		
+		// カスタムイベントリスナーを追加してダッシュボードからカート情報を受信
+		const handleCartUpdate = (event: CustomEvent) => {
+			console.log('📨 Header received cart update:', event.detail.itemCount);
+			setCartItemCount(event.detail.itemCount);
+		};
+
+		const handleCartClickHandler = (event: CustomEvent) => {
+			setOnCartClick(() => event.detail.clickHandler);
+		};
+
+		window.addEventListener('cartUpdated', handleCartUpdate as EventListener);
+		window.addEventListener('cartClickHandlerSet', handleCartClickHandler as EventListener);
+
+		return () => {
+			window.removeEventListener('cartUpdated', handleCartUpdate as EventListener);
+			window.removeEventListener('cartClickHandlerSet', handleCartClickHandler as EventListener);
+		};
+	}, []);
+
+	return { cartItemCount: isHydrated ? cartItemCount : 0, onCartClick };
+};
 
 const Header = () => {
 	const [isVisible, setIsVisible] = useState(true);
@@ -6789,6 +8510,7 @@ const Header = () => {
 	const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
 
 	const { user, logout, loading } = useAuth();
+	const { cartItemCount, onCartClick } = useCartInDashboard();
 
 	useEffect(() => {
 		// カスタムイベントリスナーを追加してプロフィールページからログインモーダルを開く
@@ -6829,6 +8551,13 @@ const Header = () => {
 
 	const handleLoginClick = () => {
 		setIsAuthModalOpen(true);
+		setIsMobileMenuOpen(false);
+	};
+
+	const handleCartClick = () => {
+		if (onCartClick) {
+			onCartClick();
+		}
 		setIsMobileMenuOpen(false);
 	};
 
@@ -6891,6 +8620,27 @@ const Header = () => {
 									)}
 								</Link>
 							))}
+
+							{/* Cart Icon - Desktop */}
+							<button
+								onClick={handleCartClick}
+								className="relative p-2 text-gray-300 hover:text-white transition-colors duration-200 hover:bg-dark-200/50 rounded-sm group"
+								aria-label="Shopping cart"
+							>
+								<ShoppingCart className="w-6 h-6" />
+								
+								{/* Cart Badge */}
+								{cartItemCount > 0 && (
+									<div className="absolute -top-1 -right-1 w-5 h-5 bg-gradient-to-r from-neonGreen to-neonOrange rounded-full flex items-center justify-center">
+										<span className="text-xs font-bold text-black">
+											{cartItemCount > 99 ? '99+' : cartItemCount}
+										</span>
+									</div>
+								)}
+
+								{/* Glow effect */}
+								<div className="absolute inset-0 bg-gradient-to-r from-neonGreen/20 to-neonOrange/20 rounded-sm transform scale-0 group-hover:scale-100 transition-transform duration-200"></div>
+							</button>
 
 							{/* Authentication Section */}
 							{loading ? (
@@ -6968,6 +8718,24 @@ const Header = () => {
 									{link.label}
 								</Link>
 							))}
+
+							{/* Cart Icon - Mobile */}
+							<button
+								onClick={handleCartClick}
+								className="flex items-center justify-between w-full px-4 py-3 text-base font-medium text-gray-300 hover:text-white hover:bg-dark-200 transition-all duration-200 rounded-sm"
+							>
+								<div className="flex items-center space-x-3">
+									<ShoppingCart className="w-5 h-5" />
+									<span>Shopping Cart</span>
+								</div>
+								{cartItemCount > 0 && (
+									<div className="w-6 h-6 bg-gradient-to-r from-neonGreen to-neonOrange rounded-full flex items-center justify-center">
+										<span className="text-xs font-bold text-black">
+											{cartItemCount > 99 ? '99+' : cartItemCount}
+										</span>
+									</div>
+								)}
+							</button>
 
 							{/* Mobile Authentication Section */}
 							{loading ? (
@@ -8255,6 +10023,243 @@ export const sanitizeUserData = (data: UpdateUserProfile): UpdateUserProfile => 
 
 	return sanitized;
 };-e 
+### FILE: ./types/product.ts
+
+// types/product.ts
+import { Timestamp } from 'firebase/firestore';
+
+// Firestoreで管理する商品データの型
+export interface FirestoreProduct {
+  id: string;
+  name: string;
+  description: string;
+  
+  // 価格情報
+  price: {
+    usd: number;
+    eth?: number; // ETH価格（自動計算可能）
+  };
+  
+  // 在庫管理
+  inventory: {
+    totalStock: number;      // 総在庫数
+    availableStock: number;  // 利用可能在庫数
+    reservedStock: number;   // 予約済み在庫数（カート内商品）
+  };
+  
+  // メタデータ
+  metadata: {
+    rating: number;
+    reviewCount: number;
+    features: string[];
+    nutritionFacts: Record<string, string>;
+    images: string[];
+    tags: string[];
+  };
+  
+  // 設定
+  settings: {
+    maxOrderQuantity: number;
+    minOrderQuantity: number;
+    isActive: boolean;
+    category: string;
+    sku: string;
+  };
+  
+  // タイムスタンプ
+  timestamps: {
+    createdAt: Timestamp;
+    updatedAt: Timestamp;
+  };
+}
+
+// 商品作成用の型
+export interface CreateProductData {
+  name: string;
+  description: string;
+  price: {
+    usd: number;
+  };
+  inventory: {
+    totalStock: number;
+    availableStock: number;
+    reservedStock: 0;
+  };
+  metadata: {
+    rating: number;              // 0 から number に変更
+    reviewCount: number;         // 0 から number に変更
+    features: string[];
+    nutritionFacts: Record<string, string>;
+    images: string[];
+    tags: string[];
+  };
+  settings: {
+    maxOrderQuantity: number;
+    minOrderQuantity: 1;
+    isActive: boolean;
+    category: string;
+    sku: string;
+  };
+}
+
+// 商品更新用の部分型
+export interface UpdateProductData {
+  name?: string;
+  description?: string;
+  price?: Partial<FirestoreProduct['price']>;
+  metadata?: Partial<FirestoreProduct['metadata']>;
+  settings?: Partial<FirestoreProduct['settings']>;
+}
+
+// 在庫更新用の型
+export interface UpdateInventoryData {
+  totalStock?: number;
+  availableStock?: number;
+  reservedStock?: number;
+}
+
+// カート予約の型
+export interface CartReservation {
+  id: string;                    // 予約ID（ユニーク）
+  userId?: string;               // ユーザーID（ログイン済みの場合）
+  sessionId: string;             // セッションID（匿名ユーザー用）
+  productId: string;
+  quantity: number;
+  
+  // タイムスタンプ
+  createdAt: Timestamp;
+  expiresAt: Timestamp;          // 予約期限（15分後）
+  
+  // 状態
+  status: 'active' | 'expired' | 'confirmed' | 'cancelled';
+}
+
+// 在庫チェック結果の型
+export interface StockCheckResult {
+  productId: string;
+  requestedQuantity: number;
+  
+  // 在庫状況
+  totalStock: number;
+  availableStock: number;
+  reservedStock: number;
+  
+  // チェック結果
+  canReserve: boolean;
+  maxCanReserve: number;
+  
+  // 制限理由
+  limitReasons: {
+    exceedsStock: boolean;
+    exceedsOrderLimit: boolean;
+    productInactive: boolean;
+  };
+  
+  // 既存予約情報
+  existingReservation?: {
+    quantity: number;
+    expiresAt: Timestamp;
+  };
+}
+
+// 商品フィルター・検索用の型
+export interface ProductFilters {
+  category?: string;
+  isActive?: boolean;
+  minPrice?: number;
+  maxPrice?: number;
+  inStock?: boolean;
+  tags?: string[];
+  searchQuery?: string;
+}
+
+// 商品ソート用の型
+export interface ProductSortOptions {
+  field: 'name' | 'price.usd' | 'metadata.rating' | 'timestamps.createdAt' | 'inventory.availableStock';
+  direction: 'asc' | 'desc';
+}
+
+// 商品リスト取得のオプション
+export interface GetProductsOptions {
+  filters?: ProductFilters;
+  sort?: ProductSortOptions;
+  limit?: number;
+  offset?: number;
+}
+
+// ダッシュボード表示用に簡略化された商品型
+export interface ProductSummary {
+  id: string;
+  name: string;
+  price: number;
+  availableStock: number;
+  isActive: boolean;
+  category: string;
+  rating: number;
+  image?: string;
+}
+
+// 商品詳細表示用の型（FirestoreProductの表示用ラッパー）
+export interface ProductDetails {
+  id: string;
+  name: string;
+  description: string;
+  price: {
+    usd: number;
+    formatted: string;
+  };
+  inventory: {
+    inStock: number;
+    isAvailable: boolean;
+    stockLevel: 'high' | 'medium' | 'low' | 'out';
+  };
+  metadata: {
+    rating: number;
+    reviewCount: number;
+    features: string[];
+    nutritionFacts: Record<string, string>;
+    images: string[];
+    tags: string[];
+  };
+  settings: {
+    maxOrderQuantity: number;
+    minOrderQuantity: number;
+  };
+  timestamps: {
+    createdAt: Date;
+    updatedAt: Date;
+  };
+}
+
+// バッチ処理用の型
+export interface BatchInventoryUpdate {
+  productId: string;
+  updates: UpdateInventoryData;
+}
+
+// 統計・分析用の型
+export interface ProductAnalytics {
+  productId: string;
+  views: number;
+  cartAdditions: number;
+  purchases: number;
+  conversionRate: number;
+  averageRating: number;
+  totalRevenue: number;
+  period: {
+    from: Date;
+    to: Date;
+  };
+}
+
+// エラー型
+export interface ProductError {
+  code: 'not-found' | 'insufficient-stock' | 'reservation-expired' | 'product-inactive' | 'validation-error';
+  message: string;
+  productId?: string;
+  requestedQuantity?: number;
+  availableStock?: number;
+}-e 
 ### FILE: ./types/react-three-fiber.d.ts
 
 // types/react-three-fiber.d.ts
@@ -8485,6 +10490,167 @@ export interface ProfileCompleteness {
 	missingFields: string[];
 	requiredFields: (keyof FirestoreUser)[];
 }-e 
+### FILE: ./scripts/seedProductsAdmin.js
+
+// scripts/seedProductsAdmin.js
+const admin = require('firebase-admin');
+const dotenv = require('dotenv');
+
+// 環境変数を読み込み
+dotenv.config({ path: '.env.local' });
+
+// Admin SDK を初期化
+try {
+  admin.initializeApp({
+    projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID || 'we-are-onchain',
+  });
+  console.log('🔧 Using Firebase Admin SDK with project:', process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID || 'we-are-onchain');
+} catch (error) {
+  console.error('❌ Firebase Admin initialization error:', error.message);
+  process.exit(1);
+}
+
+const db = admin.firestore();
+
+// 商品データ
+const products = [
+  {
+    id: 'pepe-protein-1',
+    name: 'Pepe Flavor Protein 1kg',
+    description: 'Premium whey protein with the legendary Pepe flavor. Built for the blockchain generation. This high-quality protein powder delivers 25g of protein per serving and is perfect for post-workout recovery.',
+    price: {
+      usd: 27.8
+    },
+    inventory: {
+      totalStock: 100,
+      availableStock: 45,
+      reservedStock: 0
+    },
+    metadata: {
+      rating: 4.9,
+      reviewCount: 127,
+      features: [
+        'Blockchain Verified Quality',
+        'Community Approved Formula',
+        'Meme-Powered Gains',
+        'Web3 Native Nutrition',
+        'Premium Whey Isolate',
+        'No Artificial Colors'
+      ],
+      nutritionFacts: {
+        protein: '25g',
+        fat: '1.5g',
+        carbs: '2g',
+        minerals: '1g',
+        allergen: 'Milk',
+        calories: '120'
+      },
+      images: [
+        '/images/pepe-protein-main.webp',
+        '/images/pepe-protein-side.webp',
+        '/images/pepe-protein-back.webp'
+      ],
+      tags: ['protein', 'whey', 'pepe', 'meme', 'premium', 'blockchain']
+    },
+    settings: {
+      maxOrderQuantity: 10,
+      minOrderQuantity: 1,
+      isActive: true,
+      category: 'protein',
+      sku: 'PEPE-PROT-1KG-001'
+    }
+  },
+  {
+    id: 'crypto-creatine-500g',
+    name: 'Crypto Creatine Monohydrate 500g',
+    description: 'Pure creatine monohydrate for maximum gains. Verified on the blockchain for authenticity and purity. Each serving provides 5g of micronized creatine.',
+    price: {
+      usd: 19.99
+    },
+    inventory: {
+      totalStock: 75,
+      availableStock: 68,
+      reservedStock: 0
+    },
+    metadata: {
+      rating: 4.7,
+      reviewCount: 89,
+      features: [
+        'Micronized Formula',
+        'Blockchain Verified Purity',
+        '99.9% Pure Creatine',
+        'No Fillers Added',
+        'Third-Party Tested'
+      ],
+      nutritionFacts: {
+        creatine: '5g',
+        calories: '0',
+        fat: '0g',
+        carbs: '0g',
+        protein: '0g',
+        allergen: 'None'
+      },
+      images: [
+        '/images/crypto-creatine-main.webp'
+      ],
+      tags: ['creatine', 'crypto', 'pure', 'strength', 'performance']
+    },
+    settings: {
+      maxOrderQuantity: 5,
+      minOrderQuantity: 1,
+      isActive: true,
+      category: 'supplements',
+      sku: 'CRYPTO-CREAT-500G-001'
+    }
+  }
+];
+
+// データ投入関数
+async function seedProducts() {
+  try {
+    console.log('🌱 Starting product data seeding with Admin SDK...');
+    
+    for (const product of products) {
+      const { id, ...productData } = product;
+      
+      // Firestoreドキュメントを作成
+      const productDoc = {
+        ...productData,
+        timestamps: {
+          createdAt: admin.firestore.FieldValue.serverTimestamp(),
+          updatedAt: admin.firestore.FieldValue.serverTimestamp()
+        }
+      };
+      
+      await db.collection('products').doc(id).set(productDoc);
+      
+      console.log(`✅ Product created: ${product.name} (${id})`);
+    }
+    
+    console.log('🎉 Product seeding completed successfully!');
+    console.log(`📊 Total products added: ${products.length}`);
+    
+  } catch (error) {
+    console.error('❌ Error seeding products:', error);
+    console.error('Error details:', error.message);
+    process.exit(1);
+  }
+}
+
+// スクリプト実行
+if (require.main === module) {
+  seedProducts()
+    .then(() => {
+      console.log('✨ Seeding process finished');
+      process.exit(0);
+    })
+    .catch((error) => {
+      console.error('💥 Seeding failed:', error);
+      process.exit(1);
+    });
+}
+
+module.exports = { seedProducts };-e 
 ### FILE: ./tailwind.config.js
 
 /** @type {import('tailwindcss').Config} */

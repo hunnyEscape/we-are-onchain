@@ -2,16 +2,21 @@
 import { useRef } from 'react';
 import { useScroll } from 'framer-motion';
 import GlowingTextScene from './GlowingTextScene';
+import { useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
 import HeroModel from './HeroModel';
+import CyberButton from '../../common/CyberButton';
 const GlowingTextSection = () => {
 	const sectionRef = useRef<HTMLDivElement>(null);
-
+	const router = useRouter();
 	// スクロール位置の検出
 	const { scrollYProgress } = useScroll({
 		target: sectionRef as React.RefObject<HTMLElement>,
 		offset: ["start end", "end start"]
 	});
+	const handleNavigateToDashboard = () => {
+		router.push('/dashboard');
+	};
 
 	return (
 		<section
@@ -71,8 +76,11 @@ const GlowingTextSection = () => {
 					</tbody>
 				</table>
 			</div>
-
-
+			<div className="text-center mt-5">
+				<CyberButton variant="primary" className="px-4 py-2 text-l" onClick={handleNavigateToDashboard}>
+					How to buy
+				</CyberButton>
+			</div>
 		</section>
 	);
 };

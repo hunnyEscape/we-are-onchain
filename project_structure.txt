@@ -1,6 +1,9 @@
 .
 ├── README.md
 ├── eslint.config.mjs
+├── firebase.json
+├── firestore.indexes.json
+├── firestore.rules
 ├── next-env.d.ts
 ├── next.config.js
 ├── package-lock.json
@@ -20,6 +23,8 @@
 │   ├── next.svg
 │   ├── vercel.svg
 │   └── window.svg
+├── scripts
+│   └── seedProductsAdmin.js
 ├── sphere.webm
 ├── src
 │   ├── app
@@ -105,6 +110,8 @@
 │   ├── lib
 │   │   ├── firebase.ts
 │   │   └── firestore
+│   │       ├── inventory.ts
+│   │       ├── products.ts
 │   │       └── users.ts
 │   └── utils
 │       ├── errorHandling.ts
@@ -114,7 +121,8 @@
 ├── tsconfig.json
 └── types
     ├── dashboard.ts
+    ├── product.ts
     ├── react-three-fiber.d.ts
     └── user.ts
 
-28 directories, 89 files
+29 directories, 96 files

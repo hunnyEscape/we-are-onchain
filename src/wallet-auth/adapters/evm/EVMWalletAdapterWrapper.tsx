@@ -7,8 +7,8 @@ import {
 	useConnect, 
 	useDisconnect, 
 	useSignMessage, 
-	useSwitchNetwork,
-	useNetwork
+	useSwitchChain,
+	useChainId
 } from 'wagmi';
 import { useConnectModal, useAccountModal } from '@rainbow-me/rainbowkit';
 import {
@@ -18,7 +18,6 @@ import {
 	WalletState,
 	WalletAuthResult
 } from '../../../../types/wallet';
-import { EVMWalletAdapter } from './EVMWalletAdapter';
 import { EVMAuthService } from './EVMAuthService';
 
 interface EVMWalletContextType {
@@ -26,8 +25,8 @@ interface EVMWalletContextType {
 	walletState: WalletState;
 	
 	// 接続管理
-	connect: (walletType?: string) => Promise<WalletConnection>;
-	disconnect: () => Promise<void>;
+	connectWallet: (walletType?: string) => Promise<WalletConnection>;
+	disconnectWallet: () => Promise<void>;
 	isConnecting: boolean;
 	isConnected: boolean;
 	
@@ -62,17 +61,16 @@ interface EVMWalletProviderProps {
 }
 
 /**
- * EVM Wallet用のReactプロバイダー
- * Wagmi hooksをラップして統一されたインターフェースを提供
+ * EVM Wallet用のReactプロバイダー（Wagmi v2対応）
  */
 export const EVMWalletProvider = ({ children }: EVMWalletProviderProps) => {
-	// Wagmi hooks
+	// Wagmi v2 hooks
 	const { address, isConnected, isConnecting, connector } = useAccount();
-	const { chain } = useNetwork();
-	const { connect: wagmiConnect, connectors, isLoading: isConnectLoading } = useConnect();
-	const { disconnect: wagmiDisconnect } = useDisconnect();
+	const chainId = useChainId();
+	const { connectAsync, connectors, isPending } = useConnect();
+	const { disconnectAsync } = useDisconnect();
 	const { signMessageAsync } = useSignMessage();
-	const { switchNetwork } = useSwitchNetwork();
+	const { switchChainAsync } = useSwitchChain();
 	const { openConnectModal } = useConnectModal();
 	const { openAccountModal } = useAccountModal();
 
@@ -83,12 +81,12 @@ export const EVMWalletProvider = ({ children }: EVMWalletProviderProps) => {
 
 	// ウォレット状態の構築
 	const walletState: WalletState = {
-		isConnecting: isConnecting || isConnectLoading,
+		isConnecting: isConnecting || isPending,
 		isConnected,
 		isAuthenticated,
 		address,
 		chainType: 'evm',
-		chainId: chain?.id,
+		chainId,
 		walletType: connector?.name,
 		error,
 	};
@@ -105,61 +103,74 @@ export const EVMWalletProvider = ({ children }: EVMWalletProviderProps) => {
 		setError(undefined);
 	}, []);
 
-	// 接続関数
-	const connect = useCallback(async (walletType?: string): Promise<WalletConnection> => {
+	// ウォレット接続
+	const connectWallet = useCallback(async (walletType?: string): Promise<WalletConnection> => {
 		try {
 			clearError();
 			
-			// RainbowKitモーダルを開く
+			// RainbowKitモーダルを開く方法を優先
 			if (openConnectModal) {
 				openConnectModal();
+				
+				// 接続完了を待機
+				return new Promise((resolve, reject) => {
+					const timeout = setTimeout(() => {
+						reject(new Error('Connection timeout'));
+					}, 30000);
+
+					const checkConnection = () => {
+						if (address && isConnected) {
+							clearTimeout(timeout);
+							resolve({
+								address,
+								chainType: 'evm',
+								chainId,
+								walletType: connector?.name || 'unknown',
+								isConnected: true,
+								connectedAt: new Date(),
+								lastUsedAt: new Date(),
+							});
+						}
+					};
+
+					// 既に接続済みの場合
+					if (address && isConnected) {
+						checkConnection();
+						return;
+					}
+
+					// 定期的にチェック
+					const interval = setInterval(checkConnection, 500);
+					setTimeout(() => {
+						clearInterval(interval);
+						clearTimeout(timeout);
+					}, 30000);
+				});
 			}
 
-			// 接続完了を待機（実際の接続はRainbowKitが処理）
-			// useAccountの状態変化で接続完了を検知
-			return new Promise((resolve, reject) => {
-				const checkConnection = () => {
-					if (address && isConnected) {
-						resolve({
-							address,
-							chainType: 'evm',
-							chainId: chain?.id,
-							walletType: connector?.name || 'unknown',
-							isConnected: true,
-							connectedAt: new Date(),
-							lastUsedAt: new Date(),
-						});
-					}
+			// フォールバック：直接接続
+			if (connectors.length > 0) {
+				const result = await connectAsync({ connector: connectors[0] });
+				return {
+					address: result.accounts[0],
+					chainType: 'evm',
+					chainId: result.chainId,
+					walletType: connector?.name || 'unknown',
+					isConnected: true,
+					connectedAt: new Date(),
+					lastUsedAt: new Date(),
 				};
+			}
 
-				// 既に接続済みの場合
-				if (address && isConnected) {
-					checkConnection();
-					return;
-				}
-
-				// 接続待機のタイムアウト
-				const timeout = setTimeout(() => {
-					reject(new Error('Connection timeout'));
-				}, 30000); // 30秒
-
-				// 状態変化の監視（簡易実装）
-				const interval = setInterval(() => {
-					if (address && isConnected) {
-						clearTimeout(timeout);
-						clearInterval(interval);
-						checkConnection();
-					}
-				}, 1000);
-			});
+			throw new Error('No connectors available');
 		} catch (error) {
 			handleError(error, 'connect');
 			throw error;
 		}
-	}, [address, isConnected, chain, connector, openConnectModal, clearError, handleError]);
+	}, [address, isConnected, chainId, connector, connectAsync, connectors, openConnectModal, clearError, handleError]);
 
-	// 切断関数
-	const disconnect = useCallback(async (): Promise<void> => {
+	// ウォレット切断
+	const disconnectWallet = useCallback(async (): Promise<void> => {
 		try {
 			clearError();
 			setIsAuthenticated(false);
@@ -169,14 +180,14 @@ export const EVMWalletProvider = ({ children }: EVMWalletProviderProps) => {
 				await authService.logout(address);
 			}
 			
-			await wagmiDisconnect();
+			await disconnectAsync();
 		} catch (error) {
 			handleError(error, 'disconnect');
 			throw error;
 		}
-	}, [wagmiDisconnect, address, authService, clearError, handleError]);
+	}, [disconnectAsync, address, authService, clearError, handleError]);
 
-	// 認証関数
+	// 認証
 	const authenticate = useCallback(async (): Promise<WalletAuthResult> => {
 		try {
 			clearError();
@@ -185,7 +196,7 @@ export const EVMWalletProvider = ({ children }: EVMWalletProviderProps) => {
 				throw new Error('Wallet not connected');
 			}
 
-			// 簡易的なアダプター作成（実際の署名は以下で実装）
+			// 簡易的なアダプター作成
 			const mockAdapter = {
 				isConnected: () => isConnected,
 				getAddress: () => address,
@@ -198,7 +209,7 @@ export const EVMWalletProvider = ({ children }: EVMWalletProviderProps) => {
 						signature,
 						address,
 						chainType: 'evm' as ChainType,
-						chainId: chain?.id,
+						chainId,
 						nonce,
 						timestamp: Date.now(),
 					};
@@ -221,7 +232,7 @@ export const EVMWalletProvider = ({ children }: EVMWalletProviderProps) => {
 				error: error instanceof Error ? error.message : 'Authentication failed'
 			};
 		}
-	}, [address, isConnected, chain, signMessageAsync, authService, clearError, handleError]);
+	}, [address, isConnected, chainId, signMessageAsync, authService, clearError, handleError]);
 
 	// メッセージ署名
 	const signMessage = useCallback(async (message: string): Promise<string> => {
@@ -256,7 +267,7 @@ export const EVMWalletProvider = ({ children }: EVMWalletProviderProps) => {
 				signature,
 				address,
 				chainType: 'evm',
-				chainId: chain?.id,
+				chainId,
 				nonce,
 				timestamp: Date.now(),
 			};
@@ -264,29 +275,28 @@ export const EVMWalletProvider = ({ children }: EVMWalletProviderProps) => {
 			handleError(error, 'signAuthMessage');
 			throw error;
 		}
-	}, [address, isConnected, chain, signMessage, authService, clearError, handleError]);
+	}, [address, isConnected, chainId, signMessage, authService, clearError, handleError]);
 
 	// チェーン切り替え
-	const switchChain = useCallback(async (chainId: number): Promise<void> => {
+	const switchChain = useCallback(async (targetChainId: number): Promise<void> => {
 		try {
 			clearError();
 			
-			if (!switchNetwork) {
+			if (!switchChainAsync) {
 				throw new Error('Chain switching not supported');
 			}
 			
-			switchNetwork(chainId);
+			await switchChainAsync({ chainId: targetChainId });
 		} catch (error) {
 			handleError(error, 'switchChain');
 			throw error;
 		}
-	}, [switchNetwork, clearError, handleError]);
+	}, [switchChainAsync, clearError, handleError]);
 
 	// 認証状態の復元
 	useEffect(() => {
 		const restoreAuthentication = async () => {
 			if (address && isConnected) {
-				// ローカルストレージからセッション確認
 				try {
 					const sessionKey = `wallet_session_${address.toLowerCase()}`;
 					const sessionData = localStorage.getItem(sessionKey);
@@ -313,12 +323,8 @@ export const EVMWalletProvider = ({ children }: EVMWalletProviderProps) => {
 			authService.cleanupExpiredSessions();
 		};
 
-		// 初回実行
 		cleanup();
-
-		// 1時間ごとに実行
 		const interval = setInterval(cleanup, 60 * 60 * 1000);
-
 		return () => clearInterval(interval);
 	}, [authService]);
 
@@ -328,15 +334,15 @@ export const EVMWalletProvider = ({ children }: EVMWalletProviderProps) => {
 		walletState,
 		
 		// 接続管理
-		connect,
-		disconnect,
+		connectWallet,
+		disconnectWallet,
 		isConnecting: walletState.isConnecting,
 		isConnected: walletState.isConnected,
 		
 		// ウォレット情報
 		address,
-		chainId: chain?.id,
-		chainName: chain?.name,
+		chainId,
+		chainName: chainId ? `Chain ${chainId}` : undefined,
 		
 		// 認証
 		authenticate,

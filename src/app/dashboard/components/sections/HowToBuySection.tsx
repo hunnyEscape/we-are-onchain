@@ -4,151 +4,167 @@
 import React, { useState } from 'react';
 import CyberCard from '../../../components/common/CyberCard';
 import CyberButton from '../../../components/common/CyberButton';
-import LiveDemoSection from '../../../components/payment/LiveDemoSection';
 import {
-	User,
 	ShoppingCart,
-	CreditCard,
-	Package,
-	Shield,
-	CheckCircle,
-	AlertTriangle,
-	ExternalLink,
-	Copy,
-	Clock,
-	Zap,
-	DollarSign,
-	Globe,
-	Mail,
-	Github,
-	Twitter,
-	MessageCircle,
-	QrCode,
 	Wallet,
-	TrendingUp,
-	ChevronDown,
-	ChevronUp,
-	Play
+	MapPin,
+	AlertTriangle,
+	Zap,
+	Star,
+	Monitor,
+	Smartphone
 } from 'lucide-react';
 
-interface PaymentMethod {
+interface PaymentChain {
 	id: string;
+	name: string;
 	symbol: string;
-	chain: string;
+	status: 'active' | 'coming-soon';
+	recommended?: boolean;
+	description: string;
 }
 
 interface WalletOption {
 	name: string;
 	description: string;
 	icon: React.ReactNode;
-	supported: boolean;
+	chains: string[];
+	type: 'browser' | 'mobile' | 'both';
+	popular?: boolean;
 }
 
 const HowToBuySection: React.FC = () => {
 	const [activeStep, setActiveStep] = useState(1);
-	const [isPaymentTableOpen, setIsPaymentTableOpen] = useState(false);
+	const [selectedChainType, setSelectedChainType] = useState<'evm' | 'solana' | 'all'>('all');
 
-	const paymentMethods: PaymentMethod[] = [
+	const paymentChains: PaymentChain[] = [
 		{
 			id: 'solana',
+			name: 'Solana',
 			symbol: '$SOL',
-			chain: 'Solana'
-		},
-		{
-			id: 'lightning',
-			symbol: '$BTC',
-			chain: 'Lightning'
+			status: 'active',
+			description: 'Ultra-fast with minimal fees'
 		},
 		{
 			id: 'avalanche',
+			name: 'Avalanche c-chain',
 			symbol: '$AVAX',
-			chain: 'Avalanche c-chain'
+			status: 'active',
+			recommended: true,
+			description: 'Fast and low-cost transactions'
+		},
+		{
+			id: 'ethereum',
+			name: 'Ethereum mainnet',
+			symbol: '$ETH',
+			status: 'active',
+			description: 'Most widely supported blockchain'
+		},
+		{
+			id: 'lightning',
+			name: 'Lightning',
+			symbol: '$BTC',
+			status: 'coming-soon',
+			description: 'Instant Bitcoin payments'
 		},
 		{
 			id: 'sui',
+			name: 'Sui',
 			symbol: '$SUI',
-			chain: 'SUI'
-		},
-		{
-			id: 'eth',
-			symbol: '$ETH',
-			chain: 'ETH'
+			status: 'coming-soon',
+			description: 'Next-generation blockchain'
 		}
 	];
 
 	const walletOptions: WalletOption[] = [
 		{
 			name: 'MetaMask',
-			description: 'Most popular browser wallet',
-			icon: <div className="w-8 h-8 bg-orange-500 rounded-sm flex items-center justify-center text-white text-xs font-bold">MM</div>,
-			supported: true
+			description: 'Most popular wallet',
+			icon: <div className="w-8 h-8 bg-orange-500 rounded-lg flex items-center justify-center text-white text-xs font-bold">MM</div>,
+			chains: ['ethereum', 'avalanche'],
+			type: 'both',
+			popular: true
 		},
 		{
-			name: 'Trust Wallet',
-			description: 'Mobile-first crypto wallet',
-			icon: <div className="w-8 h-8 bg-blue-400 rounded-sm flex items-center justify-center text-white text-xs font-bold">TW</div>,
-			supported: true
+			name: 'WalletConnect',
+			description: 'Connect mobile wallets',
+			icon: <div className="w-8 h-8 bg-blue-500 rounded-lg flex items-center justify-center text-white text-xs font-bold">WC</div>,
+			chains: ['ethereum', 'avalanche'],
+			type: 'mobile'
 		},
 		{
 			name: 'Coinbase Wallet',
 			description: 'Official Coinbase wallet',
-			icon: <div className="w-8 h-8 bg-blue-600 rounded-sm flex items-center justify-center text-white text-xs font-bold">CB</div>,
-			supported: true
+			icon: <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center text-white text-xs font-bold">CB</div>,
+			chains: ['ethereum', 'avalanche'],
+			type: 'both'
 		},
 		{
-			name: 'WalletConnect',
-			description: 'Connect various mobile wallets',
-			icon: <div className="w-8 h-8 bg-blue-500 rounded-sm flex items-center justify-center text-white text-xs font-bold">WC</div>,
-			supported: true
+			name: 'Phantom',
+			description: 'Leading Solana wallet',
+			icon: <div className="w-8 h-8 bg-purple-600 rounded-lg flex items-center justify-center text-white text-xs font-bold">👻</div>,
+			chains: ['solana'],
+			type: 'both',
+			popular: true
+		},
+		{
+			name: 'Solflare',
+			description: 'Solana wallet',
+			icon: <div className="w-8 h-8 bg-yellow-500 rounded-lg flex items-center justify-center text-white text-xs font-bold">SF</div>,
+			chains: ['solana'],
+			type: 'both'
 		}
 	];
 
 	const steps = [
 		{
 			id: 1,
-			title: 'Cart & Checkout',
-			description: 'Add products and set preferences',
-			details: `When you checkout. (1) Select your payment currency. (2) Set shipping address. International shipping available.`
+			title: 'Add to Cart & Checkout',
+			description: 'Select products and proceed to checkout',
+			details: 'No wallet connection or login required at this step'
 		},
 		{
 			id: 2,
-			title: 'Invoice Payment',
-			description: 'Pay using generated invoice URL',
-			details: 'Receive an invoice with QR code and payment address. Use any compatible wallet to send the exact amount to complete your purchase.'
-		},
-		{
-			id: 3,
-			title: 'Order Completion',
-			description: 'Automatic processing and shipping',
-			details: 'Transaction reflects in our system within seconds. Shipping process begins immediately after payment confirmation.'
+			title: 'Connect Wallet, Pay & Shipping Address',
+			description: 'Connect wallet, enter address, and complete payment',
+			details: 'Connect your crypto wallet, enter your shipping address, and complete the payment in one seamless process.'
 		}
 	];
 
-	const handleCopyAddress = (address: string) => {
-		navigator.clipboard.writeText(address);
+	const getFilteredWallets = () => {
+		if (selectedChainType === 'all') return walletOptions;
+		if (selectedChainType === 'evm') {
+			return walletOptions.filter(wallet =>
+				wallet.chains.some(chain => ['ethereum', 'avalanche'].includes(chain))
+			);
+		}
+		if (selectedChainType === 'solana') {
+			return walletOptions.filter(wallet => wallet.chains.includes('solana'));
+		}
+		return walletOptions;
 	};
 
-	const availableMethods = paymentMethods;
+	const activeChains = paymentChains.filter(chain => chain.status === 'active');
+	const comingSoonChains = paymentChains.filter(chain => chain.status === 'coming-soon');
 
 	return (
 		<div className="space-y-8">
-			{/* Header & Concept */}
+			{/* Header */}
 			<div className="text-center space-y-4">
 				<h2 className="text-3xl font-heading font-bold text-white mb-2">
 					How to Buy
 				</h2>
-				<p className="text-gray-400">
-					Only{' '}
-					<span className="text-purple-300 font-semibold">Solana</span>,{' '}
-					<span className="text-yellow-300 font-semibold">Lightning</span>,{' '}
-					<span className="text-red-400 font-semibold">Avalanche c-chain</span>,{' '}
-					<span className="text-gray-300 font-semibold">Ethereum mainnet</span>{' '}
-					and <span className="text-sky-300 font-semibold">Sui</span> are accepted.
+				<p className="text-gray-400 max-w-xl mx-auto text-lg leading-relaxed">
+					<span className="text-purple-400 font-semibold">Solana</span>,
+					<span className="text-red-400 font-semibold"> Avalanche c-chain</span> and
+					<span className="text-blue-400 font-semibold"> Ethereum mainnet</span> are accepted.
+					<span className="text-orange-400 font-semibold"> Lightning</span> and
+					<span className="text-sky-300 font-semibold"> Sui</span> are coming soon.
 				</p>
 			</div>
 
 			{/* Step-by-Step Guide */}
-			<CyberCard title="Step-by-Step Purchase Guide" showEffects={false}>
+			<CyberCard title="Purchase Process" showEffects={false}>
 				<div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
 					{/* Step Navigation */}
 					<div className="lg:col-span-1">
@@ -158,18 +174,18 @@ const HowToBuySection: React.FC = () => {
 									key={step.id}
 									onClick={() => setActiveStep(step.id)}
 									className={`
-                    w-full text-left p-4 rounded-sm border transition-all duration-200
-                    ${activeStep === step.id
+										w-full text-left p-4 rounded-lg border transition-all duration-200
+										${activeStep === step.id
 											? 'bg-neonGreen/10 border-neonGreen text-neonGreen'
 											: 'border-dark-300 text-gray-300 hover:border-gray-500 hover:text-white'
 										}
-                  `}
+									`}
 								>
 									<div className="flex items-center space-x-3">
 										<div className={`
-                      w-8 h-8 rounded-full flex items-center justify-center font-bold text-sm
-                      ${activeStep === step.id ? 'bg-neonGreen text-black' : 'bg-dark-300 text-gray-400'}
-                    `}>
+											w-8 h-8 rounded-full flex items-center justify-center font-bold text-sm
+											${activeStep === step.id ? 'bg-neonGreen text-black' : 'bg-dark-300 text-gray-400'}
+										`}>
 											{step.id}
 										</div>
 										<div>
@@ -195,151 +211,121 @@ const HowToBuySection: React.FC = () => {
 										</p>
 									</div>
 
-									{/* Step 1: Checkout Process */}
+									{/* Step 1: Add to Cart */}
 									{step.id === 1 && (
 										<div className="space-y-6">
-											{/* Important Notice */}
-											<div className="p-4 border border-yellow-600/30 rounded-sm bg-yellow-600/5">
-												<div className="flex items-start space-x-3">
-													<AlertTriangle className="w-5 h-5 text-yellow-400 flex-shrink-0 mt-0.5" />
-													<div>
-														<div className="text-yellow-400 font-medium mb-1">⚠️ No shipping processing until payment completion</div>
-														<div className="text-sm text-gray-300">
-															Even after checkout, orders can be cancelled until payment is completed via Invoice URL.
-														</div>
-													</div>
+											<div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+												<div className="p-4 border border-dark-300 rounded-lg">
+													<ShoppingCart className="w-6 h-6 text-neonGreen mb-2" />
+													<div className="text-white font-medium mb-1">Browse & Add</div>
+													<div className="text-sm text-gray-400">Select products and add to cart</div>
 												</div>
-											</div>
-
-											{/* Payment Currency Selection - Collapsible Table */}
-											<div className="border border-dark-300 rounded-sm">
-												<button
-													onClick={() => setIsPaymentTableOpen(!isPaymentTableOpen)}
-													className="w-full p-4 flex items-center justify-between bg-dark-200/30 hover:bg-dark-200/50 transition-colors"
-												>
-													<h4 className="text-lg font-semibold text-white">Payment Currency Selection</h4>
-													{isPaymentTableOpen ? (
-														<ChevronUp className="w-5 h-5 text-gray-400" />
-													) : (
-														<ChevronDown className="w-5 h-5 text-gray-400" />
-													)}
-												</button>
-
-												{isPaymentTableOpen && (
-													<div className="p-4 border-t border-dark-300">
-														<div className="overflow-x-auto">
-															<table className="w-full">
-																<thead>
-																	<tr className="border-b border-dark-300">
-																		<th className="text-left p-3 text-gray-300 font-medium">Method</th>
-																		<th className="text-left p-3 text-gray-300 font-medium">Currency</th>
-																	</tr>
-																</thead>
-																<tbody>
-																	{paymentMethods.map((method) => (
-																		<tr key={method.id} className="border-b border-dark-300/50 hover:bg-dark-200/20">
-																			<td className="p-3">
-																				<span className="text-sm bg-gray-600 px-2 py-1 rounded text-gray-200">
-																					{method.chain}
-																				</span>
-																			</td>
-																			<td className="p-3 text-white font-medium">
-																				{method.symbol}
-																			</td>
-																		</tr>
-																	))}
-																</tbody>
-															</table>
-														</div>
-													</div>
-												)}
+												<div className="p-4 border border-dark-300 rounded-lg">
+													<Zap className="w-6 h-6 text-neonOrange mb-2" />
+													<div className="text-white font-medium mb-1">Quick Checkout</div>
+													<div className="text-sm text-gray-400">Proceed to payment when ready</div>
+												</div>
 											</div>
 										</div>
 									)}
 
-									{/* Step 2: Invoice Payment - ★ LiveDemoSection統合 */}
+									{/* Step 2: Connect, Pay & Address */}
 									{step.id === 2 && (
 										<div className="space-y-6">
-											{/* Payment Process */}
 											<div>
-												<h4 className="text-lg font-semibold text-white mb-3">Payment Verification Steps</h4>
-												<div className="space-y-3">
-													<div className="flex items-center space-x-3 p-3 border border-dark-300 rounded-sm">
-														<div className="w-6 h-6 bg-neonGreen rounded-full flex items-center justify-center text-black font-bold text-sm">1</div>
-														<div className="text-gray-300">Amount Verification - Double-check the exact amount</div>
-													</div>
-													<div className="flex items-center space-x-3 p-3 border border-dark-300 rounded-sm">
-														<div className="w-6 h-6 bg-neonGreen rounded-full flex items-center justify-center text-black font-bold text-sm">2</div>
-														<div className="text-gray-300">Address Verification - Confirm the recipient address</div>
-													</div>
-													<div className="flex items-center space-x-3 p-3 border border-dark-300 rounded-sm">
-														<div className="w-6 h-6 bg-neonGreen rounded-full flex items-center justify-center text-black font-bold text-sm">3</div>
-														<div className="text-gray-300">Chain Verification - Ensure correct network for transaction</div>
-													</div>
-													<div className="flex items-center space-x-3 p-3 border border-dark-300 rounded-sm">
-														<div className="w-6 h-6 bg-neonGreen rounded-full flex items-center justify-center text-black font-bold text-sm">4</div>
-														<div className="text-gray-300">Gas Fee Confirmation - Review transaction fees</div>
-													</div>
-												</div>
-											</div>
-
-											{/* Supported Wallets */}
-											<div>
-												<h4 className="text-lg font-semibold text-white mb-3">Supported Wallets</h4>
-												<div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-													{walletOptions.map((wallet, index) => (
-														<div key={index} className="p-3 border border-dark-300 rounded-sm text-center">
-															{wallet.icon}
-															<div className="text-white font-medium text-sm mt-2">{wallet.name}</div>
-															<div className="text-xs text-gray-400">{wallet.description}</div>
+												<h4 className="text-lg font-semibold text-white mb-4">Choose Payment Method</h4>
+												<div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+													{activeChains.map((chain) => (
+														<div key={chain.id} className={`
+															p-4 border rounded-lg transition-all duration-200 hover:border-neonGreen/50
+														`}>
+															<div className="flex items-center space-x-3 mb-3">
+																<Wallet className="w-5 h-5 text-gray-400" />
+																<div>
+																	<div className="text-white font-medium">{chain.name}</div>
+																	<div className="text-sm text-gray-400">{chain.symbol}</div>
+																</div>
+															</div>
 														</div>
 													))}
 												</div>
 											</div>
 
-											{/* ★ Live Demo Section - 旧QR Code Demo Areaを置き換え */}
-											<div className="border border-neonGreen/30 rounded-sm bg-neonGreen/5 p-6">
-												<div className="flex items-center space-x-3 mb-4">
-													<Play className="w-6 h-6 text-neonGreen" />
-													<h4 className="text-lg font-semibold text-white">Live Payment Demo</h4>
-													<span className="text-xs bg-neonGreen/20 text-neonGreen px-2 py-1 rounded border border-neonGreen/50">
-														LIVE
-													</span>
+											{/* Supported Wallets */}
+											<div>
+												<div className="flex items-center justify-between mb-4">
+													<h4 className="text-lg font-semibold text-white">Supported Wallets</h4>
+													<div className="flex space-x-2">
+														<button
+															onClick={() => setSelectedChainType('all')}
+															className={`px-3 py-1 rounded text-xs transition-colors ${selectedChainType === 'all'
+																? 'bg-neonGreen/20 text-neonGreen border border-neonGreen/50'
+																: 'bg-dark-300 text-gray-400 hover:text-white'
+																}`}
+														>
+															All
+														</button>
+														<button
+															onClick={() => setSelectedChainType('evm')}
+															className={`px-3 py-1 rounded text-xs transition-colors ${selectedChainType === 'evm'
+																? 'bg-neonGreen/20 text-neonGreen border border-neonGreen/50'
+																: 'bg-dark-300 text-gray-400 hover:text-white'
+																}`}
+														>
+															EVM
+														</button>
+														<button
+															onClick={() => setSelectedChainType('solana')}
+															className={`px-3 py-1 rounded text-xs transition-colors ${selectedChainType === 'solana'
+																? 'bg-neonGreen/20 text-neonGreen border border-neonGreen/50'
+																: 'bg-dark-300 text-gray-400 hover:text-white'
+																}`}
+														>
+															Solana
+														</button>
+													</div>
 												</div>
 
-												<div className="mb-4 text-sm text-gray-300">
-													Experience the real payment flow with Avalanche FUJI testnet. Try sending a small amount to see how the system works.
+												<div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+													{getFilteredWallets().map((wallet, index) => (
+														<div key={index} className="p-3 border border-dark-300 rounded-lg hover:border-gray-500 transition-colors">
+															<div className="flex items-center space-x-3 mb-2">
+																{wallet.icon}
+																<div className="flex-1 min-w-0">
+																	<div className="text-white font-medium text-sm flex items-center">
+																		{wallet.name}
+																		{wallet.popular && <Star className="w-3 h-3 text-yellow-400 ml-1" />}
+																	</div>
+																</div>
+															</div>
+															<div className="text-xs text-gray-400 mb-2">{wallet.description}</div>
+															<div className="flex items-center space-x-2">
+																{wallet.type === 'both' ? (
+																	<>
+																		<Monitor className="w-3 h-3 text-gray-500" />
+																		<Smartphone className="w-3 h-3 text-gray-500" />
+																	</>
+																) : wallet.type === 'mobile' ? (
+																	<Smartphone className="w-3 h-3 text-gray-500" />
+																) : (
+																	<Monitor className="w-3 h-3 text-gray-500" />
+																)}
+															</div>
+														</div>
+													))}
 												</div>
-
-												{/* LiveDemoSection コンポーネント統合 */}
-												<LiveDemoSection />
 											</div>
-										</div>
-									)}
 
-									{/* Step 3: Order Completion */}
-									{step.id === 3 && (
-										<div className="space-y-6">
-											<div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-												<div className="p-4 border border-dark-300 rounded-sm">
-													<Zap className="w-6 h-6 text-neonOrange mb-2" />
-													<div className="text-white font-medium mb-1">System Reflection</div>
-													<div className="text-sm text-gray-400">Transaction reflects in our system within seconds to minutes</div>
-												</div>
-												<div className="p-4 border border-dark-300 rounded-sm">
-													<Package className="w-6 h-6 text-neonGreen mb-2" />
-													<div className="text-white font-medium mb-1">Immediate Shipping</div>
-													<div className="text-sm text-gray-400">Shipping process begins immediately after payment confirmation</div>
-												</div>
-												<div className="p-4 border border-dark-300 rounded-sm">
-													<Clock className="w-6 h-6 text-neonOrange mb-2" />
-													<div className="text-white font-medium mb-1">Delivery Time</div>
-													<div className="text-sm text-gray-400">3-7 business days worldwide shipping</div>
-												</div>
-												<div className="p-4 border border-dark-300 rounded-sm">
-													<Shield className="w-6 h-6 text-neonGreen mb-2" />
-													<div className="text-white font-medium mb-1">Blockchain Tracking</div>
-													<div className="text-sm text-gray-400">Blockchain-verified delivery tracking</div>
+											{/* Shipping Address Info */}
+											<div className="p-4 border border-blue-600/30 rounded-lg bg-blue-600/5">
+												<div className="flex items-start space-x-3">
+													<MapPin className="w-5 h-5 text-blue-400 flex-shrink-0 mt-0.5" />
+													<div>
+														<div className="text-blue-400 font-medium mb-1">Shipping Address</div>
+														<div className="text-sm text-gray-300">
+															Your wallet address and shipping information will be saved for future purchases. Worldwide delivery available.
+														</div>
+													</div>
 												</div>
 											</div>
 										</div>
@@ -350,53 +336,6 @@ const HowToBuySection: React.FC = () => {
 					</div>
 				</div>
 			</CyberCard>
-
-			{/* FAQ Section */}
-			<CyberCard title="Frequently Asked Questions" showEffects={false}>
-				<div className="space-y-4">
-					<div className="border-b border-dark-300 pb-4">
-						<h4 className="text-white font-medium mb-2">Do I need a crypto wallet to create an account?</h4>
-						<p className="text-sm text-gray-400">
-							No! You can create an account using traditional social logins (Google, Twitter, etc.). A crypto wallet is only needed for the final payment step.
-						</p>
-					</div>
-
-					<div className="border-b border-dark-300 pb-4">
-						<h4 className="text-white font-medium mb-2">Can I cancel my order after checkout?</h4>
-						<p className="text-sm text-gray-400">
-							Yes! Orders can be cancelled until payment is completed via the Invoice URL. No shipping processing occurs until payment confirmation.
-						</p>
-					</div>
-
-					<div className="border-b border-dark-300 pb-4">
-						<h4 className="text-white font-medium mb-2">What happens if I send the wrong amount?</h4>
-						<p className="text-sm text-gray-400">
-							Our system monitors for exact amounts. Partial payments are held until completion, and overpayments can be refunded to the sender address.
-						</p>
-					</div>
-
-					<div className="border-b border-dark-300 pb-4">
-						<h4 className="text-white font-medium mb-2">Which blockchain should I choose?</h4>
-						<p className="text-sm text-gray-400">
-							Avalanche offers low fees ($0.01-$0.1) and fast transactions. Ethereum is more expensive but widely supported. Choose based on your wallet and preference.
-						</p>
-					</div>
-
-					<div>
-						<h4 className="text-white font-medium mb-2">What if my transaction fails?</h4>
-						<p className="text-sm text-gray-400">
-							Failed transactions are automatically detected. You may pay gas fees, but no product charges apply. Simply retry with sufficient balance and gas fees.
-						</p>
-					</div>
-				</div>
-			</CyberCard>
-
-			{/* CTA */}
-			<div className="text-center">
-				<CyberButton variant="primary" className="px-8 py-4 text-lg">
-					Start Shopping Now
-				</CyberButton>
-			</div>
 		</div>
 	);
 };

@@ -1,4 +1,520 @@
 -e 
+### FILE: ./src/contexts/UnifiedAuthContext.tsx
+
+// src/contexts/UnifiedAuthContext.tsx
+'use client';
+
+import React, { createContext, useContext, useEffect, useState, useCallback, useRef } from 'react';
+import { User as FirebaseUser, onAuthStateChanged, signOut } from 'firebase/auth';
+import { auth } from '@/lib/firebase';
+import { AuthMethod, ChainType } from '../../types/wallet';
+import { ExtendedFirestoreUser, AuthIntegrationResult, WalletOperationResult, AuthFlowState } from '../../types/user-extended';
+import { UnifiedAuthState, AuthConfig, AuthActions, AuthEvent, AuthEventType, UseAuthReturn } from '../../types/auth';
+
+// EVMWalletProviderはオプショナルにする
+let useEVMWallet: any = null;
+try {
+	const evmModule = require('@/wallet-auth/adapters/evm/EVMWalletAdapterWrapper');
+	useEVMWallet = evmModule.useEVMWallet;
+} catch (error) {
+	console.warn('EVMWallet not available:', error);
+}
+
+// デフォルト設定
+const DEFAULT_CONFIG: AuthConfig = {
+	preferredMethod: 'hybrid',
+	enableFirebase: true,
+	enableWallet: true,
+	autoConnect: true,
+	sessionTimeout: 24 * 60, // 24時間
+	walletConfig: {
+		enabledChains: ['evm'],
+		preferredChain: 'evm',
+	},
+};
+
+interface UnifiedAuthContextType extends UseAuthReturn {
+	// 設定
+	config: AuthConfig;
+	
+	// 追加の状態
+	authFlowState: AuthFlowState;
+	
+	// 内部状態（デバッグ用）
+	_debug: {
+		firebaseReady: boolean;
+		walletReady: boolean;
+		lastError: string | null;
+	};
+}
+
+const UnifiedAuthContext = createContext<UnifiedAuthContextType | undefined>(undefined);
+
+interface UnifiedAuthProviderProps {
+	children: React.ReactNode;
+	config?: Partial<AuthConfig>;
+}
+
+export const UnifiedAuthProvider = ({ children, config: userConfig = {} }: UnifiedAuthProviderProps) => {
+	const config = { ...DEFAULT_CONFIG, ...userConfig };
+	
+	// Firebase状態
+	const [firebaseUser, setFirebaseUser] = useState<FirebaseUser | null>(null);
+	const [firebaseLoading, setFirebaseLoading] = useState(true);
+	
+	// Firestore状態
+	const [firestoreUser, setFirestoreUser] = useState<ExtendedFirestoreUser | null>(null);
+	const [firestoreLoading, setFirestoreLoading] = useState(false);
+	
+	// Wallet状態（EVMのみ現在対応）
+	const evmWallet = useEVMWallet ? useEVMWallet() : {
+		isConnected: false,
+		isConnecting: false,
+		isAuthenticated: false,
+		address: null,
+		chainId: null,
+		chainName: null,
+		error: null,
+		connect: async () => { throw new Error('EVM Wallet not available'); },
+		disconnect: async () => { throw new Error('EVM Wallet not available'); },
+		authenticate: async () => ({ success: false, error: 'EVM Wallet not available' }),
+		switchChain: async () => { throw new Error('EVM Wallet not available'); },
+	};
+	
+	// 統合状態
+	const [authMethod, setAuthMethod] = useState<AuthMethod>('firebase');
+	const [isAuthenticated, setIsAuthenticated] = useState(false);
+	const [error, setError] = useState<string | null>(null);
+	
+	// 認証フロー状態
+	const [authFlowState, setAuthFlowState] = useState<AuthFlowState>({
+		currentStep: 'idle',
+		signatureRequired: false,
+		verificationRequired: false,
+		progress: 0,
+	});
+	
+	// イベントエミッター
+	const eventEmitter = useRef(new EventTarget());
+	const [eventListeners] = useState(new Map<string, Set<(event: AuthEvent) => void>>());
+	
+	// デバッグ情報
+	const [debugInfo, setDebugInfo] = useState({
+		firebaseReady: false,
+		walletReady: false,
+		lastError: null as string | null,
+	});
+
+	// エラーハンドリング
+	const handleError = useCallback((error: any, context?: string) => {
+		const errorMessage = error?.message || error?.toString() || 'Unknown error';
+		const fullError = context ? `${context}: ${errorMessage}` : errorMessage;
+		
+		console.error('UnifiedAuth Error:', fullError, error);
+		setError(fullError);
+		setDebugInfo(prev => ({ ...prev, lastError: fullError }));
+		
+		// エラーイベントを発火
+		emitEvent('error', { error: fullError, context });
+	}, []);
+
+	// イベント発火
+	const emitEvent = useCallback((type: AuthEventType, data?: any) => {
+		const event: AuthEvent = {
+			type,
+			timestamp: new Date(),
+			data,
+		};
+		
+		console.log('Auth Event:', event);
+		
+		// リスナーに通知
+		const listeners = eventListeners.get(type);
+		if (listeners) {
+			listeners.forEach(callback => callback(event));
+		}
+	}, [eventListeners]);
+
+	// Firebase認証の監視
+	useEffect(() => {
+		const unsubscribe = onAuthStateChanged(auth, async (user) => {
+			console.log('🔄 Firebase auth state changed:', user?.uid || 'null');
+			
+			setFirebaseUser(user);
+			setFirebaseLoading(false);
+			setDebugInfo(prev => ({ ...prev, firebaseReady: true }));
+			
+			if (user) {
+				emitEvent('firebase-login', { uid: user.uid, email: user.email });
+				
+				// Firestoreとの同期（既存の実装を利用）
+				try {
+					setFirestoreLoading(true);
+					// TODO: ExtendedFirestoreUserとの同期ロジック
+					// 既存のsyncAuthWithFirestoreを拡張使用
+					
+					setFirestoreLoading(false);
+				} catch (error) {
+					handleError(error, 'Firebase sync');
+					setFirestoreLoading(false);
+				}
+			} else {
+				emitEvent('firebase-logout');
+				setFirestoreUser(null);
+			}
+			
+			// 認証状態の更新
+			updateAuthenticationState();
+		});
+		
+		return unsubscribe;
+	}, [handleError, emitEvent]);
+
+	// Wallet認証の監視
+	useEffect(() => {
+		setDebugInfo(prev => ({ ...prev, walletReady: true }));
+		
+		if (evmWallet.isConnected && evmWallet.address) {
+			emitEvent('wallet-connect', { 
+				address: evmWallet.address, 
+				chainId: evmWallet.chainId,
+				chainType: 'evm' 
+			});
+		}
+		
+		if (evmWallet.isAuthenticated) {
+			emitEvent('wallet-authenticate', { 
+				address: evmWallet.address, 
+				chainType: 'evm' 
+			});
+		}
+		
+		// 認証状態の更新
+		updateAuthenticationState();
+	}, [evmWallet.isConnected, evmWallet.isAuthenticated, evmWallet.address, emitEvent]);
+
+	// 統合認証状態の更新
+	const updateAuthenticationState = useCallback(() => {
+		const hasFirebaseAuth = !!firebaseUser;
+		const hasWalletAuth = evmWallet.isAuthenticated;
+		
+		let newAuthMethod: AuthMethod = 'firebase';
+		let newIsAuthenticated = false;
+		
+		if (hasFirebaseAuth && hasWalletAuth) {
+			newAuthMethod = 'hybrid';
+			newIsAuthenticated = true;
+		} else if (hasFirebaseAuth) {
+			newAuthMethod = 'firebase';
+			newIsAuthenticated = true;
+		} else if (hasWalletAuth) {
+			newAuthMethod = 'wallet';
+			newIsAuthenticated = true;
+		}
+		
+		setAuthMethod(newAuthMethod);
+		setIsAuthenticated(newIsAuthenticated);
+		
+		if (newIsAuthenticated) {
+			emitEvent('unified-login', { authMethod: newAuthMethod });
+		}
+	}, [firebaseUser, evmWallet.isAuthenticated, emitEvent]);
+
+	// 認証アクション実装
+	const authActions: AuthActions = {
+		// Firebase認証（既存実装を利用）
+		signInWithEmail: async (email: string, password: string) => {
+			try {
+				setAuthFlowState(prev => ({ ...prev, currentStep: 'connecting', progress: 25 }));
+				// TODO: 既存のsignIn実装を呼び出し
+				setAuthFlowState(prev => ({ ...prev, currentStep: 'idle', progress: 100 }));
+			} catch (error) {
+				handleError(error, 'Email sign in');
+				setAuthFlowState(prev => ({ ...prev, currentStep: 'error' }));
+				throw error;
+			}
+		},
+
+		signUpWithEmail: async (email: string, password: string) => {
+			try {
+				setAuthFlowState(prev => ({ ...prev, currentStep: 'connecting', progress: 25 }));
+				// TODO: 既存のsignUp実装を呼び出し
+				setAuthFlowState(prev => ({ ...prev, currentStep: 'idle', progress: 100 }));
+			} catch (error) {
+				handleError(error, 'Email sign up');
+				setAuthFlowState(prev => ({ ...prev, currentStep: 'error' }));
+				throw error;
+			}
+		},
+
+		signInWithGoogle: async () => {
+			try {
+				setAuthFlowState(prev => ({ ...prev, currentStep: 'connecting', progress: 25 }));
+				// TODO: 既存のsignInWithGoogle実装を呼び出し
+				setAuthFlowState(prev => ({ ...prev, currentStep: 'idle', progress: 100 }));
+			} catch (error) {
+				handleError(error, 'Google sign in');
+				setAuthFlowState(prev => ({ ...prev, currentStep: 'error' }));
+				throw error;
+			}
+		},
+
+		// Wallet認証
+		connectWallet: async (chainType: ChainType = 'evm', walletType?: string) => {
+			try {
+				setAuthFlowState(prev => ({ 
+					...prev, 
+					currentStep: 'connecting', 
+					selectedChain: chainType,
+					selectedWallet: walletType,
+					progress: 25 
+				}));
+				
+				if (chainType === 'evm') {
+					const connection = await evmWallet.connect(walletType);
+					setAuthFlowState(prev => ({ ...prev, currentStep: 'idle', progress: 100 }));
+					return connection;
+				} else {
+					throw new Error(`Chain type ${chainType} not supported yet`);
+				}
+			} catch (error) {
+				handleError(error, 'Wallet connect');
+				setAuthFlowState(prev => ({ ...prev, currentStep: 'error' }));
+				throw error;
+			}
+		},
+
+		authenticateWallet: async (chainType: ChainType = 'evm') => {
+			try {
+				setAuthFlowState(prev => ({ 
+					...prev, 
+					currentStep: 'signing',
+					signatureRequired: true,
+					progress: 50 
+				}));
+				
+				if (chainType === 'evm') {
+					const result = await evmWallet.authenticate();
+					setAuthFlowState(prev => ({ 
+						...prev, 
+						currentStep: 'idle', 
+						signatureRequired: false,
+						progress: 100 
+					}));
+					return result;
+				} else {
+					throw new Error(`Chain type ${chainType} not supported yet`);
+				}
+			} catch (error) {
+				handleError(error, 'Wallet authenticate');
+				setAuthFlowState(prev => ({ 
+					...prev, 
+					currentStep: 'error',
+					signatureRequired: false 
+				}));
+				throw error;
+			}
+		},
+
+		switchWalletChain: async (chainType: ChainType, chainId: number | string) => {
+			try {
+				if (chainType === 'evm' && typeof chainId === 'number') {
+					await evmWallet.switchChain(chainId);
+				} else {
+					throw new Error(`Chain switching not supported for ${chainType}`);
+				}
+			} catch (error) {
+				handleError(error, 'Chain switch');
+				throw error;
+			}
+		},
+
+		// 統合ログアウト
+		logout: async () => {
+			try {
+				setAuthFlowState(prev => ({ ...prev, currentStep: 'connecting', progress: 25 }));
+				
+				// Firebase ログアウト
+				if (firebaseUser) {
+					await signOut(auth);
+				}
+				
+				// Wallet ログアウト
+				if (evmWallet.isConnected) {
+					await evmWallet.disconnect();
+				}
+				
+				// 状態リセット
+				setFirestoreUser(null);
+				setIsAuthenticated(false);
+				setAuthMethod('firebase');
+				setError(null);
+				
+				setAuthFlowState(prev => ({ ...prev, currentStep: 'idle', progress: 100 }));
+				emitEvent('unified-logout');
+			} catch (error) {
+				handleError(error, 'Logout');
+				setAuthFlowState(prev => ({ ...prev, currentStep: 'error' }));
+				throw error;
+			}
+		},
+
+		// プロフィール更新
+		updateProfile: async (data: Partial<ExtendedFirestoreUser>) => {
+			try {
+				// TODO: ExtendedFirestoreUser用の更新ロジック
+				throw new Error('Not implemented yet');
+			} catch (error) {
+				handleError(error, 'Profile update');
+				throw error;
+			}
+		},
+
+		// セッション更新
+		refreshSession: async () => {
+			try {
+				// TODO: セッション更新ロジック
+				throw new Error('Not implemented yet');
+			} catch (error) {
+				handleError(error, 'Session refresh');
+				throw error;
+			}
+		},
+	};
+
+	// イベントリスナー管理
+	const addEventListener = useCallback((type: AuthEventType, callback: (event: AuthEvent) => void) => {
+		if (!eventListeners.has(type)) {
+			eventListeners.set(type, new Set());
+		}
+		eventListeners.get(type)!.add(callback);
+		
+		// Unsubscribe関数を返す
+		return () => {
+			const listeners = eventListeners.get(type);
+			if (listeners) {
+				listeners.delete(callback);
+			}
+		};
+	}, [eventListeners]);
+
+	// 統合状態の構築
+	const unifiedState: UnifiedAuthState = {
+		authMethod,
+		firebaseUser,
+		firebaseLoading,
+		walletConnection: evmWallet.isConnected ? {
+			address: evmWallet.address!,
+			chainType: 'evm',
+			chainId: evmWallet.chainId,
+			walletType: 'unknown',
+			isConnected: evmWallet.isConnected,
+			isVerified: evmWallet.isAuthenticated,
+		} : null,
+		walletLoading: evmWallet.isConnecting,
+		firestoreUser,
+		firestoreLoading,
+		isAuthenticated,
+		isLoading: firebaseLoading || evmWallet.isConnecting || firestoreLoading,
+		error,
+	};
+
+	// 便利なゲッター
+	const contextValue: UnifiedAuthContextType = {
+		...unifiedState,
+		...authActions,
+		
+		// 便利なゲッター
+		primaryUserId: firebaseUser?.uid || evmWallet.address || null,
+		displayName: firestoreUser?.displayName || firebaseUser?.displayName || null,
+		emailAddress: firestoreUser?.email || firebaseUser?.email || null,
+		walletAddress: evmWallet.address || null,
+		
+		// 状態チェック
+		isFirebaseAuth: authMethod === 'firebase' || authMethod === 'hybrid',
+		isWalletAuth: authMethod === 'wallet' || authMethod === 'hybrid',
+		hasMultipleAuth: authMethod === 'hybrid',
+		
+		// イベント管理
+		addEventListener,
+		
+		// 設定と内部状態
+		config,
+		authFlowState,
+		_debug: debugInfo,
+	};
+
+	return (
+		<UnifiedAuthContext.Provider value={contextValue}>
+			{children}
+		</UnifiedAuthContext.Provider>
+	);
+};
+
+/**
+ * 統合認証を使用するhook
+ */
+export const useUnifiedAuth = (): UnifiedAuthContextType => {
+	const context = useContext(UnifiedAuthContext);
+	if (!context) {
+		throw new Error('useUnifiedAuth must be used within UnifiedAuthProvider');
+	}
+	return context;
+};
+
+/**
+ * 認証状態のみを取得するhook
+ */
+export const useAuthState = () => {
+	const { 
+		isAuthenticated, 
+		isLoading, 
+		authMethod, 
+		primaryUserId, 
+		displayName, 
+		emailAddress, 
+		walletAddress,
+		error 
+	} = useUnifiedAuth();
+	
+	return {
+		isAuthenticated,
+		isLoading,
+		authMethod,
+		primaryUserId,
+		displayName,
+		emailAddress,
+		walletAddress,
+		error,
+	};
+};
+
+/**
+ * 認証アクションのみを取得するhook
+ */
+export const useAuthActions = () => {
+	const { 
+		signInWithEmail,
+		signUpWithEmail,
+		signInWithGoogle,
+		connectWallet,
+		authenticateWallet,
+		switchWalletChain,
+		logout,
+		updateProfile 
+	} = useUnifiedAuth();
+	
+	return {
+		signInWithEmail,
+		signUpWithEmail,
+		signInWithGoogle,
+		connectWallet,
+		authenticateWallet,
+		switchWalletChain,
+		logout,
+		updateProfile,
+	};
+};-e 
 ### FILE: ./src/contexts/AuthContext.tsx
 
 // src/contexts/AuthContext.tsx
@@ -1741,6 +2257,77 @@ export const PRODUCT_CONSTANTS = {
 		MERCHANDISE: 'merchandise'
 	}
 } as const;-e 
+### FILE: ./src/app/layout-updated.tsx
+
+// src/app/layout-updated.tsx
+import { Montserrat, Space_Grotesk } from 'next/font/google';
+import './globals.css';
+import type { Metadata } from 'next';
+import { AuthProvider } from '@/contexts/AuthContext';
+import { EVMWalletProvider } from '@/wallet-auth/adapters/evm/wagmi-provider';
+import { EVMWalletProvider as EVMWalletContextProvider } from '@/wallet-auth/adapters/evm/EVMWalletAdapterWrapper';
+import { UnifiedAuthProvider } from '@/contexts/UnifiedAuthContext';
+
+// フォントの設定
+const montserrat = Montserrat({
+	subsets: ['latin'],
+	variable: '--font-montserrat',
+	display: 'swap',
+});
+
+const spaceGrotesk = Space_Grotesk({
+	subsets: ['latin'],
+	variable: '--font-space-grotesk',
+	display: 'swap',
+});
+
+// メタデータ設定
+export const metadata: Metadata = {
+	title: 'We Are On-Chain | Pepe Protein',
+	description: 'Pay, Pump, Live. The crypto-exclusive protein for the blockchain generation.',
+	keywords: 'crypto, protein, blockchain, pepe, fitness, cryptocurrency',
+};
+
+export default function RootLayout({
+	children,
+}: {
+	children: React.ReactNode;
+}) {
+	return (
+		<html lang="en" className={`${montserrat.variable} ${spaceGrotesk.variable}`}>
+			<body className="bg-black text-white min-h-screen font-sans antialiased">
+				{/* Wagmi + RainbowKit Provider (最下層) */}
+				<EVMWalletProvider
+					appName="We are on-chain"
+					projectId={process.env.NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID}
+				>
+					{/* EVM Wallet Context Provider */}
+					<EVMWalletContextProvider>
+						{/* Firebase Auth Provider (既存) */}
+						<AuthProvider>
+							{/* 統合認証プロバイダー */}
+							<UnifiedAuthProvider
+								config={{
+									preferredMethod: 'hybrid',
+									enableFirebase: true,
+									enableWallet: true,
+									autoConnect: true,
+									sessionTimeout: 24 * 60, // 24時間
+									walletConfig: {
+										enabledChains: ['evm'],
+										preferredChain: 'evm',
+									},
+								}}
+							>
+								{children}
+							</UnifiedAuthProvider>
+						</AuthProvider>
+					</EVMWalletContextProvider>
+				</EVMWalletProvider>
+			</body>
+		</html>
+	);
+}-e 
 ### FILE: ./src/app/dashboard/components/sections/ProfileSection.tsx
 
 // src/app/dashboard/components/sections/ProfileSection.tsx
@@ -8504,6 +9091,1036 @@ export const AuthModal = ({ isOpen, onClose }: AuthModalProps) => {
 		</div>
 	);
 };-e 
+### FILE: ./src/app/components/auth/ExtendedAuthModal.tsx
+
+// src/app/components/auth/ExtendedAuthModal.tsx
+'use client';
+
+import { useState, useEffect } from 'react';
+import { useUnifiedAuth } from '@/contexts/UnifiedAuthContext';
+import { ChainType } from '../../../../types/wallet';
+import { Wallet, Mail, Shield, Zap, ChevronRight, AlertCircle, CheckCircle, Loader2 } from 'lucide-react';
+
+interface ExtendedAuthModalProps {
+	isOpen: boolean;
+	onClose: () => void;
+	defaultTab?: 'email' | 'wallet';
+	preferredChain?: ChainType;
+}
+
+type AuthTab = 'email' | 'wallet';
+type AuthStep = 'method-select' | 'email-form' | 'wallet-connect' | 'wallet-sign' | 'success' | 'error';
+
+export const ExtendedAuthModal = ({ 
+	isOpen, 
+	onClose, 
+	defaultTab = 'wallet',
+	preferredChain = 'evm' 
+}: ExtendedAuthModalProps) => {
+	const {
+		// Firebase Auth
+		signInWithEmail,
+		signUpWithEmail,
+		signInWithGoogle,
+		
+		// Wallet Auth
+		connectWallet,
+		authenticateWallet,
+		
+		// 状態
+		isLoading,
+		authFlowState,
+		walletAddress,
+		isAuthenticated,
+		error: authError,
+	} = useUnifiedAuth();
+
+	// ローカル状態
+	const [activeTab, setActiveTab] = useState<AuthTab>(defaultTab);
+	const [currentStep, setCurrentStep] = useState<AuthStep>('method-select');
+	const [isSignUp, setIsSignUp] = useState(false);
+	const [email, setEmail] = useState('');
+	const [password, setPassword] = useState('');
+	const [localError, setLocalError] = useState('');
+	const [loading, setLoading] = useState(false);
+
+	// 認証成功時の自動クローズ
+	useEffect(() => {
+		if (isAuthenticated && currentStep !== 'success') {
+			setCurrentStep('success');
+			setTimeout(() => {
+				onClose();
+				resetState();
+			}, 2000);
+		}
+	}, [isAuthenticated, currentStep, onClose]);
+
+	// エラー処理
+	useEffect(() => {
+		if (authError) {
+			setLocalError(authError);
+			setCurrentStep('error');
+		}
+	}, [authError]);
+
+	// 状態リセット
+	const resetState = () => {
+		setCurrentStep('method-select');
+		setActiveTab(defaultTab);
+		setIsSignUp(false);
+		setEmail('');
+		setPassword('');
+		setLocalError('');
+		setLoading(false);
+	};
+
+	// モーダルクローズ時のリセット
+	useEffect(() => {
+		if (!isOpen) {
+			resetState();
+		}
+	}, [isOpen, defaultTab]);
+
+	// Email認証処理
+	const handleEmailAuth = async (e: React.FormEvent) => {
+		e.preventDefault();
+		setLocalError('');
+		setLoading(true);
+
+		try {
+			if (isSignUp) {
+				await signUpWithEmail(email, password);
+			} else {
+				await signInWithEmail(email, password);
+			}
+			setCurrentStep('success');
+		} catch (error: any) {
+			setLocalError(error.message || 'Email authentication failed');
+			setCurrentStep('error');
+		} finally {
+			setLoading(false);
+		}
+	};
+
+	// Google認証処理
+	const handleGoogleAuth = async () => {
+		setLocalError('');
+		setLoading(true);
+
+		try {
+			await signInWithGoogle();
+			setCurrentStep('success');
+		} catch (error: any) {
+			setLocalError(error.message || 'Google authentication failed');
+			setCurrentStep('error');
+		} finally {
+			setLoading(false);
+		}
+	};
+
+	// Wallet接続処理
+	const handleWalletConnect = async () => {
+		setLocalError('');
+		setLoading(true);
+		setCurrentStep('wallet-connect');
+
+		try {
+			await connectWallet(preferredChain);
+			setCurrentStep('wallet-sign');
+		} catch (error: any) {
+			setLocalError(error.message || 'Wallet connection failed');
+			setCurrentStep('error');
+			setLoading(false);
+		}
+	};
+
+	// Wallet認証処理
+	const handleWalletAuth = async () => {
+		setLocalError('');
+		setLoading(true);
+
+		try {
+			const result = await authenticateWallet(preferredChain);
+			if (result.success) {
+				setCurrentStep('success');
+			} else {
+				setLocalError(result.error || 'Wallet authentication failed');
+				setCurrentStep('error');
+			}
+		} catch (error: any) {
+			setLocalError(error.message || 'Wallet authentication failed');
+			setCurrentStep('error');
+		} finally {
+			setLoading(false);
+		}
+	};
+
+	// 戻るボタン処理
+	const handleBack = () => {
+		if (currentStep === 'email-form' || currentStep === 'wallet-connect') {
+			setCurrentStep('method-select');
+		} else if (currentStep === 'wallet-sign') {
+			setCurrentStep('wallet-connect');
+		} else if (currentStep === 'error') {
+			setCurrentStep('method-select');
+		}
+		setLocalError('');
+		setLoading(false);
+	};
+
+	if (!isOpen) return null;
+
+	return (
+		<div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+			<div className="relative bg-black/95 backdrop-blur-md border border-neonGreen/30 rounded-lg shadow-2xl w-full max-w-md overflow-hidden">
+				{/* Scanline effect */}
+				<div className="absolute inset-0 overflow-hidden pointer-events-none">
+					<div className="absolute w-full h-px bg-gradient-to-r from-transparent via-neonGreen to-transparent animate-scanline opacity-30"></div>
+				</div>
+
+				{/* Progress indicator */}
+				{authFlowState.progress > 0 && authFlowState.progress < 100 && (
+					<div className="absolute top-0 left-0 right-0 h-1 bg-dark-300">
+						<div 
+							className="h-full bg-gradient-to-r from-neonGreen to-neonOrange transition-all duration-300"
+							style={{ width: `${authFlowState.progress}%` }}
+						/>
+					</div>
+				)}
+
+				<div className="relative p-8">
+					{/* Header */}
+					<div className="flex justify-between items-center mb-6">
+						<div>
+							<h2 className="text-2xl font-heading font-bold text-white mb-1">
+								{currentStep === 'success' ? 'Welcome!' : 
+								 currentStep === 'error' ? 'Connection Failed' :
+								 currentStep === 'wallet-sign' ? 'Sign Message' :
+								 'Access Terminal'}
+							</h2>
+							<p className="text-sm text-gray-400">
+								{currentStep === 'success' ? 'Authentication successful' :
+								 currentStep === 'error' ? 'Please try again' :
+								 currentStep === 'wallet-sign' ? 'Confirm your identity by signing' :
+								 'Choose your preferred authentication method'}
+							</p>
+						</div>
+						<button
+							onClick={onClose}
+							className="text-gray-400 hover:text-neonGreen transition-colors text-2xl font-light"
+						>
+							×
+						</button>
+					</div>
+
+					{/* Error Display */}
+					{(localError || authError) && currentStep !== 'success' && (
+						<div className="bg-red-900/30 border border-red-500/50 text-red-300 px-4 py-3 rounded-sm mb-4 text-sm">
+							<div className="flex items-center">
+								<AlertCircle className="w-4 h-4 mr-2 flex-shrink-0" />
+								<span>{localError || authError}</span>
+							</div>
+						</div>
+					)}
+
+					{/* Success State */}
+					{currentStep === 'success' && (
+						<div className="text-center py-8">
+							<div className="w-16 h-16 bg-gradient-to-br from-neonGreen/20 to-neonOrange/20 rounded-full flex items-center justify-center mx-auto mb-4">
+								<CheckCircle className="w-8 h-8 text-neonGreen" />
+							</div>
+							<h3 className="text-xl font-bold text-white mb-2">Authentication Complete</h3>
+							<p className="text-gray-400 mb-4">You are now connected to the network</p>
+							{walletAddress && (
+								<div className="bg-neonGreen/10 border border-neonGreen/30 rounded-sm p-3">
+									<p className="text-xs text-gray-400">Connected Wallet</p>
+									<p className="text-sm text-neonGreen font-mono">{walletAddress.slice(0, 6)}...{walletAddress.slice(-4)}</p>
+								</div>
+							)}
+						</div>
+					)}
+
+					{/* Method Selection */}
+					{currentStep === 'method-select' && (
+						<div className="space-y-4">
+							{/* Tab Selector */}
+							<div className="flex bg-dark-200/50 rounded-sm p-1">
+								<button
+									onClick={() => setActiveTab('wallet')}
+									className={`flex-1 flex items-center justify-center py-3 px-4 rounded-sm transition-all duration-200 ${
+										activeTab === 'wallet'
+											? 'bg-neonGreen/20 text-neonGreen border border-neonGreen/30'
+											: 'text-gray-400 hover:text-white'
+									}`}
+								>
+									<Wallet className="w-4 h-4 mr-2" />
+									<span className="font-medium">Wallet</span>
+									<Zap className="w-3 h-3 ml-1 text-neonOrange" />
+								</button>
+								<button
+									onClick={() => setActiveTab('email')}
+									className={`flex-1 flex items-center justify-center py-3 px-4 rounded-sm transition-all duration-200 ${
+										activeTab === 'email'
+											? 'bg-neonGreen/20 text-neonGreen border border-neonGreen/30'
+											: 'text-gray-400 hover:text-white'
+									}`}
+								>
+									<Mail className="w-4 h-4 mr-2" />
+									<span className="font-medium">Email</span>
+								</button>
+							</div>
+
+							{/* Wallet Tab */}
+							{activeTab === 'wallet' && (
+								<div className="space-y-4">
+									<div className="bg-gradient-to-r from-neonGreen/10 to-neonOrange/10 border border-neonGreen/30 rounded-sm p-4">
+										<div className="flex items-center mb-2">
+											<Shield className="w-5 h-5 text-neonGreen mr-2" />
+											<span className="text-white font-semibold">Web3 Authentication</span>
+										</div>
+										<p className="text-sm text-gray-300 mb-3">
+											Connect your crypto wallet for secure, decentralized authentication.
+										</p>
+										<ul className="text-xs text-gray-400 space-y-1">
+											<li>• No passwords required</li>
+											<li>• Cryptographic signature verification</li>
+											<li>• Supports MetaMask, WalletConnect, and more</li>
+										</ul>
+									</div>
+
+									<button
+										onClick={handleWalletConnect}
+										disabled={loading}
+										className="w-full relative px-6 py-4 bg-gradient-to-r from-neonGreen to-neonOrange text-black font-semibold rounded-sm overflow-hidden group transition-all duration-200 hover:shadow-lg hover:shadow-neonGreen/25 disabled:opacity-50 disabled:cursor-not-allowed"
+									>
+										<div className="flex items-center justify-center">
+											{loading ? (
+												<>
+													<Loader2 className="w-5 h-5 animate-spin mr-2" />
+													Connecting...
+												</>
+											) : (
+												<>
+													<Wallet className="w-5 h-5 mr-2" />
+													Connect Wallet
+													<ChevronRight className="w-4 h-4 ml-2" />
+												</>
+											)}
+										</div>
+									</button>
+								</div>
+							)}
+
+							{/* Email Tab */}
+							{activeTab === 'email' && (
+								<div className="space-y-4">
+									<div className="bg-dark-200/30 border border-gray-600 rounded-sm p-4">
+										<div className="flex items-center mb-2">
+											<Mail className="w-5 h-5 text-gray-400 mr-2" />
+											<span className="text-white font-semibold">Traditional Authentication</span>
+										</div>
+										<p className="text-sm text-gray-300 mb-3">
+											Use email and password or social login for quick access.
+										</p>
+									</div>
+
+									<button
+										onClick={() => setCurrentStep('email-form')}
+										className="w-full px-6 py-4 bg-dark-200 hover:bg-dark-300 border border-gray-600 hover:border-gray-500 text-white font-medium rounded-sm transition-all duration-200 group"
+									>
+										<div className="flex items-center justify-center">
+											<Mail className="w-5 h-5 mr-2" />
+											Continue with Email
+											<ChevronRight className="w-4 h-4 ml-2" />
+										</div>
+									</button>
+
+									<button
+										onClick={handleGoogleAuth}
+										disabled={loading}
+										className="w-full px-6 py-3 bg-white/10 hover:bg-white/20 border border-gray-600 hover:border-gray-500 text-white font-medium rounded-sm transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed group"
+									>
+										<div className="flex items-center justify-center">
+											{loading ? (
+												<Loader2 className="w-5 h-5 animate-spin mr-2" />
+											) : (
+												<svg className="w-5 h-5 mr-3" viewBox="0 0 24 24">
+													<path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" />
+													<path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" />
+													<path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" />
+													<path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" />
+												</svg>
+											)}
+											Continue with Google
+										</div>
+									</button>
+								</div>
+							)}
+						</div>
+					)}
+
+					{/* Email Form */}
+					{currentStep === 'email-form' && (
+						<div className="space-y-4">
+							<button
+								onClick={handleBack}
+								className="text-gray-400 hover:text-neonGreen transition-colors text-sm flex items-center"
+							>
+								← Back to methods
+							</button>
+
+							<form onSubmit={handleEmailAuth} className="space-y-4">
+								<div>
+									<label htmlFor="email" className="block text-sm font-medium text-gray-300 mb-2">
+										Email Address
+									</label>
+									<input
+										type="email"
+										id="email"
+										value={email}
+										onChange={(e) => setEmail(e.target.value)}
+										required
+										className="w-full px-4 py-3 bg-black/50 border border-gray-600 rounded-sm focus:outline-none focus:border-neonGreen focus:ring-1 focus:ring-neonGreen text-white placeholder-gray-500 transition-all duration-200"
+										placeholder="user@example.com"
+									/>
+								</div>
+
+								<div>
+									<label htmlFor="password" className="block text-sm font-medium text-gray-300 mb-2">
+										Password
+									</label>
+									<input
+										type="password"
+										id="password"
+										value={password}
+										onChange={(e) => setPassword(e.target.value)}
+										required
+										minLength={6}
+										className="w-full px-4 py-3 bg-black/50 border border-gray-600 rounded-sm focus:outline-none focus:border-neonGreen focus:ring-1 focus:ring-neonGreen text-white placeholder-gray-500 transition-all duration-200"
+										placeholder="••••••••"
+									/>
+									{isSignUp && (
+										<p className="text-xs text-gray-500 mt-1">
+											Minimum 6 characters required
+										</p>
+									)}
+								</div>
+
+								<button
+									type="submit"
+									disabled={loading}
+									className="w-full relative px-6 py-3 bg-gradient-to-r from-neonGreen to-neonOrange text-black font-semibold rounded-sm overflow-hidden group transition-all duration-200 hover:shadow-lg hover:shadow-neonGreen/25 disabled:opacity-50 disabled:cursor-not-allowed"
+								>
+									{loading ? (
+										<div className="flex items-center justify-center">
+											<Loader2 className="w-5 h-5 animate-spin mr-2" />
+											Processing...
+										</div>
+									) : (
+										isSignUp ? 'Create Account' : 'Sign In'
+									)}
+								</button>
+							</form>
+
+							{/* Toggle Sign Up / Sign In */}
+							<div className="text-center">
+								<button
+									onClick={() => setIsSignUp(!isSignUp)}
+									className="text-neonGreen hover:text-neonOrange transition-colors text-sm"
+								>
+									{isSignUp
+										? 'Already have an account? Sign In'
+										: 'Need an account? Create One'}
+								</button>
+							</div>
+						</div>
+					)}
+
+					{/* Wallet Sign Step */}
+					{currentStep === 'wallet-sign' && (
+						<div className="text-center space-y-6">
+							<div className="w-16 h-16 bg-gradient-to-br from-neonGreen/20 to-neonOrange/20 rounded-full flex items-center justify-center mx-auto">
+								<Wallet className="w-8 h-8 text-neonGreen" />
+							</div>
+
+							<div>
+								<h3 className="text-xl font-bold text-white mb-2">Sign Authentication Message</h3>
+								<p className="text-gray-400 mb-4">
+									Please sign the message in your wallet to verify your identity.
+								</p>
+								{walletAddress && (
+									<div className="bg-neonGreen/10 border border-neonGreen/30 rounded-sm p-3 mb-4">
+										<p className="text-xs text-gray-400">Connected Wallet</p>
+										<p className="text-sm text-neonGreen font-mono">{walletAddress.slice(0, 6)}...{walletAddress.slice(-4)}</p>
+									</div>
+								)}
+							</div>
+
+							<div className="space-y-3">
+								<button
+									onClick={handleWalletAuth}
+									disabled={loading}
+									className="w-full relative px-6 py-3 bg-gradient-to-r from-neonGreen to-neonOrange text-black font-semibold rounded-sm overflow-hidden group transition-all duration-200 hover:shadow-lg hover:shadow-neonGreen/25 disabled:opacity-50 disabled:cursor-not-allowed"
+								>
+									{loading ? (
+										<div className="flex items-center justify-center">
+											<Loader2 className="w-5 h-5 animate-spin mr-2" />
+											Waiting for signature...
+										</div>
+									) : (
+										'Sign Message'
+									)}
+								</button>
+
+								<button
+									onClick={handleBack}
+									className="w-full px-6 py-3 bg-dark-200 hover:bg-dark-300 border border-gray-600 text-white font-medium rounded-sm transition-all duration-200"
+								>
+									Back
+								</button>
+							</div>
+						</div>
+					)}
+
+					{/* Error State with Retry */}
+					{currentStep === 'error' && (
+						<div className="text-center space-y-6">
+							<div className="w-16 h-16 bg-red-500/20 rounded-full flex items-center justify-center mx-auto">
+								<AlertCircle className="w-8 h-8 text-red-400" />
+							</div>
+
+							<div>
+								<h3 className="text-xl font-bold text-white mb-2">Connection Failed</h3>
+								<p className="text-gray-400 mb-4">
+									{localError || authError || 'An unexpected error occurred'}
+								</p>
+							</div>
+
+							<div className="space-y-3">
+								<button
+									onClick={handleBack}
+									className="w-full px-6 py-3 bg-gradient-to-r from-neonGreen to-neonOrange text-black font-semibold rounded-sm transition-all duration-200 hover:shadow-lg hover:shadow-neonGreen/25"
+								>
+									Try Again
+								</button>
+
+								<button
+									onClick={onClose}
+									className="w-full px-6 py-3 bg-dark-200 hover:bg-dark-300 border border-gray-600 text-white font-medium rounded-sm transition-all duration-200"
+								>
+									Close
+								</button>
+							</div>
+						</div>
+					)}
+				</div>
+			</div>
+		</div>
+	);
+};-e 
+### FILE: ./src/app/components/ui/Header-updated.tsx
+
+// src/app/components/ui/Header-updated.tsx
+'use client';
+
+import { useState, useEffect } from 'react';
+import Link from 'next/link';
+import { useUnifiedAuth } from '@/contexts/UnifiedAuthContext';
+import { ExtendedAuthModal } from '../auth/ExtendedAuthModal';
+import { ShoppingCart, Wallet, LogOut, User, Settings } from 'lucide-react';
+
+// ダッシュボードページでのみカート機能を使用するためのhook
+const useCartInDashboard = () => {
+	const [cartItemCount, setCartItemCount] = useState(0);
+	const [onCartClick, setOnCartClick] = useState<(() => void) | null>(null);
+	const [isHydrated, setIsHydrated] = useState(false);
+
+	useEffect(() => {
+		// ハイドレーション完了を待つ
+		setIsHydrated(true);
+		
+		// カスタムイベントリスナーを追加してダッシュボードからカート情報を受信
+		const handleCartUpdate = (event: CustomEvent) => {
+			console.log('📨 Header received cart update:', event.detail.itemCount);
+			setCartItemCount(event.detail.itemCount);
+		};
+
+		const handleCartClickHandler = (event: CustomEvent) => {
+			setOnCartClick(() => event.detail.clickHandler);
+		};
+
+		window.addEventListener('cartUpdated', handleCartUpdate as EventListener);
+		window.addEventListener('cartClickHandlerSet', handleCartClickHandler as EventListener);
+
+		return () => {
+			window.removeEventListener('cartUpdated', handleCartUpdate as EventListener);
+			window.removeEventListener('cartClickHandlerSet', handleCartClickHandler as EventListener);
+		};
+	}, []);
+
+	return { cartItemCount: isHydrated ? cartItemCount : 0, onCartClick };
+};
+
+const Header = () => {
+	const [isVisible, setIsVisible] = useState(true);
+	const [lastScrollY, setLastScrollY] = useState(0);
+	const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+	const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
+	const [authModalTab, setAuthModalTab] = useState<'email' | 'wallet'>('wallet');
+
+	// 統合認証フック
+	const {
+		isAuthenticated,
+		isLoading,
+		authMethod,
+		displayName,
+		emailAddress,
+		walletAddress,
+		isFirebaseAuth,
+		isWalletAuth,
+		hasMultipleAuth,
+		logout,
+		error
+	} = useUnifiedAuth();
+
+	const { cartItemCount, onCartClick } = useCartInDashboard();
+
+	useEffect(() => {
+		// カスタムイベントリスナーを追加してプロフィールページからログインモーダルを開く
+		const handleOpenAuthModal = (event?: CustomEvent) => {
+			const preferredTab = event?.detail?.tab || 'wallet';
+			setAuthModalTab(preferredTab);
+			setIsAuthModalOpen(true);
+		};
+
+		window.addEventListener('openAuthModal', handleOpenAuthModal as EventListener);
+
+		const handleScroll = () => {
+			const currentScrollY = window.scrollY;
+
+			if (currentScrollY < lastScrollY || currentScrollY < 100) {
+				setIsVisible(true);
+			} else if (currentScrollY > lastScrollY && currentScrollY > 100) {
+				setIsVisible(false);
+			}
+
+			setLastScrollY(currentScrollY);
+		};
+
+		window.addEventListener('scroll', handleScroll, { passive: true });
+
+		return () => {
+			window.removeEventListener('scroll', handleScroll);
+			window.removeEventListener('openAuthModal', handleOpenAuthModal as EventListener);
+		};
+	}, [lastScrollY]);
+
+	const handleLogout = async () => {
+		try {
+			await logout();
+			setIsMobileMenuOpen(false);
+		} catch (error) {
+			console.error('ログアウトエラー:', error);
+		}
+	};
+
+	const handleLoginClick = (preferredTab: 'email' | 'wallet' = 'wallet') => {
+		setAuthModalTab(preferredTab);
+		setIsAuthModalOpen(true);
+		setIsMobileMenuOpen(false);
+	};
+
+	const handleCartClick = () => {
+		if (onCartClick) {
+			onCartClick();
+		}
+		setIsMobileMenuOpen(false);
+	};
+
+	// 認証状態に応じた表示名を取得
+	const getDisplayName = () => {
+		if (displayName) return displayName;
+		if (walletAddress) return `${walletAddress.slice(0, 6)}...${walletAddress.slice(-4)}`;
+		if (emailAddress) return emailAddress.split('@')[0];
+		return 'User';
+	};
+
+	// 認証方式のアイコンを取得
+	const getAuthIcon = () => {
+		if (hasMultipleAuth) return '🔗'; // ハイブリッド
+		if (isWalletAuth) return '🦊'; // ウォレット
+		if (isFirebaseAuth) return '📧'; // メール
+		return '👤';
+	};
+
+	// 認証状態の説明文を取得
+	const getAuthDescription = () => {
+		if (hasMultipleAuth) return 'Email + Wallet';
+		if (isWalletAuth) return 'Wallet Connected';
+		if (isFirebaseAuth) return 'Email Account';
+		return '';
+	};
+
+	const navLinks = [
+		{ href: '/dashboard', label: 'Shop', isHome: true },
+		{ href: '/dashboard', label: 'How to Buy' },
+		{ href: '/dashboard', label: 'White Paper' },
+	];
+
+	return (
+		<>
+			<header
+				className={`fixed top-0 left-0 right-0 z-50 transition-transform duration-300 ease-out ${
+					isVisible ? 'translate-y-0' : '-translate-y-full'
+				}`}
+			>
+				{/* Background with blur effect */}
+				<div className="absolute inset-0 bg-black/90 backdrop-blur-md border-b border-dark-300"></div>
+
+				{/* Scanline effect */}
+				<div className="absolute inset-0 overflow-hidden pointer-events-none">
+					<div className="absolute w-full h-px bg-gradient-to-r from-transparent via-neonGreen to-transparent animate-scanline opacity-30"></div>
+				</div>
+
+				<nav className="relative px-4 sm:px-6 lg:px-8">
+					<div className="flex items-center justify-between h-16 max-w-7xl mx-auto">
+						{/* Logo/Brand */}
+						<Link href="/" className="flex items-center space-x-2 group">
+							<div className="relative">
+								<div className="w-8 h-8 bg-gradient-to-br from-neonGreen to-neonOrange rounded-sm animate-pulse-fast"></div>
+								<div className="absolute inset-0 w-8 h-8 bg-gradient-to-br from-neonGreen to-neonOrange rounded-sm blur-sm opacity-50"></div>
+							</div>
+							<span className="text-xl font-heading font-bold text-white group-hover:text-neonGreen transition-colors duration-200 md:animate-glitch-slow">
+								We are on-chain
+							</span>
+						</Link>
+
+						{/* Desktop Navigation */}
+						<div className="hidden md:flex items-center space-x-8">
+							{navLinks.map((link, index) => (
+								<Link
+									key={link.href}
+									href={link.href}
+									className={`relative px-4 py-2 text-sm font-medium transition-all duration-200 group ${
+										link.isHome
+											? 'text-neonGreen'
+											: 'text-gray-300 hover:text-white'
+									}`}
+									style={{ animationDelay: `${index * 100}ms` }}
+								>
+									<span className="relative z-10">{link.label}</span>
+
+									{/* Hover effect */}
+									<div className="absolute inset-0 bg-gradient-to-r from-neonGreen/20 to-neonOrange/20 rounded-sm transform scale-0 group-hover:scale-100 transition-transform duration-200"></div>
+
+									{/* Border animation */}
+									<div className="absolute bottom-0 left-0 w-0 h-px bg-gradient-to-r from-neonGreen to-neonOrange group-hover:w-full transition-all duration-300"></div>
+
+									{/* Glitch effect for active link */}
+									{link.isHome && (
+										<div className="absolute inset-0 bg-neonGreen/10 rounded-sm animate-glitch opacity-30"></div>
+									)}
+								</Link>
+							))}
+
+							{/* Cart Icon - Desktop */}
+							<button
+								onClick={handleCartClick}
+								className="relative p-2 text-gray-300 hover:text-white transition-colors duration-200 hover:bg-dark-200/50 rounded-sm group"
+								aria-label="Shopping cart"
+							>
+								<ShoppingCart className="w-6 h-6" />
+								
+								{/* Cart Badge */}
+								{cartItemCount > 0 && (
+									<div className="absolute -top-1 -right-1 w-5 h-5 bg-gradient-to-r from-neonGreen to-neonOrange rounded-full flex items-center justify-center">
+										<span className="text-xs font-bold text-black">
+											{cartItemCount > 99 ? '99+' : cartItemCount}
+										</span>
+									</div>
+								)}
+
+								{/* Glow effect */}
+								<div className="absolute inset-0 bg-gradient-to-r from-neonGreen/20 to-neonOrange/20 rounded-sm transform scale-0 group-hover:scale-100 transition-transform duration-200"></div>
+							</button>
+
+							{/* Authentication Section */}
+							{isLoading ? (
+								<div className="px-6 py-2">
+									<div className="w-6 h-6 border-2 border-neonGreen border-t-transparent rounded-full animate-spin"></div>
+								</div>
+							) : isAuthenticated ? (
+								<div className="flex items-center space-x-4">
+									{/* User Info - Enhanced with auth method */}
+									<button
+										onClick={() => window.location.href = '/profile'}
+										className="hidden lg:flex flex-col text-right hover:bg-dark-200/50 px-3 py-2 rounded-sm transition-colors group"
+									>
+										<div className="flex items-center space-x-2">
+											<span className="text-xs text-gray-400 group-hover:text-gray-300">
+												{getAuthDescription()}
+											</span>
+											<span className="text-xs">{getAuthIcon()}</span>
+										</div>
+										<span className="text-sm text-white font-medium truncate max-w-32 group-hover:text-neonGreen">
+											{getDisplayName()}
+										</span>
+										{error && (
+											<span className="text-xs text-red-400">Connection Error</span>
+										)}
+									</button>
+
+									{/* User Avatar - Enhanced */}
+									<button
+										onClick={() => window.location.href = '/profile'}
+										className="relative group"
+										title="View Profile"
+									>
+										<div className="w-10 h-10 bg-gradient-to-br from-neonGreen to-neonOrange rounded-full flex items-center justify-center group-hover:scale-110 transition-transform duration-200 border-2 border-transparent group-hover:border-neonGreen/50">
+											{hasMultipleAuth ? (
+												<div className="flex items-center justify-center">
+													<Wallet className="w-4 h-4 text-black" />
+												</div>
+											) : isWalletAuth ? (
+												<Wallet className="w-5 h-5 text-black" />
+											) : (
+												<span className="text-black font-bold text-sm">
+													{getDisplayName()[0].toUpperCase()}
+												</span>
+											)}
+										</div>
+										<div className="absolute inset-0 w-10 h-10 bg-gradient-to-br from-neonGreen to-neonOrange rounded-full blur-sm opacity-50 group-hover:opacity-75 transition-opacity duration-200"></div>
+									</button>
+
+									{/* Quick Actions Dropdown */}
+									<div className="relative group">
+										<button className="p-2 text-gray-300 hover:text-white transition-colors duration-200 hover:bg-dark-200/50 rounded-sm">
+											<Settings className="w-5 h-5" />
+										</button>
+										
+										{/* Dropdown Menu */}
+										<div className="absolute right-0 top-full mt-2 w-48 bg-black/95 border border-neonGreen/30 rounded-sm shadow-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 z-50">
+											<div className="p-2 space-y-1">
+												<button
+													onClick={() => window.location.href = '/profile'}
+													className="w-full flex items-center px-3 py-2 text-sm text-gray-300 hover:text-white hover:bg-neonGreen/10 rounded-sm transition-colors"
+												>
+													<User className="w-4 h-4 mr-2" />
+													Profile
+												</button>
+												
+												{!hasMultipleAuth && (
+													<>
+														{isWalletAuth && (
+															<button
+																onClick={() => handleLoginClick('email')}
+																className="w-full flex items-center px-3 py-2 text-sm text-gray-300 hover:text-white hover:bg-neonGreen/10 rounded-sm transition-colors"
+															>
+																📧 <span className="ml-2">Link Email</span>
+															</button>
+														)}
+														
+														{isFirebaseAuth && (
+															<button
+																onClick={() => handleLoginClick('wallet')}
+																className="w-full flex items-center px-3 py-2 text-sm text-gray-300 hover:text-white hover:bg-neonGreen/10 rounded-sm transition-colors"
+															>
+																<Wallet className="w-4 h-4 mr-2" />
+																Link Wallet
+															</button>
+														)}
+													</>
+												)}
+												
+												<hr className="border-dark-300 my-1" />
+												
+												<button
+													onClick={handleLogout}
+													className="w-full flex items-center px-3 py-2 text-sm text-red-400 hover:text-red-300 hover:bg-red-500/10 rounded-sm transition-colors"
+												>
+													<LogOut className="w-4 h-4 mr-2" />
+													Logout
+												</button>
+											</div>
+										</div>
+									</div>
+								</div>
+							) : (
+								<div className="flex items-center space-x-3">
+									{/* Wallet Connect Button */}
+									<button
+										onClick={() => handleLoginClick('wallet')}
+										className="relative px-4 py-2 bg-gradient-to-r from-neonGreen/20 to-neonOrange/20 border border-neonGreen/50 text-neonGreen font-medium rounded-sm overflow-hidden group transition-all duration-200 hover:shadow-lg hover:shadow-neonGreen/25"
+									>
+										<div className="flex items-center">
+											<Wallet className="w-4 h-4 mr-2" />
+											<span className="text-sm">Wallet</span>
+										</div>
+									</button>
+
+									{/* Email Login Button */}
+									<button
+										onClick={() => handleLoginClick('email')}
+										className="relative px-6 py-2 bg-gradient-to-r from-neonGreen to-neonOrange text-black font-semibold rounded-sm overflow-hidden group transition-all duration-200 hover:shadow-lg hover:shadow-neonGreen/25"
+									>
+										<span className="relative z-10 text-sm">Login</span>
+										<div className="absolute inset-0 bg-gradient-to-r from-neonOrange to-neonGreen transform scale-x-0 group-hover:scale-x-100 transition-transform duration-200 origin-left"></div>
+									</button>
+								</div>
+							)}
+						</div>
+
+						{/* Mobile menu button */}
+						<button
+							onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
+							className="md:hidden relative w-10 h-10 flex flex-col items-center justify-center space-y-1 group"
+							aria-label="Toggle mobile menu"
+						>
+							<span className={`w-6 h-0.5 bg-white transition-all duration-200 ${isMobileMenuOpen ? 'rotate-45 translate-y-1.5' : ''}`}></span>
+							<span className={`w-6 h-0.5 bg-white transition-all duration-200 ${isMobileMenuOpen ? 'opacity-0' : ''}`}></span>
+							<span className={`w-6 h-0.5 bg-white transition-all duration-200 ${isMobileMenuOpen ? '-rotate-45 -translate-y-1.5' : ''}`}></span>
+						</button>
+					</div>
+
+					{/* Mobile Menu - Enhanced */}
+					<div className={`md:hidden transition-all duration-300 ease-out overflow-hidden ${
+						isMobileMenuOpen ? 'max-h-96 opacity-100' : 'max-h-0 opacity-0'
+					}`}>
+						<div className="px-4 py-4 space-y-3 border-t border-dark-300 bg-black/50">
+							{navLinks.map((link, index) => (
+								<Link
+									key={link.href}
+									href={link.href}
+									className={`block px-4 py-3 text-base font-medium transition-all duration-200 rounded-sm ${
+										link.isHome
+											? 'text-neonGreen bg-neonGreen/10 border border-neonGreen/20'
+											: 'text-gray-300 hover:text-white hover:bg-dark-200'
+									}`}
+									onClick={() => setIsMobileMenuOpen(false)}
+									style={{ animationDelay: `${index * 50}ms` }}
+								>
+									{link.label}
+								</Link>
+							))}
+
+							{/* Cart Icon - Mobile */}
+							<button
+								onClick={handleCartClick}
+								className="flex items-center justify-between w-full px-4 py-3 text-base font-medium text-gray-300 hover:text-white hover:bg-dark-200 transition-all duration-200 rounded-sm"
+							>
+								<div className="flex items-center space-x-3">
+									<ShoppingCart className="w-5 h-5" />
+									<span>Shopping Cart</span>
+								</div>
+								{cartItemCount > 0 && (
+									<div className="w-6 h-6 bg-gradient-to-r from-neonGreen to-neonOrange rounded-full flex items-center justify-center">
+										<span className="text-xs font-bold text-black">
+											{cartItemCount > 99 ? '99+' : cartItemCount}
+										</span>
+									</div>
+								)}
+							</button>
+
+							{/* Mobile Authentication Section */}
+							{isLoading ? (
+								<div className="flex justify-center py-4">
+									<div className="w-6 h-6 border-2 border-neonGreen border-t-transparent rounded-full animate-spin"></div>
+								</div>
+							) : isAuthenticated ? (
+								<div className="space-y-3 pt-4 border-t border-dark-300">
+									{/* Profile Link - Mobile */}
+									<button
+										onClick={() => {
+											window.location.href = '/profile';
+											setIsMobileMenuOpen(false);
+										}}
+										className="flex items-center justify-between w-full px-4 py-3 text-base font-medium text-gray-300 hover:text-white hover:bg-dark-200 transition-all duration-200 rounded-sm"
+									>
+										<div className="flex items-center space-x-3">
+											<div className="w-8 h-8 bg-gradient-to-br from-neonGreen to-neonOrange rounded-full flex items-center justify-center">
+												{hasMultipleAuth ? (
+													<Wallet className="w-4 h-4 text-black" />
+												) : isWalletAuth ? (
+													<Wallet className="w-4 h-4 text-black" />
+												) : (
+													<span className="text-black font-bold text-sm">
+														{getDisplayName()[0].toUpperCase()}
+													</span>
+												)}
+											</div>
+											<div className="text-left">
+												<div className="text-sm font-medium">{getDisplayName()}</div>
+												<div className="text-xs text-gray-400">{getAuthDescription()}</div>
+											</div>
+										</div>
+										<span className="text-lg">{getAuthIcon()}</span>
+									</button>
+
+									{/* Link Additional Auth Methods */}
+									{!hasMultipleAuth && (
+										<>
+											{isWalletAuth && (
+												<button
+													onClick={() => handleLoginClick('email')}
+													className="w-full px-4 py-3 text-left text-gray-300 hover:text-white hover:bg-dark-200 transition-all duration-200 rounded-sm"
+												>
+													📧 Link Email Account
+												</button>
+											)}
+											
+											{isFirebaseAuth && (
+												<button
+													onClick={() => handleLoginClick('wallet')}
+													className="w-full px-4 py-3 text-left text-gray-300 hover:text-white hover:bg-dark-200 transition-all duration-200 rounded-sm"
+												>
+													🦊 Link Wallet
+												</button>
+											)}
+										</>
+									)}
+
+									{/* Logout Button */}
+									<button
+										onClick={handleLogout}
+										className="w-full px-6 py-3 bg-red-600/80 hover:bg-red-600 text-white font-semibold rounded-sm transition-all duration-200 hover:shadow-lg hover:shadow-red-500/25"
+									>
+										Logout
+									</button>
+								</div>
+							) : (
+								<div className="space-y-3 pt-4 border-t border-dark-300">
+									<button
+										onClick={() => handleLoginClick('wallet')}
+										className="w-full px-6 py-3 bg-gradient-to-r from-neonGreen/20 to-neonOrange/20 border border-neonGreen/50 text-neonGreen font-semibold rounded-sm transition-all duration-200"
+									>
+										🦊 Connect Wallet
+									</button>
+									
+									<button
+										onClick={() => handleLoginClick('email')}
+										className="w-full px-6 py-3 bg-gradient-to-r from-neonGreen to-neonOrange text-black font-semibold rounded-sm transition-all duration-200 hover:shadow-lg hover:shadow-neonGreen/25"
+									>
+										📧 Email Login
+									</button>
+								</div>
+							)}
+						</div>
+					</div>
+				</nav>
+			</header>
+
+			{/* Extended Auth Modal */}
+			<ExtendedAuthModal
+				isOpen={isAuthModalOpen}
+				onClose={() => setIsAuthModalOpen(false)}
+				defaultTab={authModalTab}
+				preferredChain="evm"
+			/>
+		</>
+	);
+};
+
+export default Header;-e 
 ### FILE: ./src/app/components/ui/Footer.tsx
 
 'use client';
@@ -10302,6 +11919,515 @@ const CyberButton: React.FC<CyberButtonProps> = ({
 };
 
 export default CyberButton;-e 
+### FILE: ./src/app/wallet-auth-demo/page.tsx
+
+// src/app/wallet-auth-demo/page.tsx
+'use client';
+
+import React, { useState } from 'react';
+import { useUnifiedAuth } from '@/contexts/UnifiedAuthContext';
+import { useEVMWallet } from '@/wallet-auth/adapters/evm/EVMWalletAdapterWrapper';
+import { ExtendedAuthModal } from '../components/auth/ExtendedAuthModal';
+import CyberCard from '../components/common/CyberCard';
+import CyberButton from '../components/common/CyberButton';
+import { 
+	Wallet, 
+	Mail, 
+	Shield, 
+	CheckCircle, 
+	AlertTriangle, 
+	Zap,
+	User,
+	Settings,
+	ExternalLink,
+	Copy,
+	Check
+} from 'lucide-react';
+
+export default function WalletAuthDemo() {
+	const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
+	const [authModalTab, setAuthModalTab] = useState<'email' | 'wallet'>('wallet');
+	const [copiedAddress, setCopiedAddress] = useState(false);
+
+	// 統合認証
+	const unifiedAuth = useUnifiedAuth();
+	const {
+		isAuthenticated,
+		isLoading,
+		authMethod,
+		displayName,
+		emailAddress,
+		walletAddress,
+		isFirebaseAuth,
+		isWalletAuth,
+		hasMultipleAuth,
+		logout,
+		connectWallet,
+		authenticateWallet,
+		switchWalletChain,
+		authFlowState,
+		error,
+		_debug
+	} = unifiedAuth;
+
+	// EVM Wallet詳細情報
+	const evmWallet = useEVMWallet();
+
+	// アドレスコピー
+	const handleCopyAddress = (address: string) => {
+		navigator.clipboard.writeText(address);
+		setCopiedAddress(true);
+		setTimeout(() => setCopiedAddress(false), 2000);
+	};
+
+	// 認証方式別のテスト
+	const handleTestWalletConnect = async () => {
+		try {
+			await connectWallet('evm');
+		} catch (error) {
+			console.error('Wallet connect test failed:', error);
+		}
+	};
+
+	const handleTestWalletAuth = async () => {
+		try {
+			await authenticateWallet('evm');
+		} catch (error) {
+			console.error('Wallet auth test failed:', error);
+		}
+	};
+
+	const handleTestChainSwitch = async () => {
+		try {
+			await switchWalletChain('evm', 1); // Ethereum mainnet
+		} catch (error) {
+			console.error('Chain switch test failed:', error);
+		}
+	};
+
+	const openAuthModal = (tab: 'email' | 'wallet') => {
+		setAuthModalTab(tab);
+		setIsAuthModalOpen(true);
+	};
+
+	return (
+		<div className="min-h-screen bg-black text-white p-8">
+			<div className="max-w-7xl mx-auto space-y-8">
+				{/* Header */}
+				<div className="text-center space-y-4">
+					<h1 className="text-4xl font-heading font-bold text-neonGreen">
+						🚀 Wallet Authentication Demo
+					</h1>
+					<p className="text-gray-400 max-w-2xl mx-auto">
+						Test the integrated Firebase + Wallet authentication system. 
+						Connect with MetaMask, WalletConnect, or traditional email/Google login.
+					</p>
+				</div>
+
+				{/* Auth Status Overview */}
+				<CyberCard title="Authentication Status" showEffects={false}>
+					<div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+						{/* Overall Status */}
+						<div className="text-center">
+							<div className={`w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-3 ${
+								isAuthenticated 
+									? 'bg-neonGreen/20 border-2 border-neonGreen' 
+									: 'bg-gray-500/20 border-2 border-gray-500'
+							}`}>
+								{isAuthenticated ? (
+									<CheckCircle className="w-8 h-8 text-neonGreen" />
+								) : (
+									<Shield className="w-8 h-8 text-gray-500" />
+								)}
+							</div>
+							<h3 className="font-semibold text-white mb-1">
+								{isAuthenticated ? 'Authenticated' : 'Not Authenticated'}
+							</h3>
+							<p className="text-sm text-gray-400">
+								Method: {authMethod.toUpperCase()}
+							</p>
+							{hasMultipleAuth && (
+								<div className="flex items-center justify-center mt-2 text-xs text-neonOrange">
+									<Zap className="w-3 h-3 mr-1" />
+									Hybrid Mode
+								</div>
+							)}
+						</div>
+
+						{/* Firebase Auth */}
+						<div className="text-center">
+							<div className={`w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-3 ${
+								isFirebaseAuth 
+									? 'bg-blue-500/20 border-2 border-blue-500' 
+									: 'bg-gray-500/20 border-2 border-gray-500'
+							}`}>
+								<Mail className="w-8 h-8 text-blue-500" />
+							</div>
+							<h3 className="font-semibold text-white mb-1">Firebase Auth</h3>
+							<p className="text-sm text-gray-400">
+								{isFirebaseAuth ? 'Connected' : 'Disconnected'}
+							</p>
+							{emailAddress && (
+								<p className="text-xs text-blue-400 mt-1">{emailAddress}</p>
+							)}
+						</div>
+
+						{/* Wallet Auth */}
+						<div className="text-center">
+							<div className={`w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-3 ${
+								isWalletAuth 
+									? 'bg-neonGreen/20 border-2 border-neonGreen' 
+									: 'bg-gray-500/20 border-2 border-gray-500'
+							}`}>
+								<Wallet className="w-8 h-8 text-neonGreen" />
+							</div>
+							<h3 className="font-semibold text-white mb-1">Wallet Auth</h3>
+							<p className="text-sm text-gray-400">
+								{isWalletAuth ? 'Connected' : 'Disconnected'}
+							</p>
+							{walletAddress && (
+								<div className="mt-1">
+									<button
+										onClick={() => handleCopyAddress(walletAddress)}
+										className="text-xs text-neonGreen hover:text-neonOrange transition-colors flex items-center justify-center mx-auto"
+									>
+										{walletAddress.slice(0, 6)}...{walletAddress.slice(-4)}
+										{copiedAddress ? <Check className="w-3 h-3 ml-1" /> : <Copy className="w-3 h-3 ml-1" />}
+									</button>
+								</div>
+							)}
+						</div>
+					</div>
+				</CyberCard>
+
+				{/* Error Display */}
+				{error && (
+					<div className="bg-red-900/30 border border-red-500/50 text-red-300 px-4 py-3 rounded-sm">
+						<div className="flex items-center">
+							<AlertTriangle className="w-5 h-5 mr-2" />
+							<span>{error}</span>
+						</div>
+					</div>
+				)}
+
+				{/* Auth Flow State */}
+				{authFlowState.currentStep !== 'idle' && (
+					<CyberCard title="Authentication Flow" showEffects={false}>
+						<div className="space-y-4">
+							<div className="flex items-center justify-between">
+								<span className="text-gray-400">Current Step:</span>
+								<span className="text-neonGreen font-semibold capitalize">
+									{authFlowState.currentStep.replace('-', ' ')}
+								</span>
+							</div>
+							
+							{authFlowState.progress > 0 && (
+								<div>
+									<div className="flex items-center justify-between mb-2">
+										<span className="text-sm text-gray-400">Progress:</span>
+										<span className="text-sm text-neonGreen">{authFlowState.progress}%</span>
+									</div>
+									<div className="w-full h-2 bg-dark-300 rounded-full overflow-hidden">
+										<div 
+											className="h-full bg-gradient-to-r from-neonGreen to-neonOrange transition-all duration-300"
+											style={{ width: `${authFlowState.progress}%` }}
+										/>
+									</div>
+								</div>
+							)}
+
+							{authFlowState.selectedChain && (
+								<div className="flex items-center justify-between">
+									<span className="text-gray-400">Selected Chain:</span>
+									<span className="text-white">{authFlowState.selectedChain.toUpperCase()}</span>
+								</div>
+							)}
+
+							{authFlowState.signatureRequired && (
+								<div className="bg-neonOrange/10 border border-neonOrange/30 rounded-sm p-3">
+									<div className="flex items-center text-neonOrange">
+										<Settings className="w-4 h-4 mr-2" />
+										<span className="text-sm">Signature required in wallet</span>
+									</div>
+								</div>
+							)}
+						</div>
+					</CyberCard>
+				)}
+
+				{/* Quick Actions */}
+				<div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+					{/* Authentication Actions */}
+					<CyberCard title="Authentication" showEffects={false}>
+						<div className="space-y-4">
+							{!isAuthenticated ? (
+								<>
+									<CyberButton
+										variant="primary"
+										className="w-full flex items-center justify-center"
+										onClick={() => openAuthModal('wallet')}
+									>
+										<Wallet className="w-4 h-4 mr-2" />
+										Connect Wallet
+									</CyberButton>
+
+									<CyberButton
+										variant="outline"
+										className="w-full flex items-center justify-center"
+										onClick={() => openAuthModal('email')}
+									>
+										<Mail className="w-4 h-4 mr-2" />
+										Email Login
+									</CyberButton>
+								</>
+							) : (
+								<>
+									{!hasMultipleAuth && (
+										<>
+											{isWalletAuth && !isFirebaseAuth && (
+												<CyberButton
+													variant="outline"
+													className="w-full flex items-center justify-center"
+													onClick={() => openAuthModal('email')}
+												>
+													<Mail className="w-4 h-4 mr-2" />
+													Link Email Account
+												</CyberButton>
+											)}
+
+											{isFirebaseAuth && !isWalletAuth && (
+												<CyberButton
+													variant="outline"
+													className="w-full flex items-center justify-center"
+													onClick={() => openAuthModal('wallet')}
+												>
+													<Wallet className="w-4 h-4 mr-2" />
+													Link Wallet
+												</CyberButton>
+											)}
+										</>
+									)}
+
+									<CyberButton
+										variant="outline"
+										className="w-full flex items-center justify-center text-red-400 border-red-400 hover:bg-red-400/10"
+										onClick={logout}
+									>
+										Logout
+									</CyberButton>
+								</>
+							)}
+						</div>
+					</CyberCard>
+
+					{/* Wallet Actions */}
+					<CyberCard title="Wallet Testing" showEffects={false}>
+						<div className="space-y-4">
+							<CyberButton
+								variant="outline"
+								className="w-full"
+								onClick={handleTestWalletConnect}
+								disabled={!evmWallet || evmWallet.isConnected}
+							>
+								Test Wallet Connect
+							</CyberButton>
+
+							<CyberButton
+								variant="outline"
+								className="w-full"
+								onClick={handleTestWalletAuth}
+								disabled={!evmWallet || !evmWallet.isConnected || evmWallet.isAuthenticated}
+							>
+								Test Wallet Auth
+							</CyberButton>
+
+							<CyberButton
+								variant="outline"
+								className="w-full"
+								onClick={handleTestChainSwitch}
+								disabled={!evmWallet || !evmWallet.isConnected}
+							>
+								Test Chain Switch
+							</CyberButton>
+						</div>
+					</CyberCard>
+				</div>
+
+				{/* Detailed Status */}
+				<div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+					{/* Unified Auth Details */}
+					<CyberCard title="Unified Auth Details" showEffects={false}>
+						<div className="space-y-3 text-sm">
+							<div className="grid grid-cols-2 gap-4">
+								<div>
+									<span className="text-gray-400">Auth Method:</span>
+									<div className="text-white font-mono">{authMethod}</div>
+								</div>
+								<div>
+									<span className="text-gray-400">Loading:</span>
+									<div className="text-white font-mono">{isLoading ? 'true' : 'false'}</div>
+								</div>
+								<div>
+									<span className="text-gray-400">Display Name:</span>
+									<div className="text-white font-mono">{displayName || 'null'}</div>
+								</div>
+								<div>
+									<span className="text-gray-400">Email:</span>
+									<div className="text-white font-mono">{emailAddress || 'null'}</div>
+								</div>
+							</div>
+
+							{walletAddress && (
+								<div>
+									<span className="text-gray-400">Wallet Address:</span>
+									<div className="text-neonGreen font-mono text-xs break-all">
+										{walletAddress}
+									</div>
+								</div>
+							)}
+						</div>
+					</CyberCard>
+
+					{/* EVM Wallet Details */}
+					<CyberCard title="EVM Wallet Details" showEffects={false}>
+						<div className="space-y-3 text-sm">
+							<div className="grid grid-cols-2 gap-4">
+								<div>
+									<span className="text-gray-400">Connected:</span>
+									<div className="text-white font-mono">{evmWallet.isConnected ? 'true' : 'false'}</div>
+								</div>
+								<div>
+									<span className="text-gray-400">Connecting:</span>
+									<div className="text-white font-mono">{evmWallet.isConnecting ? 'true' : 'false'}</div>
+								</div>
+								<div>
+									<span className="text-gray-400">Authenticated:</span>
+									<div className="text-white font-mono">{evmWallet.isAuthenticated ? 'true' : 'false'}</div>
+								</div>
+								<div>
+									<span className="text-gray-400">Chain ID:</span>
+									<div className="text-white font-mono">{evmWallet.chainId || 'null'}</div>
+								</div>
+							</div>
+
+							{evmWallet.chainName && (
+								<div>
+									<span className="text-gray-400">Chain Name:</span>
+									<div className="text-white font-mono">{evmWallet.chainName}</div>
+								</div>
+							)}
+
+							{evmWallet.error && (
+								<div>
+									<span className="text-gray-400">Error:</span>
+									<div className="text-red-400 font-mono text-xs">{evmWallet.error}</div>
+								</div>
+							)}
+						</div>
+					</CyberCard>
+				</div>
+
+				{/* Debug Information */}
+				<CyberCard title="Debug Information" showEffects={false}>
+					<div className="space-y-4">
+						<div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
+							<div>
+								<span className="text-gray-400">Firebase Ready:</span>
+								<div className={`font-mono ${_debug.firebaseReady ? 'text-neonGreen' : 'text-red-400'}`}>
+									{_debug.firebaseReady ? 'true' : 'false'}
+								</div>
+							</div>
+							<div>
+								<span className="text-gray-400">Wallet Ready:</span>
+								<div className={`font-mono ${_debug.walletReady ? 'text-neonGreen' : 'text-red-400'}`}>
+									{_debug.walletReady ? 'true' : 'false'}
+								</div>
+							</div>
+							<div>
+								<span className="text-gray-400">Last Error:</span>
+								<div className="text-red-400 font-mono text-xs">
+									{_debug.lastError || 'none'}
+								</div>
+							</div>
+						</div>
+
+						{/* Raw State Dump */}
+						<details className="bg-dark-200/30 rounded-sm p-3">
+							<summary className="text-gray-400 cursor-pointer hover:text-white">
+								Raw State (Click to expand)
+							</summary>
+							<pre className="mt-3 text-xs text-gray-300 overflow-auto max-h-64 bg-black/50 p-3 rounded">
+								{JSON.stringify({
+									unifiedAuth: {
+										isAuthenticated,
+										authMethod,
+										isLoading,
+										hasMultipleAuth,
+										displayName,
+										emailAddress,
+										walletAddress,
+									},
+									evmWallet: {
+										isConnected: evmWallet.isConnected,
+										isConnecting: evmWallet.isConnecting,
+										isAuthenticated: evmWallet.isAuthenticated,
+										address: evmWallet.address,
+										chainId: evmWallet.chainId,
+										chainName: evmWallet.chainName,
+									},
+									authFlowState,
+								}, null, 2)}
+							</pre>
+						</details>
+					</div>
+				</CyberCard>
+
+				{/* Links */}
+				<CyberCard title="Navigation" showEffects={false}>
+					<div className="flex flex-wrap gap-4">
+						<CyberButton
+							variant="outline"
+							size="sm"
+							onClick={() => window.location.href = '/dashboard'}
+							className="flex items-center"
+						>
+							<ExternalLink className="w-4 h-4 mr-2" />
+							Dashboard
+						</CyberButton>
+
+						<CyberButton
+							variant="outline"
+							size="sm"
+							onClick={() => window.location.href = '/profile'}
+							className="flex items-center"
+						>
+							<User className="w-4 h-4 mr-2" />
+							Profile
+						</CyberButton>
+
+						<CyberButton
+							variant="outline"
+							size="sm"
+							onClick={() => window.location.href = '/'}
+							className="flex items-center"
+						>
+							<ExternalLink className="w-4 h-4 mr-2" />
+							Home
+						</CyberButton>
+					</div>
+				</CyberCard>
+			</div>
+
+			{/* Extended Auth Modal */}
+			<ExtendedAuthModal
+				isOpen={isAuthModalOpen}
+				onClose={() => setIsAuthModalOpen(false)}
+				defaultTab={authModalTab}
+				preferredChain="evm"
+			/>
+		</div>
+	);
+}-e 
 ### FILE: ./src/app/layout.tsx
 
 import { Montserrat, Space_Grotesk } from 'next/font/google';
@@ -10338,6 +12464,58 @@ export default function RootLayout({
 				<AuthProvider>
 					{children}
 				</AuthProvider>
+			</body>
+		</html>
+	);
+}-e 
+### FILE: ./src/app/layout-simplified.tsx
+
+// src/app/layout-simplified.tsx
+import { Montserrat, Space_Grotesk } from 'next/font/google';
+import './globals.css';
+import type { Metadata } from 'next';
+import { AuthProvider } from '@/contexts/AuthContext';
+
+// フォントの設定
+const montserrat = Montserrat({
+	subsets: ['latin'],
+	variable: '--font-montserrat',
+	display: 'swap',
+});
+
+const spaceGrotesk = Space_Grotesk({
+	subsets: ['latin'],
+	variable: '--font-space-grotesk',
+	display: 'swap',
+});
+
+// メタデータ設定
+export const metadata: Metadata = {
+	title: 'We Are On-Chain | Pepe Protein',
+	description: 'Pay, Pump, Live. The crypto-exclusive protein for the blockchain generation.',
+	keywords: 'crypto, protein, blockchain, pepe, fitness, cryptocurrency',
+};
+
+// 動的インポートでプロバイダーを読み込み
+const DynamicProviders = ({ children }: { children: React.ReactNode }) => {
+	return (
+		<AuthProvider>
+			{children}
+		</AuthProvider>
+	);
+};
+
+export default function RootLayout({
+	children,
+}: {
+	children: React.ReactNode;
+}) {
+	return (
+		<html lang="en" className={`${montserrat.variable} ${spaceGrotesk.variable}`}>
+			<body className="bg-black text-white min-h-screen font-sans antialiased">
+				<DynamicProviders>
+					{children}
+				</DynamicProviders>
 			</body>
 		</html>
 	);
@@ -13676,6 +15854,2053 @@ export const sanitizeUserData = (data: UpdateUserProfile): UpdateUserProfile => 
 
 	return sanitized;
 };-e 
+### FILE: ./src/wallet-auth/adapters/evm/EVMAuthService.ts
+
+// src/wallet-auth/adapters/evm/EVMAuthService.ts
+import { verifyMessage } from 'ethers';
+import { nanoid } from 'nanoid';
+import {
+	ChainType,
+	WalletAuthResult,
+	WalletSignatureData
+} from '../../../../types/wallet';
+import { WalletAdapter, WalletAuthService } from '../../core/WalletAdapterInterface';
+
+/**
+ * EVM系ウォレット認証サービス
+ * Ethereum系チェーンでの署名検証とセッション管理を行う
+ */
+export class EVMAuthService implements WalletAuthService {
+	private nonceStorage = new Map<string, { nonce: string; timestamp: number }>();
+	private sessionStorage = new Map<string, { address: string; chainType: ChainType; expires: number }>();
+
+	// Nonce有効期限（5分）
+	private readonly NONCE_EXPIRY = 5 * 60 * 1000;
+
+	// セッション有効期限（24時間）
+	private readonly SESSION_EXPIRY = 24 * 60 * 60 * 1000;
+
+	// ドメイン設定
+	private readonly DOMAIN = typeof window !== 'undefined' ? window.location.host : 'localhost';
+
+	generateNonce(): string {
+		return nanoid(32);
+	}
+
+	validateNonce(nonce: string): boolean {
+		const now = Date.now();
+
+		// 期限切れのnonceをクリーンアップ
+		for (const [address, data] of this.nonceStorage.entries()) {
+			if (now - data.timestamp > this.NONCE_EXPIRY) {
+				this.nonceStorage.delete(address);
+			}
+		}
+
+		// nonceの存在確認
+		return Array.from(this.nonceStorage.values()).some(data =>
+			data.nonce === nonce && (now - data.timestamp) <= this.NONCE_EXPIRY
+		);
+	}
+
+	storeNonce(address: string, nonce: string): void {
+		this.nonceStorage.set(address.toLowerCase(), {
+			nonce,
+			timestamp: Date.now()
+		});
+	}
+
+	clearNonce(address: string): void {
+		this.nonceStorage.delete(address.toLowerCase());
+	}
+
+	createAuthMessage(address: string, nonce: string, chainType: ChainType): string {
+		const timestamp = new Date().toISOString();
+
+		return `Welcome to We are on-chain!
+
+Click to sign in and accept the Terms of Service.
+
+This request will not trigger a blockchain transaction or cost any gas fees.
+
+Wallet address: ${address}
+Chain: ${chainType.toUpperCase()}
+Domain: ${this.DOMAIN}
+Nonce: ${nonce}
+Issued At: ${timestamp}`;
+	}
+
+	parseAuthMessage(message: string): {
+		address: string;
+		nonce: string;
+		timestamp: number;
+		domain: string;
+	} | null {
+		try {
+			const lines = message.split('\n');
+			let address = '';
+			let nonce = '';
+			let timestamp = 0;
+			let domain = '';
+
+			for (const line of lines) {
+				if (line.startsWith('Wallet address: ')) {
+					address = line.replace('Wallet address: ', '').trim();
+				} else if (line.startsWith('Domain: ')) {
+					domain = line.replace('Domain: ', '').trim();
+				} else if (line.startsWith('Nonce: ')) {
+					nonce = line.replace('Nonce: ', '').trim();
+				} else if (line.startsWith('Issued At: ')) {
+					const timestampStr = line.replace('Issued At: ', '').trim();
+					timestamp = new Date(timestampStr).getTime();
+				}
+			}
+
+			if (!address || !nonce || !timestamp || !domain) {
+				return null;
+			}
+
+			return { address, nonce, timestamp, domain };
+		} catch (error) {
+			console.error('Failed to parse auth message:', error);
+			return null;
+		}
+	}
+
+	async verifySignature(
+		signature: string,
+		message: string,
+		address: string,
+		chainType: ChainType
+	): Promise<boolean> {
+		try {
+			// EVM系チェーンでの署名検証
+			if (chainType !== 'evm') {
+				throw new Error(`Unsupported chain type: ${chainType}`);
+			}
+
+			// ethers.jsを使用して署名を検証
+			const recoveredAddress = verifyMessage(message, signature);
+
+			// アドレスの正規化と比較
+			const normalizedRecovered = recoveredAddress.toLowerCase();
+			const normalizedExpected = address.toLowerCase();
+
+			return normalizedRecovered === normalizedExpected;
+		} catch (error) {
+			console.error('Signature verification failed:', error);
+			return false;
+		}
+	}
+
+	async authenticate(adapter: WalletAdapter): Promise<WalletAuthResult> {
+		try {
+			// 1. ウォレット接続確認
+			if (!adapter.isConnected()) {
+				return {
+					success: false,
+					error: 'Wallet not connected'
+				};
+			}
+
+			const address = adapter.getAddress();
+			if (!address) {
+				return {
+					success: false,
+					error: 'No wallet address available'
+				};
+			}
+
+			// 2. Nonce生成と保存
+			const nonce = this.generateNonce();
+			this.storeNonce(address, nonce);
+
+			// 3. 署名要求
+			let signatureData: WalletSignatureData;
+			try {
+				signatureData = await adapter.signAuthMessage(nonce);
+			} catch (error) {
+				this.clearNonce(address);
+				return {
+					success: false,
+					error: error instanceof Error ? error.message : 'Signature failed'
+				};
+			}
+
+			// 4. 署名検証
+			const isValid = await this.verifySignature(
+				signatureData.signature,
+				signatureData.message,
+				signatureData.address,
+				signatureData.chainType
+			);
+
+			if (!isValid) {
+				this.clearNonce(address);
+				return {
+					success: false,
+					error: 'Invalid signature'
+				};
+			}
+
+			// 5. Nonce検証
+			if (!this.validateNonce(nonce)) {
+				this.clearNonce(address);
+				return {
+					success: false,
+					error: 'Invalid or expired nonce'
+				};
+			}
+
+			// 6. メッセージ内容検証
+			const parsedMessage = this.parseAuthMessage(signatureData.message);
+			if (!parsedMessage || parsedMessage.address.toLowerCase() !== address.toLowerCase()) {
+				this.clearNonce(address);
+				return {
+					success: false,
+					error: 'Invalid message content'
+				};
+			}
+
+			// 7. 認証成功
+			this.clearNonce(address);
+
+			return {
+				success: true,
+				user: {
+					address: signatureData.address,
+					chainType: signatureData.chainType,
+					chainId: signatureData.chainId
+				},
+				signature: signatureData
+			};
+
+		} catch (error) {
+			console.error('Authentication failed:', error);
+			return {
+				success: false,
+				error: error instanceof Error ? error.message : 'Authentication failed'
+			};
+		}
+	}
+
+	async logout(address: string): Promise<void> {
+		// Nonce削除
+		this.clearNonce(address);
+
+		// セッション削除
+		const sessionKey = this.generateSessionKey(address);
+		this.sessionStorage.delete(sessionKey);
+
+		// ローカルストレージからも削除
+		if (typeof window !== 'undefined') {
+			localStorage.removeItem(`wallet_session_${address.toLowerCase()}`);
+		}
+	}
+
+	async createSession(authResult: WalletAuthResult): Promise<string> {
+		if (!authResult.success || !authResult.user) {
+			throw new Error('Cannot create session for failed authentication');
+		}
+
+		const sessionToken = nanoid(64);
+		const sessionKey = this.generateSessionKey(authResult.user.address);
+		const expires = Date.now() + this.SESSION_EXPIRY;
+
+		// メモリに保存
+		this.sessionStorage.set(sessionKey, {
+			address: authResult.user.address,
+			chainType: authResult.user.chainType,
+			expires
+		});
+
+		// ローカルストレージにも保存
+		if (typeof window !== 'undefined') {
+			const sessionData = {
+				token: sessionToken,
+				address: authResult.user.address,
+				chainType: authResult.user.chainType,
+				expires
+			};
+			localStorage.setItem(
+				`wallet_session_${authResult.user.address.toLowerCase()}`,
+				JSON.stringify(sessionData)
+			);
+		}
+
+		return sessionToken;
+	}
+
+	async validateSession(sessionToken: string): Promise<boolean> {
+		if (!sessionToken) return false;
+
+		try {
+			// ローカルストレージから検索
+			if (typeof window !== 'undefined') {
+				for (let i = 0; i < localStorage.length; i++) {
+					const key = localStorage.key(i);
+					if (key?.startsWith('wallet_session_')) {
+						const data = localStorage.getItem(key);
+						if (data) {
+							const sessionData = JSON.parse(data);
+							if (sessionData.token === sessionToken) {
+								// 有効期限チェック
+								if (Date.now() > sessionData.expires) {
+									localStorage.removeItem(key);
+									return false;
+								}
+								return true;
+							}
+						}
+					}
+				}
+			}
+
+			return false;
+		} catch (error) {
+			console.error('Session validation failed:', error);
+			return false;
+		}
+	}
+
+	async refreshSession(sessionToken: string): Promise<string> {
+		const isValid = await this.validateSession(sessionToken);
+		if (!isValid) {
+			throw new Error('Invalid session token');
+		}
+
+		// 新しいトークンを生成
+		const newToken = nanoid(64);
+		const expires = Date.now() + this.SESSION_EXPIRY;
+
+		// ローカルストレージで該当セッションを更新
+		if (typeof window !== 'undefined') {
+			for (let i = 0; i < localStorage.length; i++) {
+				const key = localStorage.key(i);
+				if (key?.startsWith('wallet_session_')) {
+					const data = localStorage.getItem(key);
+					if (data) {
+						const sessionData = JSON.parse(data);
+						if (sessionData.token === sessionToken) {
+							sessionData.token = newToken;
+							sessionData.expires = expires;
+							localStorage.setItem(key, JSON.stringify(sessionData));
+							break;
+						}
+					}
+				}
+			}
+		}
+
+		return newToken;
+	}
+
+	async destroySession(sessionToken: string): Promise<void> {
+		// ローカルストレージから削除
+		if (typeof window !== 'undefined') {
+			for (let i = 0; i < localStorage.length; i++) {
+				const key = localStorage.key(i);
+				if (key?.startsWith('wallet_session_')) {
+					const data = localStorage.getItem(key);
+					if (data) {
+						const sessionData = JSON.parse(data);
+						if (sessionData.token === sessionToken) {
+							localStorage.removeItem(key);
+
+							// メモリからも削除
+							const sessionKey = this.generateSessionKey(sessionData.address);
+							this.sessionStorage.delete(sessionKey);
+							break;
+						}
+					}
+				}
+			}
+		}
+	}
+
+	// プライベートヘルパーメソッド
+	private generateSessionKey(address: string): string {
+		return `session_${address.toLowerCase()}`;
+	}
+
+	// セッションクリーンアップ（定期実行推奨）
+	public cleanupExpiredSessions(): void {
+		const now = Date.now();
+
+		// メモリからクリーンアップ
+		for (const [key, session] of this.sessionStorage.entries()) {
+			if (now > session.expires) {
+				this.sessionStorage.delete(key);
+			}
+		}
+
+		// ローカルストレージからクリーンアップ
+		if (typeof window !== 'undefined') {
+			const keysToRemove: string[] = [];
+
+			for (let i = 0; i < localStorage.length; i++) {
+				const key = localStorage.key(i);
+				if (key?.startsWith('wallet_session_')) {
+					const data = localStorage.getItem(key);
+					if (data) {
+						try {
+							const sessionData = JSON.parse(data);
+							if (now > sessionData.expires) {
+								keysToRemove.push(key);
+							}
+						} catch (error) {
+							// 破損したデータも削除
+							keysToRemove.push(key);
+						}
+					}
+				}
+			}
+
+			keysToRemove.forEach(key => localStorage.removeItem(key));
+		}
+	}
+}-e 
+### FILE: ./src/wallet-auth/adapters/evm/chain-config.ts
+
+// src/wallet-auth/adapters/evm/chain-config.ts
+import { Chain } from 'wagmi';
+import { mainnet, sepolia, polygon, bsc, avalanche, avalancheFuji } from 'wagmi/chains';
+import { EVMChainConfig } from '../../../../types/wallet';
+
+/**
+ * サポートするEVMチェーンの設定
+ */
+export const EVM_CHAINS: Record<string, Chain> = {
+	// Mainnets
+	ethereum: mainnet,
+	polygon: polygon,
+	bsc: bsc,
+	avalanche: avalanche,
+
+	// Testnets
+	sepolia: sepolia,
+	avalancheFuji: avalancheFuji,
+};
+
+/**
+ * 本番環境とテスト環境のチェーン設定
+ */
+export const getEVMChains = (): Chain[] => {
+	const isDevelopment = process.env.NODE_ENV === 'development';
+
+	if (isDevelopment) {
+		// 開発環境：テストネットも含める
+		return [
+			mainnet,
+			polygon,
+			avalanche,
+			sepolia,
+			avalancheFuji,
+		];
+	} else {
+		// 本番環境：メインネットのみ
+		return [
+			mainnet,
+			polygon,
+			avalanche,
+		];
+	}
+};
+
+/**
+ * デフォルトチェーン（環境別）
+ */
+export const getDefaultChain = (): Chain => {
+	const isDevelopment = process.env.NODE_ENV === 'development';
+	return isDevelopment ? avalancheFuji : mainnet;
+};
+
+/**
+ * 内部形式からWagmi形式への変換
+ */
+export const evmConfigToWagmiChain = (config: EVMChainConfig): Chain => {
+	return {
+		id: config.chainId,
+		name: config.name,
+		network: config.name.toLowerCase().replace(/\s+/g, '-'), // networkプロパティを追加
+		nativeCurrency: config.nativeCurrency,
+		rpcUrls: {
+			default: {
+				http: config.rpcUrls,
+			},
+			public: {
+				http: config.rpcUrls,
+			},
+		},
+		blockExplorers: config.blockExplorerUrls ? {
+			default: {
+				name: 'Explorer',
+				url: config.blockExplorerUrls[0],
+			},
+		} : undefined,
+		testnet: config.isTestnet,
+	};
+};
+
+/**
+ * WagmiチェーンからEVM設定への変換
+ */
+export const wagmiChainToEVMConfig = (chain: Chain): EVMChainConfig => {
+	return {
+		chainId: chain.id,
+		name: chain.name,
+		nativeCurrency: chain.nativeCurrency,
+		rpcUrls: [...chain.rpcUrls.default.http], // readonly配列をmutable配列にコピー
+		blockExplorerUrls: chain.blockExplorers ? [chain.blockExplorers.default.url] : undefined,
+		iconUrls: [],
+		isTestnet: chain.testnet,
+	};
+};
+
+/**
+ * チェーンID別のアイコンマッピング
+ */
+export const CHAIN_ICONS: Record<number, string> = {
+	1: '🔵', // Ethereum
+	137: '🟣', // Polygon
+	56: '🟡', // BSC
+	43114: '🔺', // Avalanche
+	11155111: '🔵', // Sepolia
+	43113: '🔺', // Avalanche Fuji
+};
+
+/**
+ * チェーン表示名のマッピング
+ */
+export const CHAIN_DISPLAY_NAMES: Record<number, string> = {
+	1: 'Ethereum',
+	137: 'Polygon',
+	56: 'BSC',
+	43114: 'Avalanche',
+	11155111: 'Sepolia Testnet',
+	43113: 'Avalanche Fuji',
+};
+
+/**
+ * チェーンの色テーマ
+ */
+export const CHAIN_COLORS: Record<number, { primary: string; secondary: string }> = {
+	1: { primary: '#627EEA', secondary: '#8B9DC3' }, // Ethereum blue
+	137: { primary: '#8247E5', secondary: '#A66EF5' }, // Polygon purple
+	56: { primary: '#F3BA2F', secondary: '#F8D347' }, // BSC yellow
+	43114: { primary: '#E84142', secondary: '#ED6B6C' }, // Avalanche red
+	11155111: { primary: '#627EEA', secondary: '#8B9DC3' }, // Sepolia (same as Ethereum)
+	43113: { primary: '#E84142', secondary: '#ED6B6C' }, // Fuji (same as Avalanche)
+};
+
+/**
+ * ガス料金の単位
+ */
+export const GAS_UNITS: Record<number, string> = {
+	1: 'gwei',
+	137: 'gwei',
+	56: 'gwei',
+	43114: 'nAVAX',
+	11155111: 'gwei',
+	43113: 'nAVAX',
+};
+
+/**
+ * チェーン固有の設定
+ */
+export interface ChainSpecificConfig {
+	confirmations: number;
+	blockTime: number; // seconds
+	maxGasLimit: number;
+	nativeTokenDecimals: number;
+	explorerApiUrl?: string;
+}
+
+export const CHAIN_CONFIGS: Record<number, ChainSpecificConfig> = {
+	1: {
+		confirmations: 12,
+		blockTime: 12,
+		maxGasLimit: 10000000,
+		nativeTokenDecimals: 18,
+		explorerApiUrl: 'https://api.etherscan.io/api',
+	},
+	137: {
+		confirmations: 10,
+		blockTime: 2,
+		maxGasLimit: 20000000,
+		nativeTokenDecimals: 18,
+		explorerApiUrl: 'https://api.polygonscan.com/api',
+	},
+	56: {
+		confirmations: 15,
+		blockTime: 3,
+		maxGasLimit: 10000000,
+		nativeTokenDecimals: 18,
+		explorerApiUrl: 'https://api.bscscan.com/api',
+	},
+	43114: {
+		confirmations: 5,
+		blockTime: 3,
+		maxGasLimit: 8000000,
+		nativeTokenDecimals: 18,
+		explorerApiUrl: 'https://api.routescan.io/v2/network/mainnet/evm/43114/etherscan/api',
+	},
+	11155111: {
+		confirmations: 3,
+		blockTime: 12,
+		maxGasLimit: 10000000,
+		nativeTokenDecimals: 18,
+		explorerApiUrl: 'https://api-sepolia.etherscan.io/api',
+	},
+	43113: {
+		confirmations: 1,
+		blockTime: 3,
+		maxGasLimit: 8000000,
+		nativeTokenDecimals: 18,
+		explorerApiUrl: 'https://api.routescan.io/v2/network/testnet/evm/43113/etherscan/api',
+	},
+};
+
+/**
+ * フォーセット情報（テストネット用）
+ */
+export const TESTNET_FAUCETS: Record<number, { name: string; url: string }[]> = {
+	11155111: [
+		{ name: 'Sepolia Faucet', url: 'https://sepoliafaucet.com/' },
+		{ name: 'Alchemy Faucet', url: 'https://sepoliafaucet.net/' },
+	],
+	43113: [
+		{ name: 'Avalanche Faucet', url: 'https://faucet.avax.network/' },
+		{ name: 'Core Faucet', url: 'https://core.app/tools/testnet-faucet/' },
+	],
+};
+
+/**
+ * チェーンユーティリティ関数
+ */
+export const chainUtils = {
+	/**
+	 * チェーンIDからチェーン情報を取得
+	 */
+	getChainById(chainId: number): Chain | undefined {
+		return Object.values(EVM_CHAINS).find(chain => chain.id === chainId);
+	},
+
+	/**
+	 * チェーンがテストネットかどうか
+	 */
+	isTestnet(chainId: number): boolean {
+		const chain = this.getChainById(chainId);
+		return chain?.testnet ?? false;
+	},
+
+	/**
+	 * チェーンの表示名を取得
+	 */
+	getDisplayName(chainId: number): string {
+		return CHAIN_DISPLAY_NAMES[chainId] || `Chain ${chainId}`;
+	},
+
+	/**
+	 * チェーンのアイコンを取得
+	 */
+	getIcon(chainId: number): string {
+		return CHAIN_ICONS[chainId] || '⚪';
+	},
+
+	/**
+	 * チェーンの色を取得
+	 */
+	getColors(chainId: number): { primary: string; secondary: string } {
+		return CHAIN_COLORS[chainId] || { primary: '#6B7280', secondary: '#9CA3AF' };
+	},
+
+	/**
+	 * アドレスのエクスプローラーURLを生成
+	 */
+	getExplorerUrl(chainId: number, address: string): string {
+		const chain = this.getChainById(chainId);
+		if (!chain?.blockExplorers) return '';
+		return `${chain.blockExplorers.default.url}/address/${address}`;
+	},
+
+	/**
+	 * トランザクションのエクスプローラーURLを生成
+	 */
+	getTxExplorerUrl(chainId: number, txHash: string): string {
+		const chain = this.getChainById(chainId);
+		if (!chain?.blockExplorers) return '';
+		return `${chain.blockExplorers.default.url}/tx/${txHash}`;
+	},
+
+	/**
+	 * チェーンがサポートされているかチェック
+	 */
+	isSupported(chainId: number): boolean {
+		return Object.values(EVM_CHAINS).some(chain => chain.id === chainId);
+	},
+
+	/**
+	 * アドレスを短縮表示
+	 */
+	formatAddress(address: string): string {
+		if (!address || address.length < 10) return address;
+		return `${address.slice(0, 6)}...${address.slice(-4)}`;
+	},
+
+	/**
+	 * フォーセット情報を取得
+	 */
+	getFaucets(chainId: number): { name: string; url: string }[] {
+		return TESTNET_FAUCETS[chainId] || [];
+	},
+};-e 
+### FILE: ./src/wallet-auth/adapters/evm/EVMWalletAdapterWrapper.tsx
+
+// src/wallet-auth/adapters/evm/EVMWalletAdapterWrapper.tsx
+'use client';
+
+import React, { createContext, useContext, useEffect, useState, useCallback } from 'react';
+import { 
+	useAccount, 
+	useConnect, 
+	useDisconnect, 
+	useSignMessage, 
+	useSwitchChain,
+	useChainId
+} from 'wagmi';
+import { useConnectModal, useAccountModal } from '@rainbow-me/rainbowkit';
+import {
+	ChainType,
+	WalletConnection,
+	WalletSignatureData,
+	WalletState,
+	WalletAuthResult
+} from '../../../../types/wallet';
+import { EVMAuthService } from './EVMAuthService';
+
+interface EVMWalletContextType {
+	// 基本状態
+	walletState: WalletState;
+	
+	// 接続管理
+	connectWallet: (walletType?: string) => Promise<WalletConnection>;
+	disconnectWallet: () => Promise<void>;
+	isConnecting: boolean;
+	isConnected: boolean;
+	
+	// ウォレット情報
+	address: string | undefined;
+	chainId: number | undefined;
+	chainName: string | undefined;
+	
+	// 認証
+	authenticate: () => Promise<WalletAuthResult>;
+	isAuthenticated: boolean;
+	
+	// 署名
+	signMessage: (message: string) => Promise<string>;
+	signAuthMessage: (nonce: string) => Promise<WalletSignatureData>;
+	
+	// チェーン操作
+	switchChain: (chainId: number) => Promise<void>;
+	
+	// UI操作
+	openConnectModal: (() => void) | undefined;
+	openAccountModal: (() => void) | undefined;
+	
+	// エラー
+	error: string | undefined;
+}
+
+const EVMWalletContext = createContext<EVMWalletContextType | undefined>(undefined);
+
+interface EVMWalletProviderProps {
+	children: React.ReactNode;
+}
+
+/**
+ * EVM Wallet用のReactプロバイダー（Wagmi v2対応）
+ */
+export const EVMWalletProvider = ({ children }: EVMWalletProviderProps) => {
+	// Wagmi v2 hooks
+	const { address, isConnected, isConnecting, connector } = useAccount();
+	const chainId = useChainId();
+	const { connectAsync, connectors, isPending } = useConnect();
+	const { disconnectAsync } = useDisconnect();
+	const { signMessageAsync } = useSignMessage();
+	const { switchChainAsync } = useSwitchChain();
+	const { openConnectModal } = useConnectModal();
+	const { openAccountModal } = useAccountModal();
+
+	// 内部状態
+	const [isAuthenticated, setIsAuthenticated] = useState(false);
+	const [error, setError] = useState<string | undefined>();
+	const [authService] = useState(() => new EVMAuthService());
+
+	// ウォレット状態の構築
+	const walletState: WalletState = {
+		isConnecting: isConnecting || isPending,
+		isConnected,
+		isAuthenticated,
+		address,
+		chainType: 'evm',
+		chainId,
+		walletType: connector?.name,
+		error,
+	};
+
+	// エラーハンドリング
+	const handleError = useCallback((error: any, context?: string) => {
+		console.error(`EVM Wallet Error (${context}):`, error);
+		const errorMessage = error?.message || error?.toString() || 'An unknown error occurred';
+		setError(errorMessage);
+	}, []);
+
+	// エラークリア
+	const clearError = useCallback(() => {
+		setError(undefined);
+	}, []);
+
+	// ウォレット接続
+	const connectWallet = useCallback(async (walletType?: string): Promise<WalletConnection> => {
+		try {
+			clearError();
+			
+			// RainbowKitモーダルを開く方法を優先
+			if (openConnectModal) {
+				openConnectModal();
+				
+				// 接続完了を待機
+				return new Promise((resolve, reject) => {
+					const timeout = setTimeout(() => {
+						reject(new Error('Connection timeout'));
+					}, 30000);
+
+					const checkConnection = () => {
+						if (address && isConnected) {
+							clearTimeout(timeout);
+							resolve({
+								address,
+								chainType: 'evm',
+								chainId,
+								walletType: connector?.name || 'unknown',
+								isConnected: true,
+								connectedAt: new Date(),
+								lastUsedAt: new Date(),
+							});
+						}
+					};
+
+					// 既に接続済みの場合
+					if (address && isConnected) {
+						checkConnection();
+						return;
+					}
+
+					// 定期的にチェック
+					const interval = setInterval(checkConnection, 500);
+					setTimeout(() => {
+						clearInterval(interval);
+						clearTimeout(timeout);
+					}, 30000);
+				});
+			}
+
+			// フォールバック：直接接続
+			if (connectors.length > 0) {
+				const result = await connectAsync({ connector: connectors[0] });
+				return {
+					address: result.accounts[0],
+					chainType: 'evm',
+					chainId: result.chainId,
+					walletType: connector?.name || 'unknown',
+					isConnected: true,
+					connectedAt: new Date(),
+					lastUsedAt: new Date(),
+				};
+			}
+
+			throw new Error('No connectors available');
+		} catch (error) {
+			handleError(error, 'connect');
+			throw error;
+		}
+	}, [address, isConnected, chainId, connector, connectAsync, connectors, openConnectModal, clearError, handleError]);
+
+	// ウォレット切断
+	const disconnectWallet = useCallback(async (): Promise<void> => {
+		try {
+			clearError();
+			setIsAuthenticated(false);
+			
+			// セッションクリア
+			if (address) {
+				await authService.logout(address);
+			}
+			
+			await disconnectAsync();
+		} catch (error) {
+			handleError(error, 'disconnect');
+			throw error;
+		}
+	}, [disconnectAsync, address, authService, clearError, handleError]);
+
+	// 認証
+	const authenticate = useCallback(async (): Promise<WalletAuthResult> => {
+		try {
+			clearError();
+			
+			if (!address || !isConnected) {
+				throw new Error('Wallet not connected');
+			}
+
+			// 簡易的なアダプター作成
+			const mockAdapter = {
+				isConnected: () => isConnected,
+				getAddress: () => address,
+				signAuthMessage: async (nonce: string) => {
+					const message = authService.createAuthMessage(address, nonce, 'evm');
+					const signature = await signMessageAsync({ message });
+					
+					return {
+						message,
+						signature,
+						address,
+						chainType: 'evm' as ChainType,
+						chainId,
+						nonce,
+						timestamp: Date.now(),
+					};
+				}
+			} as any;
+
+			const result = await authService.authenticate(mockAdapter);
+			
+			if (result.success) {
+				setIsAuthenticated(true);
+				// セッション作成
+				await authService.createSession(result);
+			}
+			
+			return result;
+		} catch (error) {
+			handleError(error, 'authenticate');
+			return {
+				success: false,
+				error: error instanceof Error ? error.message : 'Authentication failed'
+			};
+		}
+	}, [address, isConnected, chainId, signMessageAsync, authService, clearError, handleError]);
+
+	// メッセージ署名
+	const signMessage = useCallback(async (message: string): Promise<string> => {
+		try {
+			clearError();
+			
+			if (!isConnected) {
+				throw new Error('Wallet not connected');
+			}
+			
+			return await signMessageAsync({ message });
+		} catch (error) {
+			handleError(error, 'signMessage');
+			throw error;
+		}
+	}, [isConnected, signMessageAsync, clearError, handleError]);
+
+	// 認証メッセージ署名
+	const signAuthMessage = useCallback(async (nonce: string): Promise<WalletSignatureData> => {
+		try {
+			clearError();
+			
+			if (!address || !isConnected) {
+				throw new Error('Wallet not connected');
+			}
+
+			const message = authService.createAuthMessage(address, nonce, 'evm');
+			const signature = await signMessage(message);
+
+			return {
+				message,
+				signature,
+				address,
+				chainType: 'evm',
+				chainId,
+				nonce,
+				timestamp: Date.now(),
+			};
+		} catch (error) {
+			handleError(error, 'signAuthMessage');
+			throw error;
+		}
+	}, [address, isConnected, chainId, signMessage, authService, clearError, handleError]);
+
+	// チェーン切り替え
+	const switchChain = useCallback(async (targetChainId: number): Promise<void> => {
+		try {
+			clearError();
+			
+			if (!switchChainAsync) {
+				throw new Error('Chain switching not supported');
+			}
+			
+			await switchChainAsync({ chainId: targetChainId });
+		} catch (error) {
+			handleError(error, 'switchChain');
+			throw error;
+		}
+	}, [switchChainAsync, clearError, handleError]);
+
+	// 認証状態の復元
+	useEffect(() => {
+		const restoreAuthentication = async () => {
+			if (address && isConnected) {
+				try {
+					const sessionKey = `wallet_session_${address.toLowerCase()}`;
+					const sessionData = localStorage.getItem(sessionKey);
+					
+					if (sessionData) {
+						const session = JSON.parse(sessionData);
+						const isValid = await authService.validateSession(session.token);
+						setIsAuthenticated(isValid);
+					}
+				} catch (error) {
+					console.warn('Failed to restore authentication:', error);
+				}
+			} else {
+				setIsAuthenticated(false);
+			}
+		};
+
+		restoreAuthentication();
+	}, [address, isConnected, authService]);
+
+	// 定期的なセッションクリーンアップ
+	useEffect(() => {
+		const cleanup = () => {
+			authService.cleanupExpiredSessions();
+		};
+
+		cleanup();
+		const interval = setInterval(cleanup, 60 * 60 * 1000);
+		return () => clearInterval(interval);
+	}, [authService]);
+
+	// コンテキスト値
+	const contextValue: EVMWalletContextType = {
+		// 基本状態
+		walletState,
+		
+		// 接続管理
+		connectWallet,
+		disconnectWallet,
+		isConnecting: walletState.isConnecting,
+		isConnected: walletState.isConnected,
+		
+		// ウォレット情報
+		address,
+		chainId,
+		chainName: chainId ? `Chain ${chainId}` : undefined,
+		
+		// 認証
+		authenticate,
+		isAuthenticated,
+		
+		// 署名
+		signMessage,
+		signAuthMessage,
+		
+		// チェーン操作
+		switchChain,
+		
+		// UI操作
+		openConnectModal,
+		openAccountModal,
+		
+		// エラー
+		error,
+	};
+
+	return (
+		<EVMWalletContext.Provider value={contextValue}>
+			{children}
+		</EVMWalletContext.Provider>
+	);
+};
+
+/**
+ * EVMWalletContextを使用するhook
+ */
+export const useEVMWallet = (): EVMWalletContextType => {
+	const context = useContext(EVMWalletContext);
+	if (!context) {
+		throw new Error('useEVMWallet must be used within EVMWalletProvider');
+	}
+	return context;
+};
+
+/**
+ * EVMウォレットの接続状態のみを取得するhook
+ */
+export const useEVMWalletConnection = () => {
+	const { isConnected, isConnecting, address, chainId, chainName, error } = useEVMWallet();
+	
+	return {
+		isConnected,
+		isConnecting,
+		address,
+		chainId,
+		chainName,
+		error,
+	};
+};
+
+/**
+ * EVMウォレット認証のみを取得するhook
+ */
+export const useEVMWalletAuth = () => {
+	const { authenticate, isAuthenticated, signMessage, signAuthMessage } = useEVMWallet();
+	
+	return {
+		authenticate,
+		isAuthenticated,
+		signMessage,
+		signAuthMessage,
+	};
+};-e 
+### FILE: ./src/wallet-auth/adapters/evm/wagmi-provider.tsx
+
+// src/wallet-auth/adapters/evm/wagmi-provider.tsx
+'use client';
+
+import React, { ReactNode } from 'react';
+import { WagmiProvider, createConfig, http } from 'wagmi';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { RainbowKitProvider, getDefaultConfig, darkTheme } from '@rainbow-me/rainbowkit';
+import { mainnet, sepolia, polygon, avalanche, avalancheFuji } from 'wagmi/chains';
+
+// RainbowKit CSS import（グローバルレベルで必要）
+import '@rainbow-me/rainbowkit/styles.css';
+
+interface EVMWalletProviderProps {
+	children: ReactNode;
+	appName?: string;
+	projectId?: string;
+}
+
+/**
+ * サポートするチェーンの設定（Wagmi v2）
+ */
+const getSupportedChains = () => {
+	const isDevelopment = process.env.NODE_ENV === 'development';
+	
+	if (isDevelopment) {
+		// 開発環境：テストネットも含める
+		return [mainnet, polygon, avalanche, sepolia, avalancheFuji];
+	} else {
+		// 本番環境：メインネットのみ
+		return [mainnet, polygon, avalanche];
+	}
+};
+
+/**
+ * デフォルトチェーンを取得
+ */
+const getDefaultChain = () => {
+	const isDevelopment = process.env.NODE_ENV === 'development';
+	return isDevelopment ? avalancheFuji : mainnet;
+};
+
+/**
+ * Wagmi + RainbowKit プロバイダー（v2対応）
+ */
+export const EVMWalletProvider = ({
+	children,
+	appName = 'We are on-chain',
+	projectId = process.env.NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID
+}: EVMWalletProviderProps) => {
+	// サポートするチェーン
+	const chains = getSupportedChains();
+	const defaultChain = getDefaultChain();
+
+	// WalletConnect Project IDの確認
+	if (!projectId) {
+		console.warn('⚠️ WalletConnect Project ID not found. Some wallets may not work properly.');
+	}
+
+	// Wagmi設定（v2 API）
+	const config = getDefaultConfig({
+		appName,
+		projectId: projectId || 'dummy-project-id',
+		chains: chains as any,
+		ssr: true, // Next.jsのSSR対応
+	});
+
+	// React Query Client（v5対応）
+	const queryClient = new QueryClient({
+		defaultOptions: {
+			queries: {
+				staleTime: 1000 * 60 * 5, // 5分
+				refetchOnWindowFocus: false,
+				retry: (failureCount, error) => {
+					// ネットワークエラーのみリトライ
+					if (failureCount < 3 && error?.message?.includes('network')) {
+						return true;
+					}
+					return false;
+				},
+			},
+		},
+	});
+
+	return (
+		<WagmiProvider config={config}>
+			<QueryClientProvider client={queryClient}>
+				<RainbowKitProvider
+					initialChain={defaultChain}
+					appInfo={{
+						appName,
+						learnMoreUrl: 'https://wagmi.sh',
+					}}
+					theme={darkTheme({
+						accentColor: '#00FF7F', // neonGreen
+						accentColorForeground: '#000000',
+						borderRadius: 'medium',
+						fontStack: 'system',
+						overlayBlur: 'small',
+					})}
+					modalSize="compact"
+					coolMode={true} // サイバーパンクに合うエフェクト
+				>
+					{children}
+				</RainbowKitProvider>
+			</QueryClientProvider>
+		</WagmiProvider>
+	);
+};
+
+/**
+ * EVMウォレットプロバイダー用のhook
+ * プロバイダーが正しく設定されているかチェック
+ */
+export const useEVMWalletProvider = () => {
+	const configStatus = React.useMemo(() => {
+		try {
+			// 基本的な設定チェック
+			const hasProjectId = !!process.env.NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID;
+			const supportedChains = getSupportedChains();
+			const hasChains = supportedChains.length > 0;
+			const defaultChain = getDefaultChain();
+			
+			return {
+				isConfigured: hasProjectId && hasChains,
+				hasProjectId,
+				hasChains,
+				chainCount: supportedChains.length,
+				defaultChain: defaultChain.name,
+				supportedNetworks: supportedChains.map(chain => ({
+					id: chain.id,
+					name: chain.name,
+					testnet: chain.testnet || false,
+				})),
+				projectId: hasProjectId ? 'Set' : 'Missing',
+				environment: process.env.NODE_ENV,
+			};
+		} catch (error) {
+			console.error('EVMWalletProvider configuration error:', error);
+			return {
+				isConfigured: false,
+				hasProjectId: false,
+				hasChains: false,
+				chainCount: 0,
+				defaultChain: 'Unknown',
+				supportedNetworks: [],
+				projectId: 'Error',
+				environment: process.env.NODE_ENV,
+				error: error instanceof Error ? error.message : 'Unknown error',
+			};
+		}
+	}, []);
+
+	return configStatus;
+};
+
+/**
+ * Wagmi設定のバリデーター
+ */
+export const validateWagmiConfig = () => {
+	const errors: string[] = [];
+	const warnings: string[] = [];
+
+	// Project ID チェック
+	if (!process.env.NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID) {
+		errors.push('NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID is not set');
+	}
+
+	// チェーン設定チェック
+	try {
+		const chains = getSupportedChains();
+		if (chains.length === 0) {
+			errors.push('No supported chains configured');
+		}
+
+		// 開発環境での警告
+		if (process.env.NODE_ENV === 'development') {
+			warnings.push('Development mode: testnet chains enabled');
+		}
+	} catch (error) {
+		errors.push(`Chain configuration error: ${error}`);
+	}
+
+	return {
+		isValid: errors.length === 0,
+		errors,
+		warnings,
+	};
+};
+
+/**
+ * デバッグ用のプロバイダー情報コンポーネント（v2対応）
+ */
+export const EVMProviderDebugInfo = () => {
+	const providerInfo = useEVMWalletProvider();
+	const validation = validateWagmiConfig();
+
+	if (process.env.NODE_ENV !== 'development') {
+		return null;
+	}
+
+	return (
+		<div className="fixed bottom-4 right-4 p-4 bg-black/90 border border-neonGreen/30 rounded-sm text-xs text-white z-50 max-w-xs">
+			<div className="font-bold text-neonGreen mb-2">🦊 EVM Provider Debug (v2)</div>
+			
+			{/* 基本ステータス */}
+			<div className="space-y-1 mb-3">
+				<div className="flex justify-between">
+					<span>Configured:</span>
+					<span className={providerInfo.isConfigured ? 'text-neonGreen' : 'text-red-400'}>
+						{providerInfo.isConfigured ? '✅' : '❌'}
+					</span>
+				</div>
+				<div className="flex justify-between">
+					<span>Project ID:</span>
+					<span className={providerInfo.hasProjectId ? 'text-neonGreen' : 'text-red-400'}>
+						{providerInfo.projectId}
+					</span>
+				</div>
+				<div className="flex justify-between">
+					<span>Chains:</span>
+					<span className="text-white">{providerInfo.chainCount}</span>
+				</div>
+				<div className="flex justify-between">
+					<span>Default:</span>
+					<span className="text-neonOrange">{providerInfo.defaultChain}</span>
+				</div>
+				<div className="flex justify-between">
+					<span>Environment:</span>
+					<span className="text-gray-300">{providerInfo.environment}</span>
+				</div>
+			</div>
+
+			{/* サポートされているネットワーク */}
+			{providerInfo.supportedNetworks.length > 0 && (
+				<div className="mb-3">
+					<div className="text-gray-400 mb-1">Networks:</div>
+					<div className="space-y-1">
+						{providerInfo.supportedNetworks.map((network) => (
+							<div key={network.id} className="flex justify-between text-xs">
+								<span className={network.testnet ? 'text-yellow-400' : 'text-white'}>
+									{network.name}
+								</span>
+								<span className="text-gray-400">
+									{network.testnet ? '🧪' : '🌐'}
+								</span>
+							</div>
+						))}
+					</div>
+				</div>
+			)}
+
+			{/* バリデーション結果 */}
+			{!validation.isValid && (
+				<div className="mb-3">
+					<div className="text-red-400 mb-1">Errors:</div>
+					{validation.errors.map((error, index) => (
+						<div key={index} className="text-red-300 text-xs">
+							• {error}
+						</div>
+					))}
+				</div>
+			)}
+
+			{validation.warnings.length > 0 && (
+				<div className="mb-3">
+					<div className="text-yellow-400 mb-1">Warnings:</div>
+					{validation.warnings.map((warning, index) => (
+						<div key={index} className="text-yellow-300 text-xs">
+							• {warning}
+						</div>
+					))}
+				</div>
+			)}
+
+			{/* エラー情報 */}
+			{providerInfo.error && (
+				<div className="mt-3 p-2 bg-red-900/30 border border-red-500/50 rounded">
+					<div className="text-red-400 text-xs font-bold mb-1">Error:</div>
+					<div className="text-red-300 text-xs break-all">
+						{providerInfo.error}
+					</div>
+				</div>
+			)}
+
+			{/* 成功インジケーター */}
+			{validation.isValid && providerInfo.isConfigured && (
+				<div className="mt-3 p-2 bg-neonGreen/20 border border-neonGreen/50 rounded">
+					<div className="text-neonGreen text-xs font-bold">
+						🚀 Ready for Web3!
+					</div>
+				</div>
+			)}
+		</div>
+	);
+};
+
+/**
+ * Wagmi設定情報を取得するhook
+ */
+export const useWagmiConfigInfo = () => {
+	return React.useMemo(() => {
+		const chains = getSupportedChains();
+		const defaultChain = getDefaultChain();
+		
+		return {
+			supportedChains: chains,
+			defaultChain,
+			chainIds: chains.map(chain => chain.id),
+			isTestnetEnabled: process.env.NODE_ENV === 'development',
+			projectId: process.env.NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID,
+		};
+	}, []);
+};-e 
+### FILE: ./src/wallet-auth/adapters/evm/EVMWalletAdapter.ts
+
+// src/wallet-auth/adapters/evm/EVMWalletAdapter.ts
+import { 
+	useAccount, 
+	useConnect, 
+	useDisconnect, 
+	useSignMessage, 
+	useSwitchNetwork,
+	useNetwork,
+} from 'wagmi';
+import { useConnectModal } from '@rainbow-me/rainbowkit';
+import {
+	ChainType,
+	WalletConnection,
+	WalletSignatureData,
+	WalletState,
+	WalletProvider,
+	ChainConfig,
+	WalletError
+} from '../../../../types/wallet';
+import { WalletAdapter } from '../../core/WalletAdapterInterface';
+import { chainUtils, getEVMChains, CHAIN_DISPLAY_NAMES } from './chain-config';
+
+// window.ethereumの型定義を拡張
+declare global {
+	interface Window {
+		ethereum?: {
+			isMetaMask?: boolean;
+			isCoinbaseWallet?: boolean;
+			request?: (args: { method: string; params?: any[] }) => Promise<any>;
+		};
+	}
+}
+
+/**
+ * EVM系ウォレット用のAdapter実装
+ * Wagmi + RainbowKitを使用してEVMチェーンのウォレット接続を管理
+ */
+export class EVMWalletAdapter implements WalletAdapter {
+	readonly chainType: ChainType = 'evm';
+	
+	private stateSubscribers: ((state: WalletState) => void)[] = [];
+	private currentState: WalletState = {
+		isConnecting: false,
+		isConnected: false,
+		isAuthenticated: false,
+	};
+
+	constructor() {
+		// 初期化時の状態確認
+		this.updateState();
+	}
+
+	get isSupported(): boolean {
+		return typeof window !== 'undefined' && typeof window.ethereum !== 'undefined';
+	}
+
+	get supportedWallets(): WalletProvider[] {
+		const wallets: WalletProvider[] = [
+			{
+				id: 'metamask',
+				name: 'MetaMask',
+				chainType: 'evm',
+				icon: '🦊',
+				downloadUrl: 'https://metamask.io/download/',
+				isInstalled: typeof window !== 'undefined' && !!window.ethereum?.isMetaMask,
+				capabilities: {
+					canSwitchChain: true,
+					canAddChain: true,
+					canSignMessage: true,
+					canSignTransaction: true,
+					supportsEIP1559: true,
+				},
+			},
+			{
+				id: 'walletconnect',
+				name: 'WalletConnect',
+				chainType: 'evm',
+				icon: '🔗',
+				downloadUrl: 'https://walletconnect.com/',
+				isInstalled: true, // WalletConnectは常に利用可能
+				capabilities: {
+					canSwitchChain: true,
+					canAddChain: false,
+					canSignMessage: true,
+					canSignTransaction: true,
+					supportsEIP1559: true,
+				},
+			},
+			{
+				id: 'coinbase',
+				name: 'Coinbase Wallet',
+				chainType: 'evm',
+				icon: '🔵',
+				downloadUrl: 'https://www.coinbase.com/wallet',
+				isInstalled: typeof window !== 'undefined' && !!window.ethereum?.isCoinbaseWallet,
+				capabilities: {
+					canSwitchChain: true,
+					canAddChain: true,
+					canSignMessage: true,
+					canSignTransaction: true,
+					supportsEIP1559: true,
+				},
+			},
+		];
+
+		return wallets;
+	}
+
+	// Wagmi hooksをラップして使用する関数
+	private useWagmiHooks() {
+		const { address, isConnected, isConnecting, connector } = useAccount();
+		const { chain } = useNetwork();
+		const { connect, connectors, isLoading: isConnectLoading } = useConnect();
+		const { disconnect } = useDisconnect();
+		const { signMessageAsync } = useSignMessage();
+		const { switchNetwork } = useSwitchNetwork();
+		const { openConnectModal } = useConnectModal();
+
+		return {
+			address,
+			isConnected,
+			isConnecting: isConnecting || isConnectLoading,
+			connector,
+			chain,
+			connect,
+			connectors,
+			disconnect,
+			signMessageAsync,
+			switchNetwork,
+			openConnectModal,
+		};
+	}
+
+	getState(): WalletState {
+		return { ...this.currentState };
+	}
+
+	subscribe(callback: (state: WalletState) => void): () => void {
+		this.stateSubscribers.push(callback);
+		
+		// 初回呼び出し
+		callback(this.currentState);
+		
+		// Unsubscribe関数を返す
+		return () => {
+			const index = this.stateSubscribers.indexOf(callback);
+			if (index > -1) {
+				this.stateSubscribers.splice(index, 1);
+			}
+		};
+	}
+
+	private updateState(): void {
+		// この関数はReactコンポーネント内で呼び出される必要がある
+		// 実際の状態更新はuseEffectで行う
+	}
+
+	private notifyStateChange(): void {
+		this.stateSubscribers.forEach(callback => callback(this.currentState));
+	}
+
+	async connect(walletType?: string): Promise<WalletConnection> {
+		try {
+			this.currentState.isConnecting = true;
+			this.currentState.error = undefined;
+			this.notifyStateChange();
+
+			// RainbowKitのモーダルを開く
+			// 実際の接続処理はRainbowKitが行う
+			if (typeof window !== 'undefined') {
+				// カスタムイベントでRainbowKitモーダルを開く要求を送信
+				window.dispatchEvent(new CustomEvent('openWalletModal', { 
+					detail: { walletType } 
+				}));
+			}
+
+			// 接続完了を待機（実際の実装では適切な待機処理が必要）
+			await new Promise(resolve => setTimeout(resolve, 100));
+
+			// 接続状態を確認して返す
+			const connection = this.createWalletConnection();
+			
+			this.currentState.isConnecting = false;
+			this.currentState.isConnected = true;
+			this.notifyStateChange();
+
+			return connection;
+		} catch (error) {
+			this.currentState.isConnecting = false;
+			this.currentState.error = this.formatError(error).message;
+			this.notifyStateChange();
+			throw error;
+		}
+	}
+
+	async disconnect(): Promise<void> {
+		try {
+			// Wagmiのdisconnect関数を呼び出す
+			// 実際の実装ではuseDisconnectフックを使用
+			
+			this.currentState.isConnected = false;
+			this.currentState.isAuthenticated = false;
+			this.currentState.address = undefined;
+			this.currentState.chainType = undefined;
+			this.currentState.chainId = undefined;
+			this.currentState.walletType = undefined;
+			this.notifyStateChange();
+		} catch (error) {
+			this.currentState.error = this.formatError(error).message;
+			this.notifyStateChange();
+			throw error;
+		}
+	}
+
+	async reconnect(): Promise<WalletConnection | null> {
+		try {
+			// 自動再接続の試行
+			// Wagmiの自動接続機能を利用
+			return this.createWalletConnection();
+		} catch (error) {
+			console.warn('Auto-reconnect failed:', error);
+			return null;
+		}
+	}
+
+	getAddress(): string | null {
+		return this.currentState.address || null;
+	}
+
+	getChainId(): number | string | null {
+		return this.currentState.chainId || null;
+	}
+
+	getWalletType(): string | null {
+		return this.currentState.walletType || null;
+	}
+
+	isConnected(): boolean {
+		return this.currentState.isConnected;
+	}
+
+	async signMessage(message: string): Promise<string> {
+		if (!this.isConnected()) {
+			throw new Error('Wallet not connected');
+		}
+
+		try {
+			// Wagmiのサインメッセージを使用
+			// 実際の実装ではuseSignMessageフックを使用
+			const signature = await this.executeSignMessage(message);
+			return signature;
+		} catch (error) {
+			throw this.formatError(error);
+		}
+	}
+
+	async signAuthMessage(nonce: string): Promise<WalletSignatureData> {
+		const address = this.getAddress();
+		if (!address) {
+			throw new Error('No address available');
+		}
+
+		const message = this.createAuthMessage(address, nonce);
+		const signature = await this.signMessage(message);
+
+		return {
+			message,
+			signature,
+			address,
+			chainType: this.chainType,
+			chainId: this.getChainId() || undefined, // nullをundefinedに変換
+			nonce,
+			timestamp: Date.now(),
+		};
+	}
+
+	async switchChain(chainId: number | string): Promise<void> {
+		const numericChainId = typeof chainId === 'string' ? parseInt(chainId) : chainId;
+		
+		if (!chainUtils.isSupported(numericChainId)) {
+			throw new Error(`Chain ${chainId} is not supported`);
+		}
+
+		try {
+			// WagmiのswitchNetworkを使用
+			// 実際の実装ではuseSwitchNetworkフックを使用
+			await this.executeSwitchChain(numericChainId);
+			
+			this.currentState.chainId = numericChainId;
+			this.notifyStateChange();
+		} catch (error) {
+			throw this.formatError(error);
+		}
+	}
+
+	async addChain(chainConfig: ChainConfig): Promise<void> {
+		try {
+			if (typeof window !== 'undefined' && window.ethereum?.request) {
+				await window.ethereum.request({
+					method: 'wallet_addEthereumChain',
+					params: [{
+						chainId: `0x${chainConfig.chainId.toString(16)}`,
+						chainName: chainConfig.name,
+						nativeCurrency: chainConfig.nativeCurrency,
+						rpcUrls: chainConfig.rpcUrls,
+						blockExplorerUrls: chainConfig.blockExplorerUrls,
+					}],
+				});
+			} else {
+				throw new Error('Ethereum provider not available or does not support adding chains');
+			}
+		} catch (error) {
+			throw this.formatError(error);
+		}
+	}
+
+	getSupportedChains(): ChainConfig[] {
+		return getEVMChains().map(chain => ({
+			chainId: chain.id,
+			name: chain.name,
+			nativeCurrency: chain.nativeCurrency,
+			rpcUrls: [...chain.rpcUrls.default.http], // readonly配列をmutable配列にコピー
+			blockExplorerUrls: chain.blockExplorers ? [chain.blockExplorers.default.url] : undefined,
+			isTestnet: chain.testnet,
+		}));
+	}
+
+	validateAddress(address: string): boolean {
+		return /^0x[a-fA-F0-9]{40}$/.test(address);
+	}
+
+	formatAddress(address: string): string {
+		return chainUtils.formatAddress(address);
+	}
+
+	getExplorerUrl(address: string): string {
+		const chainId = this.getChainId();
+		if (typeof chainId === 'number') {
+			return chainUtils.getExplorerUrl(chainId, address);
+		}
+		return '';
+	}
+
+	// プライベートヘルパーメソッド
+	private createWalletConnection(): WalletConnection {
+		return {
+			address: this.getAddress() || '',
+			chainType: this.chainType,
+			chainId: this.getChainId() || undefined, // nullをundefinedに変換
+			walletType: this.getWalletType() || 'unknown',
+			isConnected: this.isConnected(),
+			connectedAt: new Date(),
+			lastUsedAt: new Date(),
+		};
+	}
+
+	private createAuthMessage(address: string, nonce: string): string {
+		return `Welcome to We are on-chain!
+
+Please sign this message to authenticate your wallet.
+
+Address: ${address}
+Nonce: ${nonce}
+Timestamp: ${new Date().toISOString()}
+
+This request will not trigger a blockchain transaction or cost any gas fees.`;
+	}
+
+	private formatError(error: any): WalletError {
+		let code = 'unknown-error';
+		let message = 'An unknown error occurred';
+
+		if (error?.code) {
+			code = String(error.code); // 数値の場合は文字列に変換
+		}
+
+		if (error?.message) {
+			message = error.message;
+		} else if (typeof error === 'string') {
+			message = error;
+		}
+
+		// EVM固有のエラーコード処理（数値として比較）
+		const numericCode = typeof error?.code === 'number' ? error.code : parseInt(code);
+		
+		if (numericCode === 4001) {
+			code = 'user-rejected';
+			message = 'User rejected the request';
+		} else if (numericCode === -32002) {
+			code = 'already-pending';
+			message = 'A request is already pending';
+		} else if (numericCode === -32603) {
+			code = 'internal-error';
+			message = 'Internal error';
+		}
+
+		return {
+			code,
+			message,
+			details: error,
+			chainType: this.chainType,
+		};
+	}
+
+	// これらのメソッドは実際にはReactコンポーネント内でhooksを使用して実装される
+	private async executeSignMessage(message: string): Promise<string> {
+		// 実際の実装ではuseSignMessageを使用
+		throw new Error('This method should be called from a React component with wagmi hooks');
+	}
+
+	private async executeSwitchChain(chainId: number): Promise<void> {
+		// 実際の実装ではuseSwitchNetworkを使用
+		throw new Error('This method should be called from a React component with wagmi hooks');
+	}
+}-e 
+### FILE: ./src/wallet-auth/core/WalletAdapterInterface.ts
+
+// src/wallet-auth/core/WalletAdapterInterface.ts
+import {
+	ChainType,
+	WalletConnection,
+	WalletSignatureData,
+	WalletAuthResult,
+	WalletState,
+	WalletError,
+	ChainConfig,
+	WalletProvider
+} from '../../../types/wallet';
+
+/**
+ * 全チェーン共通のWallet Adapterインターフェース
+ * 各チェーン（EVM、Solana、SUI）は、このインターフェースを実装する
+ */
+export interface WalletAdapter {
+	// 基本情報
+	readonly chainType: ChainType;
+	readonly supportedWallets: WalletProvider[];
+	readonly isSupported: boolean;
+
+	// 状態管理
+	getState(): WalletState;
+	subscribe(callback: (state: WalletState) => void): () => void;
+
+	// ウォレット接続
+	connect(walletType?: string): Promise<WalletConnection>;
+	disconnect(): Promise<void>;
+	reconnect(): Promise<WalletConnection | null>;
+
+	// ウォレット情報
+	getAddress(): string | null;
+	getChainId(): number | string | null;
+	getWalletType(): string | null;
+	isConnected(): boolean;
+
+	// 署名機能
+	signMessage(message: string): Promise<string>;
+	signAuthMessage(nonce: string): Promise<WalletSignatureData>;
+
+	// チェーン管理（対応している場合）
+	switchChain?(chainId: number | string): Promise<void>;
+	addChain?(chainConfig: ChainConfig): Promise<void>;
+	getSupportedChains(): ChainConfig[];
+
+	// ユーティリティ
+	validateAddress(address: string): boolean;
+	formatAddress(address: string): string;
+	getExplorerUrl(address: string): string;
+}
+
+/**
+ * Wallet認証サービスのインターフェース
+ */
+export interface WalletAuthService {
+	// Nonce管理
+	generateNonce(): string;
+	validateNonce(nonce: string): boolean;
+	storeNonce(address: string, nonce: string): void;
+	clearNonce(address: string): void;
+
+	// 認証メッセージ
+	createAuthMessage(address: string, nonce: string, chainType: ChainType): string;
+	parseAuthMessage(message: string): {
+		address: string;
+		nonce: string;
+		timestamp: number;
+		domain: string;
+	} | null;
+
+	// 署名検証
+	verifySignature(
+		signature: string,
+		message: string,
+		address: string,
+		chainType: ChainType
+	): Promise<boolean>;
+
+	// 認証実行
+	authenticate(adapter: WalletAdapter): Promise<WalletAuthResult>;
+	logout(address: string): Promise<void>;
+
+	// セッション管理
+	createSession(authResult: WalletAuthResult): Promise<string>;
+	validateSession(sessionToken: string): Promise<boolean>;
+	refreshSession(sessionToken: string): Promise<string>;
+	destroySession(sessionToken: string): Promise<void>;
+}
+
+/**
+ * マルチチェーンウォレット管理のインターフェース
+ */
+export interface MultiChainWalletManager {
+	// アダプター管理
+	registerAdapter(adapter: WalletAdapter): void;
+	getAdapter(chainType: ChainType): WalletAdapter | null;
+	getSupportedChains(): ChainType[];
+
+	// 接続管理
+	connectWallet(chainType: ChainType, walletType?: string): Promise<WalletConnection>;
+	disconnectWallet(chainType: ChainType): Promise<void>;
+	disconnectAll(): Promise<void>;
+
+	// 状態取得
+	getConnectedWallets(): WalletConnection[];
+	getPrimaryWallet(): WalletConnection | null;
+	setPrimaryWallet(address: string, chainType: ChainType): Promise<void>;
+
+	// 認証
+	authenticateWallet(chainType: ChainType): Promise<WalletAuthResult>;
+	isAuthenticated(chainType?: ChainType): boolean;
+
+	// イベント
+	subscribe(
+		event: 'connect' | 'disconnect' | 'change' | 'error',
+		callback: (data: any) => void
+	): () => void;
+}
+
+/**
+ * ウォレット設定管理のインターフェース
+ */
+export interface WalletConfigManager {
+	// チェーン設定
+	addChainConfig(chainType: ChainType, config: ChainConfig): void;
+	getChainConfig(chainType: ChainType, chainId: number | string): ChainConfig | null;
+	getAllChainConfigs(): Record<ChainType, ChainConfig[]>;
+
+	// 優先設定
+	setPreferredChain(chainType: ChainType): void;
+	getPreferredChain(): ChainType;
+	setPreferredWallet(chainType: ChainType, walletType: string): void;
+	getPreferredWallet(chainType: ChainType): string | null;
+
+	// 機能設定
+	enableChain(chainType: ChainType, enabled: boolean): void;
+	isChainEnabled(chainType: ChainType): boolean;
+	setAutoConnect(enabled: boolean): void;
+	isAutoConnectEnabled(): boolean;
+}
+
+/**
+ * ウォレット検出のインターフェース
+ */
+export interface WalletDetector {
+	// インストール検出
+	detectInstalledWallets(chainType: ChainType): Promise<WalletProvider[]>;
+	isWalletInstalled(chainType: ChainType, walletType: string): boolean;
+
+	// 推奨ウォレット
+	getRecommendedWallets(chainType: ChainType): WalletProvider[];
+	getWalletDownloadUrl(chainType: ChainType, walletType: string): string | null;
+
+	// ブラウザ互換性
+	isBrowserSupported(): boolean;
+	isMobileSupported(): boolean;
+	isWalletAvailable(chainType: ChainType, walletType: string): boolean;
+}
+
+/**
+ * エラーハンドリングのインターフェース
+ */
+export interface WalletErrorHandler {
+	// エラー分類
+	classifyError(error: any, chainType: ChainType): WalletError;
+
+	// エラー処理
+	handleConnectionError(error: WalletError): void;
+	handleSignatureError(error: WalletError): void;
+	handleChainError(error: WalletError): void;
+
+	// エラー回復
+	canRecover(error: WalletError): boolean;
+	suggestRecovery(error: WalletError): string[];
+
+	// ログ
+	logError(error: WalletError, context?: string): void;
+}
+
+/**
+ * ウォレット統計のインターフェース
+ */
+export interface WalletAnalytics {
+	// 使用統計
+	trackConnection(chainType: ChainType, walletType: string): void;
+	trackDisconnection(chainType: ChainType, walletType: string): void;
+	trackAuthentication(chainType: ChainType, success: boolean): void;
+	trackError(error: WalletError): void;
+
+	// 統計取得
+	getConnectionStats(): Record<string, number>;
+	getPopularWallets(): Array<{ chainType: ChainType; walletType: string; usage: number }>;
+	getErrorRate(): number;
+
+	// レポート
+	generateReport(period: 'day' | 'week' | 'month'): any;
+}-e 
 ### FILE: ./types/demo-payment.ts
 
 // types/demo-payment.ts
@@ -14456,6 +18681,165 @@ export interface HowToBuyConfig {
 	supportedChains: string[];
 	faucetLinks: Record<string, string>;
 }-e 
+### FILE: ./types/wallet.ts
+
+// types/wallet.ts
+export type ChainType = 'evm' | 'solana' | 'sui';
+export type WalletType = 'metamask' | 'walletconnect' | 'coinbase' | 'phantom' | 'solflare' | 'sui-wallet' | 'ethos';
+export type AuthMethod = 'firebase' | 'wallet' | 'hybrid';
+
+// 基本的なウォレット接続情報
+export interface WalletConnection {
+	address: string;
+	chainType: ChainType;
+	chainId?: number | string;
+	walletType: string;
+	isConnected: boolean;
+	connectedAt?: Date;
+	lastUsedAt?: Date;
+	isVerified?: boolean; // 署名検証済みかどうか
+	isPrimary?: boolean;  // プライマリウォレットかどうか
+}
+
+// ウォレット認証で使用する署名データ
+export interface WalletSignatureData {
+	message: string;
+	signature: string;
+	address: string;
+	chainType: ChainType;
+	chainId?: number | string;
+	nonce: string;
+	timestamp: number;
+}
+
+// 認証結果
+export interface WalletAuthResult {
+	success: boolean;
+	user?: {
+		address: string;
+		chainType: ChainType;
+		chainId?: number | string;
+	};
+	error?: string;
+	signature?: WalletSignatureData;
+}
+
+// ウォレット状態
+export interface WalletState {
+	isConnecting: boolean;
+	isConnected: boolean;
+	isAuthenticated: boolean;
+	address?: string;
+	chainType?: ChainType;
+	chainId?: number | string;
+	walletType?: string;
+	error?: string;
+}
+
+// チェーン設定
+export interface ChainConfig {
+	chainId: number | string;
+	name: string;
+	nativeCurrency: {
+		name: string;
+		symbol: string;
+		decimals: number;
+	};
+	rpcUrls: string[];
+	blockExplorerUrls?: string[];
+	iconUrls?: string[];
+	isTestnet?: boolean;
+}
+
+// EVM固有の設定
+export interface EVMChainConfig extends ChainConfig {
+	chainId: number;
+}
+
+// Solana固有の設定
+export interface SolanaChainConfig extends ChainConfig {
+	chainId: string;
+	cluster: 'mainnet-beta' | 'testnet' | 'devnet';
+}
+
+// SUI固有の設定
+export interface SUIChainConfig extends ChainConfig {
+	chainId: string;
+	network: 'mainnet' | 'testnet' | 'devnet';
+}
+
+// サポートされているチェーンの設定
+export interface SupportedChains {
+	evm: EVMChainConfig[];
+	solana: SolanaChainConfig[];
+	sui: SUIChainConfig[];
+}
+
+// ウォレット機能
+export interface WalletCapabilities {
+	canSwitchChain: boolean;
+	canAddChain: boolean;
+	canSignMessage: boolean;
+	canSignTransaction: boolean;
+	supportsEIP1559: boolean; // EVM固有
+}
+
+// ウォレットプロバイダー情報
+export interface WalletProvider {
+	id: string;
+	name: string;
+	chainType: ChainType;
+	icon?: string;
+	downloadUrl?: string;
+	isInstalled: boolean;
+	capabilities: WalletCapabilities;
+}
+
+// 複数ウォレット管理用
+export interface ConnectedWallet extends WalletConnection {
+	id: string;
+	isVerified: boolean;
+	isPrimary: boolean;
+	nickname?: string;
+}
+
+// ウォレット切り替え用
+export interface WalletSwitchRequest {
+	fromAddress: string;
+	toAddress: string;
+	chainType: ChainType;
+	reason: string;
+}
+
+// 認証設定
+export interface WalletAuthConfig {
+	enabledChains: ChainType[];
+	preferredChain: ChainType;
+	authMessage: string;
+	nonceExpiry: number; // seconds
+	enableMultiWallet: boolean;
+	autoConnect: boolean;
+}
+
+// エラー型
+export interface WalletError {
+	code: string;
+	message: string;
+	details?: any;
+	chainType?: ChainType;
+}
+
+// ウォレット統計
+export interface WalletStats {
+	totalConnections: number;
+	lastConnected: Date;
+	connectionHistory: Array<{
+		address: string;
+		chainType: ChainType;
+		connectedAt: Date;
+		disconnectedAt?: Date;
+	}>;
+}-e 
 ### FILE: ./types/user.ts
 
 // types/user.ts
@@ -14589,6 +18973,395 @@ export interface ProfileCompleteness {
 	completionPercentage: number;
 	missingFields: string[];
 	requiredFields: (keyof FirestoreUser)[];
+}-e 
+### FILE: ./types/user-extended.ts
+
+// types/user-extended.ts
+import { Timestamp } from 'firebase/firestore';
+import { FirestoreUser } from './user';
+import { WalletConnection, ChainType, AuthMethod } from './wallet';
+
+// 拡張されたFirestoreUser（Wallet認証対応）
+export interface ExtendedFirestoreUser extends Omit<FirestoreUser, 'walletAddress'> {
+	// 認証方式
+	authMethod: AuthMethod;
+	
+	// マルチウォレット対応
+	connectedWallets: WalletConnection[];
+	primaryWallet?: WalletConnection;
+	
+	// 後方互換性のため残す（deprecatedとして扱う）
+	walletAddress?: string;
+	
+	// 認証履歴
+	authHistory: Array<{
+		method: AuthMethod;
+		timestamp: Timestamp;
+		chainType?: ChainType;
+		walletAddress?: string;
+		success: boolean;
+		ipAddress?: string;
+	}>;
+	
+	// ユーザー設定
+	preferences: {
+		preferredAuthMethod: AuthMethod;
+		autoConnectWallet: boolean;
+		preferredChain?: ChainType;
+		hideWalletAddress: boolean;
+		notificationSettings: {
+			walletConnection: boolean;
+			newChainDetected: boolean;
+			securityAlerts: boolean;
+		};
+	};
+	
+	// セキュリティ情報
+	security: {
+		lastPasswordChange?: Timestamp;
+		twoFactorEnabled: boolean;
+		trustedDevices: Array<{
+			deviceId: string;
+			deviceName: string;
+			lastUsed: Timestamp;
+			ipAddress: string;
+		}>;
+		suspiciousActivity: Array<{
+			type: string;
+			timestamp: Timestamp;
+			details: any;
+			resolved: boolean;
+		}>;
+	};
+	
+	// Wallet固有の統計
+	walletStats?: {
+		totalTransactions: number;
+		totalGasSpent: number;
+		chainsUsed: ChainType[];
+		favoriteWallets: string[];
+		firstWalletConnection: Timestamp;
+	};
+}
+
+// ユーザー作成時のデータ（拡張版）
+export interface CreateExtendedUserData extends Omit<ExtendedFirestoreUser, 'id' | 'createdAt' | 'updatedAt' | 'lastLoginAt'> {
+	id: string;
+	email: string;
+	displayName: string;
+	authMethod: AuthMethod;
+	connectedWallets: WalletConnection[];
+	authHistory: Array<{
+		method: AuthMethod;
+		timestamp: Timestamp;
+		chainType?: ChainType;
+		walletAddress?: string;
+		success: boolean;
+		ipAddress?: string;
+	}>;
+	preferences: ExtendedFirestoreUser['preferences'];
+	security: ExtendedFirestoreUser['security'];
+}
+
+// プロフィール更新用（拡張版）
+export interface UpdateExtendedUserProfile {
+	displayName?: string;
+	nickname?: string;
+	profileImage?: string;
+	address?: Partial<FirestoreUser['address']>;
+	isProfileComplete?: boolean;
+	
+	// Wallet関連の更新
+	connectedWallets?: WalletConnection[];
+	primaryWallet?: WalletConnection;
+	preferences?: Partial<ExtendedFirestoreUser['preferences']>;
+	
+	// セキュリティ設定の更新
+	security?: Partial<ExtendedFirestoreUser['security']>;
+}
+
+// ウォレット操作の結果
+export interface WalletOperationResult {
+	success: boolean;
+	walletConnection?: WalletConnection;
+	error?: string;
+	requiresVerification?: boolean;
+}
+
+// 認証統合の結果
+export interface AuthIntegrationResult {
+	success: boolean;
+	user: ExtendedFirestoreUser;
+	newUser: boolean;
+	walletLinked: boolean;
+	error?: string;
+}
+
+// ウォレット検証の状態
+export interface WalletVerificationStatus {
+	isVerified: boolean;
+	verificationMethod: 'signature' | 'transaction' | 'none';
+	verifiedAt?: Timestamp;
+	verificationHash?: string;
+}
+
+// マルチウォレット管理
+export interface MultiWalletConfig {
+	maxWallets: number;
+	requireVerification: boolean;
+	allowDuplicateChains: boolean;
+	autoSwitchToPrimary: boolean;
+}
+
+// ウォレット統計の詳細
+export interface DetailedWalletStats {
+	// 基本統計
+	totalConnections: number;
+	totalTransactions: number;
+	totalGasSpent: number;
+	
+	// チェーン別統計
+	chainStats: Record<ChainType, {
+		connections: number;
+		transactions: number;
+		gasSpent: number;
+		lastUsed: Timestamp;
+	}>;
+	
+	// ウォレット別統計
+	walletStats: Record<string, {
+		connections: number;
+		transactions: number;
+		lastUsed: Timestamp;
+		favoriteChains: ChainType[];
+	}>;
+	
+	// 時系列データ
+	timeSeriesData: Array<{
+		date: Timestamp;
+		connections: number;
+		transactions: number;
+		gasSpent: number;
+	}>;
+}
+
+// 認証フロー状態
+export interface AuthFlowState {
+	currentStep: 'idle' | 'connecting' | 'signing' | 'verifying' | 'completing' | 'error';
+	selectedChain?: ChainType;
+	selectedWallet?: string;
+	signatureRequired: boolean;
+	verificationRequired: boolean;
+	error?: string;
+	progress: number; // 0-100
+}
+
+// Firestore用のヘルパー関数の型
+export interface ExtendedUserHelpers {
+	// ウォレット管理
+	addWalletToUser: (userId: string, wallet: WalletConnection) => Promise<void>;
+	removeWalletFromUser: (userId: string, walletAddress: string) => Promise<void>;
+	setPrimaryWallet: (userId: string, walletAddress: string) => Promise<void>;
+	verifyWallet: (userId: string, walletAddress: string, verificationData: any) => Promise<void>;
+	
+	// 認証履歴
+	addAuthHistory: (userId: string, authEvent: ExtendedFirestoreUser['authHistory'][0]) => Promise<void>;
+	
+	// 統計更新
+	updateWalletStats: (userId: string, stats: Partial<DetailedWalletStats>) => Promise<void>;
+	
+	// セキュリティ
+	addTrustedDevice: (userId: string, device: ExtendedFirestoreUser['security']['trustedDevices'][0]) => Promise<void>;
+	reportSuspiciousActivity: (userId: string, activity: ExtendedFirestoreUser['security']['suspiciousActivity'][0]) => Promise<void>;
+}
+
+// 移行用のヘルパー
+export interface UserMigrationHelpers {
+	// 既存ユーザーの拡張
+	migrateExistingUser: (oldUser: FirestoreUser) => ExtendedFirestoreUser;
+	
+	// 既存walletAddressからconnectedWalletsへの移行
+	migrateWalletAddress: (oldUser: FirestoreUser) => WalletConnection[];
+	
+	// デフォルト設定の生成
+	generateDefaultPreferences: () => ExtendedFirestoreUser['preferences'];
+	generateDefaultSecurity: () => ExtendedFirestoreUser['security'];
+}-e 
+### FILE: ./types/auth.ts
+
+// types/auth.ts
+import { User as FirebaseUser } from 'firebase/auth';
+import { FirestoreUser } from './user';
+import { WalletConnection, WalletAuthResult, ChainType } from './wallet';
+
+// 統合認証方式
+export type AuthMethod = 'firebase' | 'wallet' | 'hybrid';
+
+// 統合認証状態
+export interface UnifiedAuthState {
+	// 認証方式
+	authMethod: AuthMethod;
+
+	// Firebase認証
+	firebaseUser: FirebaseUser | null;
+	firebaseLoading: boolean;
+
+	// Wallet認証
+	walletConnection: WalletConnection | null;
+	walletLoading: boolean;
+
+	// Firestore統合
+	firestoreUser: FirestoreUser | null;
+	firestoreLoading: boolean;
+
+	// 全体の状態
+	isAuthenticated: boolean;
+	isLoading: boolean;
+
+	// エラー
+	error: string | null;
+}
+
+// 認証設定
+export interface AuthConfig {
+	// 認証方式の優先順位
+	preferredMethod: AuthMethod;
+
+	// 各認証方式の有効/無効
+	enableFirebase: boolean;
+	enableWallet: boolean;
+
+	// 自動ログイン
+	autoConnect: boolean;
+
+	// セッション管理
+	sessionTimeout: number; // minutes
+
+	// ウォレット設定
+	walletConfig?: {
+		enabledChains: ChainType[];
+		preferredChain: ChainType;
+	};
+}
+
+// 認証アクション
+export interface AuthActions {
+	// Firebase認証
+	signInWithEmail: (email: string, password: string) => Promise<void>;
+	signUpWithEmail: (email: string, password: string) => Promise<void>;
+	signInWithGoogle: () => Promise<void>;
+
+	// Wallet認証
+	connectWallet: (chainType?: ChainType, walletType?: string) => Promise<WalletConnection>;
+	authenticateWallet: (chainType?: ChainType) => Promise<WalletAuthResult>;
+	switchWalletChain: (chainType: ChainType, chainId: number | string) => Promise<void>;
+
+	// 統合ログアウト
+	logout: () => Promise<void>;
+
+	// プロフィール更新
+	updateProfile: (data: Partial<FirestoreUser>) => Promise<void>;
+
+	// セッション管理
+	refreshSession: () => Promise<void>;
+}
+
+// 認証イベント
+export type AuthEventType =
+	| 'firebase-login'
+	| 'firebase-logout'
+	| 'wallet-connect'
+	| 'wallet-disconnect'
+	| 'wallet-authenticate'
+	| 'unified-login'
+	| 'unified-logout'
+	| 'profile-update'
+	| 'error';
+
+export interface AuthEvent {
+	type: AuthEventType;
+	timestamp: Date;
+	data?: any;
+	error?: string;
+}
+
+// 認証フック用の戻り値
+export interface UseAuthReturn extends UnifiedAuthState, AuthActions {
+	// 便利なゲッター
+	primaryUserId: string | null;
+	displayName: string | null;
+	emailAddress: string | null;
+	walletAddress: string | null;
+
+	// 状態チェック
+	isFirebaseAuth: boolean;
+	isWalletAuth: boolean;
+	hasMultipleAuth: boolean;
+
+	// イベント
+	addEventListener: (type: AuthEventType, callback: (event: AuthEvent) => void) => () => void;
+}
+
+// ウォレット接続結果
+export interface WalletConnectionResult {
+	success: boolean;
+	connection?: WalletConnection;
+	error?: string;
+}
+
+// 認証統合結果
+export interface AuthIntegrationResult {
+	success: boolean;
+	authMethod: AuthMethod;
+	firebaseUser?: FirebaseUser;
+	walletConnection?: WalletConnection;
+	firestoreUser?: FirestoreUser;
+	error?: string;
+}
+
+// Firebase + Wallet統合データ
+export interface IntegratedUserData {
+	// Firebase認証データ
+	firebaseUid?: string;
+	email?: string;
+	emailVerified?: boolean;
+
+	// Wallet認証データ
+	connectedWallets: WalletConnection[];
+	primaryWallet?: WalletConnection;
+
+	// 認証履歴
+	authHistory: Array<{
+		method: AuthMethod;
+		timestamp: Date;
+		chainType?: ChainType;
+		success: boolean;
+	}>;
+
+	// 設定
+	preferences: {
+		preferredAuthMethod: AuthMethod;
+		autoConnect: boolean;
+		preferredChain?: ChainType;
+	};
+}
+
+// 認証プロバイダーのProps
+export interface UnifiedAuthProviderProps {
+	children: React.ReactNode;
+	config?: Partial<AuthConfig>;
+}
+
+// 認証コンテキストの型
+export interface UnifiedAuthContextType extends UseAuthReturn {
+	// 設定
+	config: AuthConfig;
+
+	// 内部状態
+	_internal: {
+		eventEmitter: EventTarget;
+		sessionStorage: Map<string, any>;
+	};
 }-e 
 ### FILE: ./scripts/seedProductsAdmin.js
 
@@ -14849,27 +19622,36 @@ module.exports = {
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  reactStrictMode: true,
-  transpilePackages: ['three', '@react-three/fiber', '@react-three/drei'], // この行を追加
-  images: {
-    domains: [],
-    formats: ["image/avif", "image/webp"],
-  },
-  // WebGLキャンバスサポート
-  webpack: (config) => {
-    config.module.rules.push({
-      test: /\.(glsl|vs|fs|vert|frag)$/,
-      type: "asset/source",
-    });
+	reactStrictMode: true,
+	transpilePackages: ['three', '@react-three/fiber', '@react-three/drei'], // この行を追加
+	images: {
+		domains: [],
+		formats: ["image/avif", "image/webp"],
+	},
+	// WebGLキャンバスサポート
+	webpack: (config) => {
+		config.module.rules.push({
+			test: /\.(glsl|vs|fs|vert|frag)$/,
+			type: "asset/source",
+		});
 
-    return config;
-  },
-  // 実験的機能
-  experimental: {
-    optimizeCss: true,
-    scrollRestoration: true,
-    esmExternals: 'loose', // この行も追加
-  },
+		// WalletConnect用のnode polyfills
+		config.resolve.fallback = {
+			...config.resolve.fallback,
+			crypto: require.resolve('crypto-browserify'),
+			stream: require.resolve('stream-browserify'),
+			buffer: require.resolve('buffer'),
+			util: require.resolve('util'),
+		};
+
+		return config;
+	},
+	// 実験的機能
+	experimental: {
+		optimizeCss: true,
+		scrollRestoration: true,
+		esmExternals: 'loose', // この行も追加
+	},
 };
 
 module.exports = nextConfig;-e 

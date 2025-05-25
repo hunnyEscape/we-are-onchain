@@ -1,5 +1,5 @@
 // src/wallet-auth/adapters/evm/chain-config.ts
-import { Chain } from 'wagmi';
+import { type Chain } from 'viem'; // wagmiではなくviemからインポート
 import { mainnet, sepolia, polygon, bsc, avalanche, avalancheFuji } from 'wagmi/chains';
 import { EVMChainConfig } from '../../../../types/wallet';
 
@@ -58,7 +58,6 @@ export const evmConfigToWagmiChain = (config: EVMChainConfig): Chain => {
 	return {
 		id: config.chainId,
 		name: config.name,
-		network: config.name.toLowerCase().replace(/\s+/g, '-'), // networkプロパティを追加
 		nativeCurrency: config.nativeCurrency,
 		rpcUrls: {
 			default: {

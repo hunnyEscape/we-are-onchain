@@ -43,7 +43,8 @@
 │   │   │       └── wallet-generator.ts
 │   │   ├── components
 │   │   │   ├── auth
-│   │   │   │   └── AuthModal.tsx
+│   │   │   │   ├── AuthModal.tsx
+│   │   │   │   └── ExtendedAuthModal.tsx
 │   │   │   ├── common
 │   │   │   │   ├── CyberButton.tsx
 │   │   │   │   ├── CyberCard.tsx
@@ -97,6 +98,7 @@
 │   │   │   └── ui
 │   │   │       ├── Footer.tsx
 │   │   │       ├── GlitchText.tsx
+│   │   │       ├── Header-updated.tsx
 │   │   │       ├── Header.tsx
 │   │   │       └── ScanlineEffect.module.css
 │   │   ├── dashboard
@@ -118,15 +120,20 @@
 │   │   │   └── page.tsx
 │   │   ├── favicon.ico
 │   │   ├── globals.css
+│   │   ├── layout-simplified.tsx
+│   │   ├── layout-updated.tsx
 │   │   ├── layout.tsx
 │   │   ├── page.tsx
 │   │   ├── profile
 │   │   │   ├── layout.tsx
 │   │   │   └── page.tsx
-│   │   └── styles
-│   │       └── cyber-components.css
+│   │   ├── styles
+│   │   │   └── cyber-components.css
+│   │   └── wallet-auth-demo
+│   │       └── page.tsx
 │   ├── contexts
-│   │   └── AuthContext.tsx
+│   │   ├── AuthContext.tsx
+│   │   └── UnifiedAuthContext.tsx
 │   ├── hooks
 │   │   ├── useCryptoPrices.ts
 │   │   └── usePriceConverter.ts
@@ -137,18 +144,31 @@
 │   │       ├── inventory.ts
 │   │       ├── products.ts
 │   │       └── users.ts
-│   └── utils
-│       ├── errorHandling.ts
-│       ├── userHelpers.ts
-│       └── validation.ts
+│   ├── utils
+│   │   ├── errorHandling.ts
+│   │   ├── userHelpers.ts
+│   │   └── validation.ts
+│   └── wallet-auth
+│       ├── adapters
+│       │   └── evm
+│       │       ├── EVMAuthService.ts
+│       │       ├── EVMWalletAdapter.ts
+│       │       ├── EVMWalletAdapterWrapper.tsx
+│       │       ├── chain-config.ts
+│       │       └── wagmi-provider.tsx
+│       └── core
+│           └── WalletAdapterInterface.ts
 ├── tailwind.config.js
 ├── tsconfig.json
 └── types
+    ├── auth.ts
     ├── crypto.ts
     ├── dashboard.ts
     ├── demo-payment.ts
     ├── product.ts
     ├── react-three-fiber.d.ts
-    └── user.ts
+    ├── user-extended.ts
+    ├── user.ts
+    └── wallet.ts
 
-39 directories, 112 files
+44 directories, 127 files

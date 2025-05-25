@@ -1,7 +1,12 @@
+// src/app/layout-updated.tsx
 import { Montserrat, Space_Grotesk } from 'next/font/google';
 import './globals.css';
 import type { Metadata } from 'next';
 import { AuthProvider } from '@/contexts/AuthContext';
+import { EVMWalletProvider } from '@/wallet-auth/adapters/evm/wagmi-provider';
+import { EVMWalletProvider as EVMWalletContextProvider } from '@/wallet-auth/adapters/evm/EVMWalletAdapterWrapper';
+import { UnifiedAuthProvider } from '@/contexts/UnifiedAuthContext';
+
 // フォントの設定
 const montserrat = Montserrat({
 	subsets: ['latin'],
@@ -14,6 +19,7 @@ const spaceGrotesk = Space_Grotesk({
 	variable: '--font-space-grotesk',
 	display: 'swap',
 });
+
 // メタデータ設定
 export const metadata: Metadata = {
 	title: 'We Are On-Chain | Pepe Protein',
@@ -29,9 +35,34 @@ export default function RootLayout({
 	return (
 		<html lang="en" className={`${montserrat.variable} ${spaceGrotesk.variable}`}>
 			<body className="bg-black text-white min-h-screen font-sans antialiased">
-				<AuthProvider>
-					{children}
-				</AuthProvider>
+				{/* Wagmi + RainbowKit Provider (最下層) */}
+				<EVMWalletProvider
+					appName="We are on-chain"
+					projectId={process.env.NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID}
+				>
+					{/* EVM Wallet Context Provider */}
+					<EVMWalletContextProvider>
+						{/* Firebase Auth Provider (既存) */}
+						<AuthProvider>
+							{/* 統合認証プロバイダー */}
+							<UnifiedAuthProvider
+								config={{
+									preferredMethod: 'hybrid',
+									enableFirebase: true,
+									enableWallet: true,
+									autoConnect: true,
+									sessionTimeout: 24 * 60, // 24時間
+									walletConfig: {
+										enabledChains: ['evm'],
+										preferredChain: 'evm',
+									},
+								}}
+							>
+								{children}
+							</UnifiedAuthProvider>
+						</AuthProvider>
+					</EVMWalletContextProvider>
+				</EVMWalletProvider>
 			</body>
 		</html>
 	);

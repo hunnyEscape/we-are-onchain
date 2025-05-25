@@ -12,6 +12,8 @@ export interface WalletConnection {
 	isConnected: boolean;
 	connectedAt?: Date;
 	lastUsedAt?: Date;
+	isVerified?: boolean; // 署名検証済みかどうか
+	isPrimary?: boolean;  // プライマリウォレットかどうか
 }
 
 // ウォレット認証で使用する署名データ

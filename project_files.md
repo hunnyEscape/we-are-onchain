@@ -2275,151 +2275,167 @@ export default ProfileSection;-e
 import React, { useState } from 'react';
 import CyberCard from '../../../components/common/CyberCard';
 import CyberButton from '../../../components/common/CyberButton';
-import LiveDemoSection from '../../../components/payment/LiveDemoSection';
 import {
-	User,
 	ShoppingCart,
-	CreditCard,
-	Package,
-	Shield,
-	CheckCircle,
-	AlertTriangle,
-	ExternalLink,
-	Copy,
-	Clock,
-	Zap,
-	DollarSign,
-	Globe,
-	Mail,
-	Github,
-	Twitter,
-	MessageCircle,
-	QrCode,
 	Wallet,
-	TrendingUp,
-	ChevronDown,
-	ChevronUp,
-	Play
+	MapPin,
+	AlertTriangle,
+	Zap,
+	Star,
+	Monitor,
+	Smartphone
 } from 'lucide-react';
 
-interface PaymentMethod {
+interface PaymentChain {
 	id: string;
+	name: string;
 	symbol: string;
-	chain: string;
+	status: 'active' | 'coming-soon';
+	recommended?: boolean;
+	description: string;
 }
 
 interface WalletOption {
 	name: string;
 	description: string;
 	icon: React.ReactNode;
-	supported: boolean;
+	chains: string[];
+	type: 'browser' | 'mobile' | 'both';
+	popular?: boolean;
 }
 
 const HowToBuySection: React.FC = () => {
 	const [activeStep, setActiveStep] = useState(1);
-	const [isPaymentTableOpen, setIsPaymentTableOpen] = useState(false);
+	const [selectedChainType, setSelectedChainType] = useState<'evm' | 'solana' | 'all'>('all');
 
-	const paymentMethods: PaymentMethod[] = [
+	const paymentChains: PaymentChain[] = [
 		{
 			id: 'solana',
+			name: 'Solana',
 			symbol: '$SOL',
-			chain: 'Solana'
-		},
-		{
-			id: 'lightning',
-			symbol: '$BTC',
-			chain: 'Lightning'
+			status: 'active',
+			description: 'Ultra-fast with minimal fees'
 		},
 		{
 			id: 'avalanche',
+			name: 'Avalanche c-chain',
 			symbol: '$AVAX',
-			chain: 'Avalanche c-chain'
+			status: 'active',
+			recommended: true,
+			description: 'Fast and low-cost transactions'
+		},
+		{
+			id: 'ethereum',
+			name: 'Ethereum mainnet',
+			symbol: '$ETH',
+			status: 'active',
+			description: 'Most widely supported blockchain'
+		},
+		{
+			id: 'lightning',
+			name: 'Lightning',
+			symbol: '$BTC',
+			status: 'coming-soon',
+			description: 'Instant Bitcoin payments'
 		},
 		{
 			id: 'sui',
+			name: 'Sui',
 			symbol: '$SUI',
-			chain: 'SUI'
-		},
-		{
-			id: 'eth',
-			symbol: '$ETH',
-			chain: 'ETH'
+			status: 'coming-soon',
+			description: 'Next-generation blockchain'
 		}
 	];
 
 	const walletOptions: WalletOption[] = [
 		{
 			name: 'MetaMask',
-			description: 'Most popular browser wallet',
-			icon: <div className="w-8 h-8 bg-orange-500 rounded-sm flex items-center justify-center text-white text-xs font-bold">MM</div>,
-			supported: true
+			description: 'Most popular wallet',
+			icon: <div className="w-8 h-8 bg-orange-500 rounded-lg flex items-center justify-center text-white text-xs font-bold">MM</div>,
+			chains: ['ethereum', 'avalanche'],
+			type: 'both',
+			popular: true
 		},
 		{
-			name: 'Trust Wallet',
-			description: 'Mobile-first crypto wallet',
-			icon: <div className="w-8 h-8 bg-blue-400 rounded-sm flex items-center justify-center text-white text-xs font-bold">TW</div>,
-			supported: true
+			name: 'WalletConnect',
+			description: 'Connect mobile wallets',
+			icon: <div className="w-8 h-8 bg-blue-500 rounded-lg flex items-center justify-center text-white text-xs font-bold">WC</div>,
+			chains: ['ethereum', 'avalanche'],
+			type: 'mobile'
 		},
 		{
 			name: 'Coinbase Wallet',
 			description: 'Official Coinbase wallet',
-			icon: <div className="w-8 h-8 bg-blue-600 rounded-sm flex items-center justify-center text-white text-xs font-bold">CB</div>,
-			supported: true
+			icon: <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center text-white text-xs font-bold">CB</div>,
+			chains: ['ethereum', 'avalanche'],
+			type: 'both'
 		},
 		{
-			name: 'WalletConnect',
-			description: 'Connect various mobile wallets',
-			icon: <div className="w-8 h-8 bg-blue-500 rounded-sm flex items-center justify-center text-white text-xs font-bold">WC</div>,
-			supported: true
+			name: 'Phantom',
+			description: 'Leading Solana wallet',
+			icon: <div className="w-8 h-8 bg-purple-600 rounded-lg flex items-center justify-center text-white text-xs font-bold">👻</div>,
+			chains: ['solana'],
+			type: 'both',
+			popular: true
+		},
+		{
+			name: 'Solflare',
+			description: 'Solana wallet',
+			icon: <div className="w-8 h-8 bg-yellow-500 rounded-lg flex items-center justify-center text-white text-xs font-bold">SF</div>,
+			chains: ['solana'],
+			type: 'both'
 		}
 	];
 
 	const steps = [
 		{
 			id: 1,
-			title: 'Cart & Checkout',
-			description: 'Add products and set preferences',
-			details: `When you checkout. (1) Select your payment currency. (2) Set shipping address. International shipping available.`
+			title: 'Add to Cart & Checkout',
+			description: 'Select products and proceed to checkout',
+			details: 'No wallet connection or login required at this step'
 		},
 		{
 			id: 2,
-			title: 'Invoice Payment',
-			description: 'Pay using generated invoice URL',
-			details: 'Receive an invoice with QR code and payment address. Use any compatible wallet to send the exact amount to complete your purchase.'
-		},
-		{
-			id: 3,
-			title: 'Order Completion',
-			description: 'Automatic processing and shipping',
-			details: 'Transaction reflects in our system within seconds. Shipping process begins immediately after payment confirmation.'
+			title: 'Connect Wallet, Shipping Address & Pay',
+			description: 'Connect wallet, enter address, and complete payment',
+			details: 'Connect your crypto wallet, enter your shipping address, and complete the payment in one seamless process.'
 		}
 	];
 
-	const handleCopyAddress = (address: string) => {
-		navigator.clipboard.writeText(address);
+	const getFilteredWallets = () => {
+		if (selectedChainType === 'all') return walletOptions;
+		if (selectedChainType === 'evm') {
+			return walletOptions.filter(wallet =>
+				wallet.chains.some(chain => ['ethereum', 'avalanche'].includes(chain))
+			);
+		}
+		if (selectedChainType === 'solana') {
+			return walletOptions.filter(wallet => wallet.chains.includes('solana'));
+		}
+		return walletOptions;
 	};
 
-	const availableMethods = paymentMethods;
+	const activeChains = paymentChains.filter(chain => chain.status === 'active');
+	const comingSoonChains = paymentChains.filter(chain => chain.status === 'coming-soon');
 
 	return (
 		<div className="space-y-8">
-			{/* Header & Concept */}
+			{/* Header */}
 			<div className="text-center space-y-4">
 				<h2 className="text-3xl font-heading font-bold text-white mb-2">
 					How to Buy
 				</h2>
-				<p className="text-gray-400">
-					Only{' '}
-					<span className="text-purple-300 font-semibold">Solana</span>,{' '}
-					<span className="text-yellow-300 font-semibold">Lightning</span>,{' '}
-					<span className="text-red-400 font-semibold">Avalanche c-chain</span>,{' '}
-					<span className="text-gray-300 font-semibold">Ethereum mainnet</span>{' '}
-					and <span className="text-sky-300 font-semibold">Sui</span> are accepted.
+				<p className="text-gray-400 max-w-xl mx-auto text-lg leading-relaxed">
+					<span className="text-purple-400 font-semibold">Solana</span>,
+					<span className="text-red-400 font-semibold"> Avalanche c-chain</span> and
+					<span className="text-blue-400 font-semibold"> Ethereum mainnet</span> are accepted.
+					<span className="text-orange-400 font-semibold"> Lightning</span> and
+					<span className="text-sky-300 font-semibold"> Sui</span> are coming soon.
 				</p>
 			</div>
 
 			{/* Step-by-Step Guide */}
-			<CyberCard title="Step-by-Step Purchase Guide" showEffects={false}>
+			<CyberCard title="Purchase Process" showEffects={false}>
 				<div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
 					{/* Step Navigation */}
 					<div className="lg:col-span-1">
@@ -2429,18 +2445,18 @@ const HowToBuySection: React.FC = () => {
 									key={step.id}
 									onClick={() => setActiveStep(step.id)}
 									className={`
-                    w-full text-left p-4 rounded-sm border transition-all duration-200
-                    ${activeStep === step.id
+										w-full text-left p-4 rounded-lg border transition-all duration-200
+										${activeStep === step.id
 											? 'bg-neonGreen/10 border-neonGreen text-neonGreen'
 											: 'border-dark-300 text-gray-300 hover:border-gray-500 hover:text-white'
 										}
-                  `}
+									`}
 								>
 									<div className="flex items-center space-x-3">
 										<div className={`
-                      w-8 h-8 rounded-full flex items-center justify-center font-bold text-sm
-                      ${activeStep === step.id ? 'bg-neonGreen text-black' : 'bg-dark-300 text-gray-400'}
-                    `}>
+											w-8 h-8 rounded-full flex items-center justify-center font-bold text-sm
+											${activeStep === step.id ? 'bg-neonGreen text-black' : 'bg-dark-300 text-gray-400'}
+										`}>
 											{step.id}
 										</div>
 										<div>
@@ -2466,151 +2482,121 @@ const HowToBuySection: React.FC = () => {
 										</p>
 									</div>
 
-									{/* Step 1: Checkout Process */}
+									{/* Step 1: Add to Cart */}
 									{step.id === 1 && (
 										<div className="space-y-6">
-											{/* Important Notice */}
-											<div className="p-4 border border-yellow-600/30 rounded-sm bg-yellow-600/5">
-												<div className="flex items-start space-x-3">
-													<AlertTriangle className="w-5 h-5 text-yellow-400 flex-shrink-0 mt-0.5" />
-													<div>
-														<div className="text-yellow-400 font-medium mb-1">⚠️ No shipping processing until payment completion</div>
-														<div className="text-sm text-gray-300">
-															Even after checkout, orders can be cancelled until payment is completed via Invoice URL.
-														</div>
-													</div>
+											<div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+												<div className="p-4 border border-dark-300 rounded-lg">
+													<ShoppingCart className="w-6 h-6 text-neonGreen mb-2" />
+													<div className="text-white font-medium mb-1">Browse & Add</div>
+													<div className="text-sm text-gray-400">Select products and add to cart</div>
 												</div>
-											</div>
-
-											{/* Payment Currency Selection - Collapsible Table */}
-											<div className="border border-dark-300 rounded-sm">
-												<button
-													onClick={() => setIsPaymentTableOpen(!isPaymentTableOpen)}
-													className="w-full p-4 flex items-center justify-between bg-dark-200/30 hover:bg-dark-200/50 transition-colors"
-												>
-													<h4 className="text-lg font-semibold text-white">Payment Currency Selection</h4>
-													{isPaymentTableOpen ? (
-														<ChevronUp className="w-5 h-5 text-gray-400" />
-													) : (
-														<ChevronDown className="w-5 h-5 text-gray-400" />
-													)}
-												</button>
-
-												{isPaymentTableOpen && (
-													<div className="p-4 border-t border-dark-300">
-														<div className="overflow-x-auto">
-															<table className="w-full">
-																<thead>
-																	<tr className="border-b border-dark-300">
-																		<th className="text-left p-3 text-gray-300 font-medium">Method</th>
-																		<th className="text-left p-3 text-gray-300 font-medium">Currency</th>
-																	</tr>
-																</thead>
-																<tbody>
-																	{paymentMethods.map((method) => (
-																		<tr key={method.id} className="border-b border-dark-300/50 hover:bg-dark-200/20">
-																			<td className="p-3">
-																				<span className="text-sm bg-gray-600 px-2 py-1 rounded text-gray-200">
-																					{method.chain}
-																				</span>
-																			</td>
-																			<td className="p-3 text-white font-medium">
-																				{method.symbol}
-																			</td>
-																		</tr>
-																	))}
-																</tbody>
-															</table>
-														</div>
-													</div>
-												)}
+												<div className="p-4 border border-dark-300 rounded-lg">
+													<Zap className="w-6 h-6 text-neonOrange mb-2" />
+													<div className="text-white font-medium mb-1">Quick Checkout</div>
+													<div className="text-sm text-gray-400">Proceed to payment when ready</div>
+												</div>
 											</div>
 										</div>
 									)}
 
-									{/* Step 2: Invoice Payment - ★ LiveDemoSection統合 */}
+									{/* Step 2: Connect, Pay & Address */}
 									{step.id === 2 && (
 										<div className="space-y-6">
-											{/* Payment Process */}
 											<div>
-												<h4 className="text-lg font-semibold text-white mb-3">Payment Verification Steps</h4>
-												<div className="space-y-3">
-													<div className="flex items-center space-x-3 p-3 border border-dark-300 rounded-sm">
-														<div className="w-6 h-6 bg-neonGreen rounded-full flex items-center justify-center text-black font-bold text-sm">1</div>
-														<div className="text-gray-300">Amount Verification - Double-check the exact amount</div>
-													</div>
-													<div className="flex items-center space-x-3 p-3 border border-dark-300 rounded-sm">
-														<div className="w-6 h-6 bg-neonGreen rounded-full flex items-center justify-center text-black font-bold text-sm">2</div>
-														<div className="text-gray-300">Address Verification - Confirm the recipient address</div>
-													</div>
-													<div className="flex items-center space-x-3 p-3 border border-dark-300 rounded-sm">
-														<div className="w-6 h-6 bg-neonGreen rounded-full flex items-center justify-center text-black font-bold text-sm">3</div>
-														<div className="text-gray-300">Chain Verification - Ensure correct network for transaction</div>
-													</div>
-													<div className="flex items-center space-x-3 p-3 border border-dark-300 rounded-sm">
-														<div className="w-6 h-6 bg-neonGreen rounded-full flex items-center justify-center text-black font-bold text-sm">4</div>
-														<div className="text-gray-300">Gas Fee Confirmation - Review transaction fees</div>
-													</div>
-												</div>
-											</div>
-
-											{/* Supported Wallets */}
-											<div>
-												<h4 className="text-lg font-semibold text-white mb-3">Supported Wallets</h4>
-												<div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-													{walletOptions.map((wallet, index) => (
-														<div key={index} className="p-3 border border-dark-300 rounded-sm text-center">
-															{wallet.icon}
-															<div className="text-white font-medium text-sm mt-2">{wallet.name}</div>
-															<div className="text-xs text-gray-400">{wallet.description}</div>
+												<h4 className="text-lg font-semibold text-white mb-4">Choose Payment Method</h4>
+												<div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+													{activeChains.map((chain) => (
+														<div key={chain.id} className={`
+															p-4 border rounded-lg transition-all duration-200 hover:border-neonGreen/50
+														`}>
+															<div className="flex items-center space-x-3 mb-3">
+																<Wallet className="w-5 h-5 text-gray-400" />
+																<div>
+																	<div className="text-white font-medium">{chain.name}</div>
+																	<div className="text-sm text-gray-400">{chain.symbol}</div>
+																</div>
+															</div>
 														</div>
 													))}
 												</div>
 											</div>
 
-											{/* ★ Live Demo Section - 旧QR Code Demo Areaを置き換え */}
-											<div className="border border-neonGreen/30 rounded-sm bg-neonGreen/5 p-6">
-												<div className="flex items-center space-x-3 mb-4">
-													<Play className="w-6 h-6 text-neonGreen" />
-													<h4 className="text-lg font-semibold text-white">Live Payment Demo</h4>
-													<span className="text-xs bg-neonGreen/20 text-neonGreen px-2 py-1 rounded border border-neonGreen/50">
-														LIVE
-													</span>
+											{/* Supported Wallets */}
+											<div>
+												<div className="flex items-center justify-between mb-4">
+													<h4 className="text-lg font-semibold text-white">Supported Wallets</h4>
+													<div className="flex space-x-2">
+														<button
+															onClick={() => setSelectedChainType('all')}
+															className={`px-3 py-1 rounded text-xs transition-colors ${selectedChainType === 'all'
+																? 'bg-neonGreen/20 text-neonGreen border border-neonGreen/50'
+																: 'bg-dark-300 text-gray-400 hover:text-white'
+																}`}
+														>
+															All
+														</button>
+														<button
+															onClick={() => setSelectedChainType('evm')}
+															className={`px-3 py-1 rounded text-xs transition-colors ${selectedChainType === 'evm'
+																? 'bg-neonGreen/20 text-neonGreen border border-neonGreen/50'
+																: 'bg-dark-300 text-gray-400 hover:text-white'
+																}`}
+														>
+															EVM
+														</button>
+														<button
+															onClick={() => setSelectedChainType('solana')}
+															className={`px-3 py-1 rounded text-xs transition-colors ${selectedChainType === 'solana'
+																? 'bg-neonGreen/20 text-neonGreen border border-neonGreen/50'
+																: 'bg-dark-300 text-gray-400 hover:text-white'
+																}`}
+														>
+															Solana
+														</button>
+													</div>
 												</div>
 
-												<div className="mb-4 text-sm text-gray-300">
-													Experience the real payment flow with Avalanche FUJI testnet. Try sending a small amount to see how the system works.
+												<div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+													{getFilteredWallets().map((wallet, index) => (
+														<div key={index} className="p-3 border border-dark-300 rounded-lg hover:border-gray-500 transition-colors">
+															<div className="flex items-center space-x-3 mb-2">
+																{wallet.icon}
+																<div className="flex-1 min-w-0">
+																	<div className="text-white font-medium text-sm flex items-center">
+																		{wallet.name}
+																		{wallet.popular && <Star className="w-3 h-3 text-yellow-400 ml-1" />}
+																	</div>
+																</div>
+															</div>
+															<div className="text-xs text-gray-400 mb-2">{wallet.description}</div>
+															<div className="flex items-center space-x-2">
+																{wallet.type === 'both' ? (
+																	<>
+																		<Monitor className="w-3 h-3 text-gray-500" />
+																		<Smartphone className="w-3 h-3 text-gray-500" />
+																	</>
+																) : wallet.type === 'mobile' ? (
+																	<Smartphone className="w-3 h-3 text-gray-500" />
+																) : (
+																	<Monitor className="w-3 h-3 text-gray-500" />
+																)}
+															</div>
+														</div>
+													))}
 												</div>
-
-												{/* LiveDemoSection コンポーネント統合 */}
-												<LiveDemoSection />
 											</div>
-										</div>
-									)}
 
-									{/* Step 3: Order Completion */}
-									{step.id === 3 && (
-										<div className="space-y-6">
-											<div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-												<div className="p-4 border border-dark-300 rounded-sm">
-													<Zap className="w-6 h-6 text-neonOrange mb-2" />
-													<div className="text-white font-medium mb-1">System Reflection</div>
-													<div className="text-sm text-gray-400">Transaction reflects in our system within seconds to minutes</div>
-												</div>
-												<div className="p-4 border border-dark-300 rounded-sm">
-													<Package className="w-6 h-6 text-neonGreen mb-2" />
-													<div className="text-white font-medium mb-1">Immediate Shipping</div>
-													<div className="text-sm text-gray-400">Shipping process begins immediately after payment confirmation</div>
-												</div>
-												<div className="p-4 border border-dark-300 rounded-sm">
-													<Clock className="w-6 h-6 text-neonOrange mb-2" />
-													<div className="text-white font-medium mb-1">Delivery Time</div>
-													<div className="text-sm text-gray-400">3-7 business days worldwide shipping</div>
-												</div>
-												<div className="p-4 border border-dark-300 rounded-sm">
-													<Shield className="w-6 h-6 text-neonGreen mb-2" />
-													<div className="text-white font-medium mb-1">Blockchain Tracking</div>
-													<div className="text-sm text-gray-400">Blockchain-verified delivery tracking</div>
+											{/* Shipping Address Info */}
+											<div className="p-4 border border-blue-600/30 rounded-lg bg-blue-600/5">
+												<div className="flex items-start space-x-3">
+													<MapPin className="w-5 h-5 text-blue-400 flex-shrink-0 mt-0.5" />
+													<div>
+														<div className="text-blue-400 font-medium mb-1">Shipping Address</div>
+														<div className="text-sm text-gray-300">
+															Your wallet address and shipping information will be saved for future purchases. Worldwide delivery available.
+														</div>
+													</div>
 												</div>
 											</div>
 										</div>
@@ -2621,53 +2607,6 @@ const HowToBuySection: React.FC = () => {
 					</div>
 				</div>
 			</CyberCard>
-
-			{/* FAQ Section */}
-			<CyberCard title="Frequently Asked Questions" showEffects={false}>
-				<div className="space-y-4">
-					<div className="border-b border-dark-300 pb-4">
-						<h4 className="text-white font-medium mb-2">Do I need a crypto wallet to create an account?</h4>
-						<p className="text-sm text-gray-400">
-							No! You can create an account using traditional social logins (Google, Twitter, etc.). A crypto wallet is only needed for the final payment step.
-						</p>
-					</div>
-
-					<div className="border-b border-dark-300 pb-4">
-						<h4 className="text-white font-medium mb-2">Can I cancel my order after checkout?</h4>
-						<p className="text-sm text-gray-400">
-							Yes! Orders can be cancelled until payment is completed via the Invoice URL. No shipping processing occurs until payment confirmation.
-						</p>
-					</div>
-
-					<div className="border-b border-dark-300 pb-4">
-						<h4 className="text-white font-medium mb-2">What happens if I send the wrong amount?</h4>
-						<p className="text-sm text-gray-400">
-							Our system monitors for exact amounts. Partial payments are held until completion, and overpayments can be refunded to the sender address.
-						</p>
-					</div>
-
-					<div className="border-b border-dark-300 pb-4">
-						<h4 className="text-white font-medium mb-2">Which blockchain should I choose?</h4>
-						<p className="text-sm text-gray-400">
-							Avalanche offers low fees ($0.01-$0.1) and fast transactions. Ethereum is more expensive but widely supported. Choose based on your wallet and preference.
-						</p>
-					</div>
-
-					<div>
-						<h4 className="text-white font-medium mb-2">What if my transaction fails?</h4>
-						<p className="text-sm text-gray-400">
-							Failed transactions are automatically detected. You may pay gas fees, but no product charges apply. Simply retry with sufficient balance and gas fees.
-						</p>
-					</div>
-				</div>
-			</CyberCard>
-
-			{/* CTA */}
-			<div className="text-center">
-				<CyberButton variant="primary" className="px-8 py-4 text-lg">
-					Start Shopping Now
-				</CyberButton>
-			</div>
 		</div>
 	);
 };
@@ -2678,63 +2617,31 @@ export default HowToBuySection;-e
 // src/app/dashboard/components/sections/CartSection.tsx
 'use client';
 
-import React, { useState } from 'react';
+import React from 'react';
 import CyberCard from '../../../components/common/CyberCard';
 import CyberButton from '../../../components/common/CyberButton';
 import { useCart, usePanel } from '../../context/DashboardContext';
 import { useAuth } from '@/contexts/AuthContext';
-import { usePriceConverter } from '@/hooks/usePriceConverter';
-import { PAYMENT_METHODS, PaymentMethodKey } from '../../../../../types/dashboard';
 import {
 	ShoppingCart,
 	Trash2,
 	Plus,
 	Minus,
-	Zap,
-	AlertCircle,
 	Clock,
-	Package,
-	RefreshCw,
-	TrendingUp,
-	TrendingDown
+	Package
 } from 'lucide-react';
-
-const Info = ({ className = "w-4 h-4" }: { className?: string }) => (
-	<svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-		<path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-	</svg>
-);
 
 const CartSection: React.FC = () => {
 	const {
 		cartItems,
 		removeFromCart,
 		updateQuantity,
-		clearCart,
-		getCartTotal,
 		getCartItemCount,
 		getCartItemsWithDetails
 	} = useCart();
 
 	const { openPanel } = usePanel();
 	const { user } = useAuth();
-
-	// 暗号通貨価格変換フック
-	const {
-		convertUSDTo,
-		formatCryptoPrice,
-		formatUSDPrice,
-		isLoading: pricesLoading,
-		error: pricesError,
-		lastUpdated,
-		exchangeRates
-	} = usePriceConverter();
-
-	const [promoCode, setPromoCode] = useState('');
-	const [appliedPromo, setAppliedPromo] = useState<string | null>(null);
-	const [gasFeeEstimate] = useState(0.003); // ETH equivalent in USD
-	const [selectedPaymentMethod, setSelectedPaymentMethod] = useState<PaymentMethodKey | null>(null);
-	const [showPromoError, setShowPromoError] = useState(false);
 
 	// カートアイテムの詳細情報を取得
 	const cartItemsWithDetails = getCartItemsWithDetails();
@@ -2754,45 +2661,6 @@ const CartSection: React.FC = () => {
 		removeFromCart(id);
 	};
 
-	const applyPromoCode = () => {
-		const validPromoCodes = ['pepe10', 'blockchain15', 'web3save'];
-
-		if (validPromoCodes.includes(promoCode.toLowerCase())) {
-			setAppliedPromo(promoCode.toUpperCase());
-			setPromoCode('');
-			setShowPromoError(false);
-		} else {
-			setShowPromoError(true);
-			setTimeout(() => setShowPromoError(false), 3000);
-		}
-	};
-
-	const removePromoCode = () => {
-		setAppliedPromo(null);
-	};
-
-	const calculateSubtotal = () => {
-		return getCartTotal();
-	};
-
-	const calculateDiscount = () => {
-		const subtotal = calculateSubtotal();
-		switch (appliedPromo) {
-			case 'PEPE10':
-				return subtotal * 0.1; // 10% discount
-			case 'BLOCKCHAIN15':
-				return subtotal * 0.15; // 15% discount
-			case 'WEB3SAVE':
-				return Math.min(subtotal * 0.05, 5); // 5% discount, max $5
-			default:
-				return 0;
-		}
-	};
-
-	const calculateTotal = () => {
-		return calculateSubtotal() - calculateDiscount() + gasFeeEstimate;
-	};
-
 	const handleCheckout = () => {
 		try {
 			if (!user) {
@@ -2804,18 +2672,10 @@ const CartSection: React.FC = () => {
 			// TODO: チェックアウト処理を実装
 			console.log('Checkout initiated', {
 				cartItems,
-				total: calculateTotal(),
-				paymentMethod: selectedPaymentMethod,
-				appliedPromo,
 				user: user.uid
 			});
 
-			// 仮の処理完了メッセージ
-			const totalUSD = calculateTotal();
-			const totalCrypto = convertUSDTo(totalUSD, selectedPaymentMethod);
-			const formattedCrypto = formatCryptoPrice(totalCrypto, selectedPaymentMethod);
-
-			alert(`Checkout initiated for ${formatUSDPrice(totalUSD)} (${formattedCrypto})`);
+			alert('Checkout initiated!');
 		} catch (error) {
 			console.error('Checkout error:', error);
 		}
@@ -2825,81 +2685,8 @@ const CartSection: React.FC = () => {
 		openPanel('shop');
 	};
 
-	const handleClearCart = () => {
-		clearCart();
-	};
-
-	const getDiscountText = (promoCode: string) => {
-		switch (promoCode) {
-			case 'PEPE10':
-				return '10% off';
-			case 'BLOCKCHAIN15':
-				return '15% off';
-			case 'WEB3SAVE':
-				return '5% off (max $5)';
-			default:
-				return '';
-		}
-	};
-
-	// 価格表示コンポーネント
-	const PriceDisplay = ({
-		usdAmount,
-		showCrypto = true,
-		size = 'md'
-	}: {
-		usdAmount: number;
-		showCrypto?: boolean;
-		size?: 'sm' | 'md' | 'lg'
-	}) => {
-		const cryptoAmount = convertUSDTo(usdAmount, selectedPaymentMethod);
-		const isLoading = pricesLoading;
-		const hasError = pricesError !== null;
-
-		const sizeClasses = {
-			sm: 'text-sm',
-			md: 'text-base',
-			lg: 'text-lg font-bold'
-		};
-
-		return (
-			<div className={`${sizeClasses[size]}`}>
-				<div className="text-white font-semibold">
-					{formatUSDPrice(usdAmount)}
-				</div>
-				{showCrypto && (
-					<div className={`text-xs ${hasError ? 'text-red-400' : 'text-gray-400'} flex items-center space-x-1`}>
-						{isLoading ? (
-							<>
-								<RefreshCw className="w-3 h-3 animate-spin" />
-								<span>Loading...</span>
-							</>
-						) : hasError ? (
-							<span>Price unavailable</span>
-						) : (
-							<span>≈ {formatCryptoPrice(cryptoAmount, selectedPaymentMethod)}</span>
-						)}
-					</div>
-				)}
-			</div>
-		);
-	};
-
-	// 24時間変動表示コンポーネント
-	const PriceChangeIndicator = ({ currency }: { currency: string }) => {
-		const rate = exchangeRates[currency];
-		if (!rate) return null;
-
-		// ここでは仮の変動率を表示（実際のデータは価格フックから取得可能）
-		const change = 2.34; // 実際の実装では価格データから取得
-		const isPositive = change >= 0;
-
-		return (
-			<div className={`flex items-center space-x-1 text-xs ${isPositive ? 'text-green-400' : 'text-red-400'}`}>
-				{isPositive ? <TrendingUp className="w-3 h-3" /> : <TrendingDown className="w-3 h-3" />}
-				<span>{isPositive ? '+' : ''}{change.toFixed(2)}%</span>
-			</div>
-		);
+	const formatUSDPrice = (amount: number) => {
+		return `$${amount.toFixed(2)}`;
 	};
 
 	if (cartItems.length === 0) {
@@ -2910,14 +2697,16 @@ const CartSection: React.FC = () => {
 					<p className="text-gray-400">Your cart is currently empty</p>
 				</div>
 
-				<CyberCard showEffects={false} className="text-center py-12">
-					<ShoppingCart className="w-16 h-16 text-gray-400 mx-auto mb-4" />
-					<h3 className="text-xl font-semibold text-white mb-2">Your cart is empty</h3>
-					<p className="text-gray-400 mb-6">Add some premium protein to get started</p>
-					<CyberButton variant="primary" onClick={handleContinueShopping}>
-						Start Shopping
-					</CyberButton>
-				</CyberCard>
+				<div className="max-w-2xl mx-auto">
+					<CyberCard showEffects={false} className="text-center py-12">
+						<ShoppingCart className="w-16 h-16 text-gray-400 mx-auto mb-4" />
+						<h3 className="text-xl font-semibold text-white mb-2">Your cart is empty</h3>
+						<p className="text-gray-400 mb-6">Add some premium protein to get started</p>
+						<CyberButton variant="primary" onClick={handleContinueShopping}>
+							Start Shopping
+						</CyberButton>
+					</CyberCard>
+				</div>
 			</div>
 		);
 	}
@@ -2934,159 +2723,77 @@ const CartSection: React.FC = () => {
 				</p>
 			</div>
 
-			<div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-				{/* Cart Items */}
-				<div className="lg:col-span-2 space-y-4">
-					<CyberCard title={`Cart Items (${getCartItemCount()})`} showEffects={false}>
-						<div className="space-y-4">
-							{cartItemsWithDetails.map((item) => (
-								<div key={item.id} className="flex items-center space-x-4 p-4 border border-dark-300 rounded-sm">
-									{/* Product Image */}
-									<div className="w-16 h-16 bg-gradient-to-br from-neonGreen to-neonOrange rounded-sm flex items-center justify-center">
-										<Package className="w-8 h-8 text-black" />
-									</div>
+			{/* Cart Items - 中央配置 */}
+			<div className="max-w-4xl mx-auto">
+				<CyberCard title={`Cart Items (${getCartItemCount()})`} showEffects={false}>
+					<div className="space-y-4">
+						{cartItemsWithDetails.map((item) => (
+							<div key={item.id} className="flex items-center space-x-4 p-4 border border-dark-300 rounded-sm">
+								{/* Product Image */}
+								<div className="w-16 h-16 bg-gradient-to-br from-neonGreen to-neonOrange rounded-sm flex items-center justify-center flex-shrink-0">
+									<Package className="w-8 h-8 text-black" />
+								</div>
 
-									{/* Product Info */}
-									<div className="flex-1">
-										<h3 className="text-white font-semibold">{item.name}</h3>
-										<p className="text-sm text-gray-400">Premium whey protein blend</p>
-										<PriceDisplay usdAmount={item.price} showCrypto={true} size="sm" />
+								{/* Product Info */}
+								<div className="flex-1 min-w-0">
+									<h3 className="text-white font-semibold">{item.name}</h3>
+									<p className="text-sm text-gray-400">Premium whey protein blend</p>
+									<div className="text-white font-semibold">{formatUSDPrice(item.price)}</div>
 
-										{/* Item Info */}
-										<div className="flex items-center space-x-2 mt-1">
-											{item.timeLeft && (
-												<div className="flex items-center space-x-1">
-													<Clock className="w-3 h-3 text-yellow-400" />
-													<span className="text-xs text-yellow-400">{item.timeLeft}</span>
-												</div>
-											)}
+									{/* Item Info */}
+									{item.timeLeft && (
+										<div className="flex items-center space-x-1 mt-1">
+											<Clock className="w-3 h-3 text-yellow-400" />
+											<span className="text-xs text-yellow-400">{item.timeLeft}</span>
 										</div>
-									</div>
+									)}
+								</div>
 
-									{/* Quantity Controls */}
-									<div className="flex items-center space-x-2">
-										<button
-											onClick={() => updateItemQuantity(item.id, item.quantity - 1)}
-											className="w-8 h-8 border border-dark-300 rounded-sm flex items-center justify-center text-white hover:bg-dark-200 transition-colors"
-										>
-											<Minus className="w-4 h-4" />
-										</button>
-										<span className="w-12 text-center text-white font-medium">{item.quantity}</span>
-										<button
-											onClick={() => updateItemQuantity(item.id, item.quantity + 1)}
-											className="w-8 h-8 border border-dark-300 rounded-sm flex items-center justify-center text-white hover:bg-dark-200 transition-colors"
-										>
-											<Plus className="w-4 h-4" />
-										</button>
-									</div>
-
-									{/* Item Total */}
-									<div className="text-right">
-										<PriceDisplay usdAmount={item.price * item.quantity} showCrypto={true} size="md" />
-										<div className="text-xs text-gray-400">
-											{item.quantity} × {formatUSDPrice(item.price)}
-										</div>
-									</div>
-
-									{/* Remove Button */}
+								{/* Quantity Controls */}
+								<div className="flex items-center space-x-2 flex-shrink-0">
 									<button
-										onClick={() => handleRemoveItem(item.id)}
-										className="p-2 text-red-400 hover:text-red-300 hover:bg-red-900/20 rounded-sm transition-colors"
-										title="Remove from cart"
+										onClick={() => updateItemQuantity(item.id, item.quantity - 1)}
+										className="w-8 h-8 border border-dark-300 rounded-sm flex items-center justify-center text-white hover:bg-dark-200 transition-colors"
 									>
-										<Trash2 className="w-4 h-4" />
+										<Minus className="w-4 h-4" />
+									</button>
+									<span className="w-12 text-center text-white font-medium">{item.quantity}</span>
+									<button
+										onClick={() => updateItemQuantity(item.id, item.quantity + 1)}
+										className="w-8 h-8 border border-dark-300 rounded-sm flex items-center justify-center text-white hover:bg-dark-200 transition-colors"
+									>
+										<Plus className="w-4 h-4" />
 									</button>
 								</div>
-							))}
-						</div>
-					</CyberCard>
-				</div>
 
-				{/* Order Summary */}
-				<div className="lg:col-span-1">
-					<CyberCard title="Order Summary" showEffects={false}>
-						<div className="space-y-4">
-							{/* 価格データの状態表示 */}
-							{pricesError && (
-								<div className="p-3 border border-red-600/30 rounded-sm bg-red-600/5">
-									<div className="flex items-center space-x-2">
-										<AlertCircle className="w-4 h-4 text-red-400" />
-										<span className="text-xs text-red-400">Price data unavailable</span>
+								{/* Item Total */}
+								<div className="text-right flex-shrink-0">
+									<div className="text-white font-semibold">{formatUSDPrice(item.price * item.quantity)}</div>
+									<div className="text-xs text-gray-400">
+										{item.quantity} × {formatUSDPrice(item.price)}
 									</div>
 								</div>
-							)}
 
-							{/* Authentication Notice */}
-							{!user && (
-								<div className="p-3 border border-yellow-600/30 rounded-sm bg-yellow-600/5">
-									<div className="flex items-center space-x-2">
-										<AlertCircle className="w-4 h-4 text-yellow-400" />
-										<span className="text-xs text-yellow-400">Login required for checkout</span>
-									</div>
-								</div>
-							)}
-
-							<div>
-								<label className="block text-sm font-medium text-white mb-2">Payment Method</label>
-								<div className="space-y-2">
-									{(Object.keys(PAYMENT_METHODS) as PaymentMethodKey[]).map((methodKey) => {
-										const method = PAYMENT_METHODS[methodKey];
-										return (
-											<label key={methodKey} className="flex items-center justify-between p-2 border border-dark-300 rounded-sm hover:bg-dark-200/50 cursor-pointer transition-colors">
-												<div className="flex items-center space-x-2">
-													<input
-														type="radio"
-														name="paymentMethod"
-														value={methodKey}
-														checked={selectedPaymentMethod === methodKey}
-														onChange={(e) => setSelectedPaymentMethod(e.target.value as PaymentMethodKey)}
-														className="text-neonGreen focus:ring-neonGreen"
-													/>
-													<span className="text-white">{method.name}</span>
-												</div>
-											</label>
-										);
-									})}
-								</div>
-								{lastUpdated && (
-									<div className="text-xs text-gray-400 mt-2 flex items-center space-x-1">
-										<RefreshCw className="w-3 h-3" />
-										<span>Updated {new Date(lastUpdated).toLocaleTimeString()}</span>
-									</div>
-								)}
-							</div>
-
-							{/* Price Breakdown */}
-							<div className="space-y-3 pt-4">
-								{appliedPromo && (
-									<div className="flex justify-between">
-										<span className="text-gray-400">Discount ({appliedPromo})</span>
-										<PriceDisplay usdAmount={-calculateDiscount()} showCrypto={true} size="sm" />
-									</div>
-								)}
-
-
-								<div className="flex justify-between pt-3 border-t border-dark-300">
-									<span className="text-white font-semibold">Total</span>
-									<PriceDisplay usdAmount={calculateTotal()} showCrypto={true} size="lg" />
-								</div>
-							</div>
-
-							{/* Action Buttons */}
-							<div className="space-y-3 pt-4">
-								<CyberButton
-									variant="primary"
-									className="w-full flex items-center justify-center space-x-2"
-									onClick={handleCheckout}
-									disabled={pricesLoading && !pricesError || !selectedPaymentMethod}
+								{/* Remove Button */}
+								<button
+									onClick={() => handleRemoveItem(item.id)}
+									className="p-2 text-red-400 hover:text-red-300 hover:bg-red-900/20 rounded-sm transition-colors flex-shrink-0"
+									title="Remove from cart"
 								>
-									<span>
-										{!selectedPaymentMethod ? 'Select payment method...' : 'Proceed to checkout'}
-									</span>
-								</CyberButton>
+									<Trash2 className="w-4 h-4" />
+								</button>
 							</div>
-						</div>
-					</CyberCard>
+						))}
+					</div>
+				</CyberCard>
+				<div className="mt-6">
+					<CyberButton
+						variant="primary"
+						className="w-full flex items-center justify-center space-x-2"
+						onClick={handleCheckout}
+					>
+						<span>Proceed to checkout</span>
+					</CyberButton>
 				</div>
 			</div>
 		</div>
@@ -4849,10 +4556,7 @@ import { SectionType } from '../../../../types/dashboard';
 import { useCart } from '../context/DashboardContext';
 import { 
   ShoppingBag, 
-  TrendingUp, 
   FileText, 
-  User, 
-  ShoppingCart,
   CreditCard
 } from 'lucide-react';
 
@@ -4881,26 +4585,11 @@ const DashboardGrid: React.FC<DashboardGridProps> = ({ onCardClick }) => {
       stats: '5 Simple Steps'
     },
     {
-      id: 'purchase-scan' as SectionType,
-      title: 'Purchase Scan',
-      description: 'View community purchase rankings',
-      icon: <TrendingUp className="w-8 h-8 text-neonGreen" />,
-      stats: '247 Total Purchases',
-      badge: 'Live'
-    },
-    {
       id: 'whitepaper' as SectionType,
       title: 'Whitepaper',
       description: 'Technical documentation and guides',
       icon: <FileText className="w-8 h-8 text-neonOrange" />,
       stats: '6 Sections'
-    },
-    {
-      id: 'profile' as SectionType,
-      title: 'Profile',
-      description: 'Manage your account and view history',
-      icon: <User className="w-8 h-8 text-neonGreen" />,
-      stats: 'Rank #42'
     }
   ];
 
@@ -5049,7 +4738,6 @@ import { DashboardProvider, usePanel } from './context/DashboardContext';
 // セクションコンポーネントのインポート
 import ShopSection from './components/sections/ShopSection';
 import HowToBuySection from './components/sections/HowToBuySection';
-import PurchaseScanSection from './components/sections/PurchaseScanSection';
 import WhitepaperSection from './components/sections/WhitepaperSection';
 import ProfileSection from './components/sections/ProfileSection';
 import CartSection from './components/sections/CartSection';
@@ -5069,8 +4757,6 @@ function DashboardPanelManager() {
 				return <ShopSection />;
 			case 'how-to-buy':
 				return <HowToBuySection />;
-			case 'purchase-scan':
-				return <PurchaseScanSection />;
 			case 'whitepaper':
 				return <WhitepaperSection />;
 			case 'profile':
@@ -5086,7 +4772,6 @@ function DashboardPanelManager() {
 		const titles = {
 			'shop': 'Shop',
 			'how-to-buy': 'How to Buy',
-			'purchase-scan': 'Purchase Scan',
 			'whitepaper': 'Whitepaper',
 			'profile': 'Profile',
 			'cart': 'Cart'
@@ -5561,6 +5246,7 @@ export function useWallet() {
 
 import React from 'react';
 import DashboardGrid from './components/DashboardGrid';
+import PurchaseScanSection from './components/sections/PurchaseScanSection';
 import { usePanel } from './context/DashboardContext';
 
 export default function DashboardPage() {
@@ -5579,8 +5265,621 @@ export default function DashboardPage() {
 			</div>
 
 			{/* ダッシュボードグリッド */}
-			<DashboardGrid onCardClick={openPanel} />
+			<div className="mb-12">
+				<DashboardGrid onCardClick={openPanel} />
+			</div>
+
+			{/* Purchase Scan セクション - 独立表示 */}
+			<div className="border-t border-dark-300 pt-12">
+				<PurchaseScanSection />
+			</div>
 		</>
+	);
+}-e 
+### FILE: ./src/app/profile/layout.tsx
+
+// src/app/profile/layout.tsx
+'use client';
+
+import Header from '../components/ui/Header';
+import Footer from '../components/ui/Footer';
+import GridPattern from '../components/common/GridPattern';
+
+interface ProfileLayoutProps {
+	children: React.ReactNode;
+}
+
+export default function ProfileLayout({ children }: ProfileLayoutProps) {
+	return (
+		<div className="min-h-screen bg-black text-white relative">
+			{/* Header */}
+			<Header />
+
+			{/* Background Effects */}
+			<div className="fixed inset-0 z-0">
+				<div className="absolute inset-0 bg-gradient-to-b from-black via-dark-100 to-black opacity-80" />
+				<GridPattern
+					size={40}
+					opacity={0.02}
+					color="rgba(0, 255, 127, 0.05)"
+				/>
+			</div>
+
+			{/* Main Content */}
+			<main className="relative z-10 pt-16 min-h-[calc(100vh-4rem)]">
+				{children}
+			</main>
+
+			{/* Footer */}
+			<Footer />
+		</div>
+	);
+}-e 
+### FILE: ./src/app/profile/page.tsx
+
+// src/app/profile/page.tsx
+'use client';
+
+import React, { useState, useEffect } from 'react';
+import { useAuth } from '@/contexts/AuthContext';
+import CyberCard from '../components/common/CyberCard';
+import CyberButton from '../components/common/CyberButton';
+import { ProfileEditModal } from '../dashboard/components/sections/ProfileEditModal';
+import {
+	User,
+	Wallet,
+	Trophy,
+	Calendar,
+	ShoppingBag,
+	TrendingUp,
+	Award,
+	ExternalLink,
+	Copy,
+	Check,
+	Shield,
+	LogIn,
+	Edit,
+	AlertCircle,
+	CheckCircle,
+	ArrowLeft
+} from 'lucide-react';
+import {
+	getUserDisplayName,
+	getUserAvatarUrl,
+	getUserInitials,
+	formatUserStats,
+	formatDate,
+	formatAddress,
+	calculateProfileCompleteness
+} from '@/utils/userHelpers';
+
+export default function ProfilePage() {
+	const { user, loading, firestoreUser, firestoreLoading } = useAuth();
+	const [copiedAddress, setCopiedAddress] = useState(false);
+	const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+
+	// ページタイトルの設定
+	useEffect(() => {
+		document.title = 'Profile - We are on-chain';
+		return () => {
+			document.title = 'We are on-chain';
+		};
+	}, []);
+
+	// ローディング状態
+	if (loading || firestoreLoading) {
+		return (
+			<div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+				<div className="space-y-8">
+					<div className="text-center">
+						<h1 className="text-4xl font-heading font-bold text-white mb-2">
+							Profile
+						</h1>
+						<p className="text-gray-400">
+							Loading your Web3 protein journey...
+						</p>
+					</div>
+
+					<CyberCard showEffects={false}>
+						<div className="flex items-center justify-center py-12">
+							<div className="flex items-center space-x-3">
+								<div className="w-8 h-8 border-2 border-neonGreen border-t-transparent rounded-full animate-spin"></div>
+								<span className="text-white">Loading profile data...</span>
+							</div>
+						</div>
+					</CyberCard>
+				</div>
+			</div>
+		);
+	}
+
+	// 未認証の場合のプロンプト
+	if (!user) {
+		return (
+			<div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+				<div className="space-y-8">
+					<div className="text-center">
+						<h1 className="text-4xl font-heading font-bold text-white mb-2">
+							Profile
+						</h1>
+						<p className="text-gray-400">
+							Your Web3 protein journey and achievements
+						</p>
+					</div>
+
+					<CyberCard showEffects={false}>
+						<div className="text-center py-12">
+							<div className="w-20 h-20 bg-gradient-to-br from-neonGreen/20 to-neonOrange/20 rounded-full flex items-center justify-center mx-auto mb-6">
+								<Shield className="w-10 h-10 text-neonGreen" />
+							</div>
+
+							<h3 className="text-2xl font-bold text-white mb-4">
+								Authentication Required
+							</h3>
+
+							<p className="text-gray-400 mb-8 max-w-md mx-auto">
+								Please log in to access your profile, view your order history, and track your achievements in the on-chain protein revolution.
+							</p>
+
+							<div className="flex flex-col sm:flex-row gap-4 justify-center">
+								<CyberButton
+									variant="primary"
+									className="flex items-center space-x-2"
+									onClick={() => {
+										const loginEvent = new CustomEvent('openAuthModal');
+										window.dispatchEvent(loginEvent);
+									}}
+								>
+									<LogIn className="w-4 h-4" />
+									<span>Sign In</span>
+								</CyberButton>
+
+								<CyberButton
+									variant="outline"
+									onClick={() => window.location.href = '/dashboard'}
+									className="flex items-center space-x-2"
+								>
+									<ArrowLeft className="w-4 h-4" />
+									<span>Back to Dashboard</span>
+								</CyberButton>
+							</div>
+
+							<div className="mt-8 p-4 border border-neonGreen/30 rounded-sm bg-neonGreen/5">
+								<h4 className="text-neonGreen font-semibold mb-2">Why Sign In?</h4>
+								<ul className="text-sm text-gray-300 space-y-1 text-left max-w-xs mx-auto">
+									<li>• Track your order history</li>
+									<li>• Earn badges and achievements</li>
+									<li>• Access exclusive member benefits</li>
+									<li>• Join the community leaderboard</li>
+								</ul>
+							</div>
+						</div>
+					</CyberCard>
+				</div>
+			</div>
+		);
+	}
+
+	// Firestoreユーザーデータが存在しない場合
+	if (!firestoreUser) {
+		return (
+			<div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+				<div className="space-y-8">
+					<div className="text-center">
+						<h1 className="text-4xl font-heading font-bold text-white mb-2">
+							Profile
+						</h1>
+						<p className="text-gray-400">
+							Setting up your profile...
+						</p>
+					</div>
+
+					<CyberCard showEffects={false}>
+						<div className="text-center py-12">
+							<div className="w-20 h-20 bg-gradient-to-br from-neonOrange/20 to-red-500/20 rounded-full flex items-center justify-center mx-auto mb-6">
+								<AlertCircle className="w-10 h-10 text-neonOrange" />
+							</div>
+
+							<h3 className="text-2xl font-bold text-white mb-4">
+								Profile Setup in Progress
+							</h3>
+
+							<p className="text-gray-400 mb-8 max-w-md mx-auto">
+								We're setting up your profile. This usually takes just a moment.
+							</p>
+
+							<div className="flex flex-col sm:flex-row gap-4 justify-center">
+								<CyberButton
+									variant="outline"
+									onClick={() => window.location.reload()}
+								>
+									Refresh Page
+								</CyberButton>
+
+								<CyberButton
+									variant="outline"
+									onClick={() => window.location.href = '/dashboard'}
+									className="flex items-center space-x-2"
+								>
+									<ArrowLeft className="w-4 h-4" />
+									<span>Back to Dashboard</span>
+								</CyberButton>
+							</div>
+						</div>
+					</CyberCard>
+				</div>
+			</div>
+		);
+	}
+
+	// プロフィール完成度を計算
+	const profileCompleteness = calculateProfileCompleteness(firestoreUser);
+	const formattedStats = formatUserStats(firestoreUser.stats);
+	const displayName = getUserDisplayName(firestoreUser, user);
+	const avatarUrl = getUserAvatarUrl(firestoreUser, user);
+	const initials = getUserInitials(firestoreUser, user);
+
+	const handleCopyAddress = () => {
+		navigator.clipboard.writeText(firestoreUser.walletAddress || firestoreUser.id);
+		setCopiedAddress(true);
+		setTimeout(() => setCopiedAddress(false), 2000);
+	};
+
+	const orderHistory = [
+		{
+			id: 'order-001',
+			date: new Date('2024-05-15'),
+			product: 'Pepe Flavor Protein',
+			quantity: 1,
+			amount: 0.025,
+			amountUSD: 89.99,
+			status: 'Delivered',
+			txHash: '0x789xyz...def456'
+		},
+		{
+			id: 'order-002',
+			date: new Date('2024-04-28'),
+			product: 'Pepe Flavor Protein',
+			quantity: 2,
+			amount: 0.05,
+			amountUSD: 179.98,
+			status: 'Delivered',
+			txHash: '0xabc123...789def'
+		},
+		{
+			id: 'order-003',
+			date: new Date('2024-04-10'),
+			product: 'Pepe Flavor Protein',
+			quantity: 1,
+			amount: 0.05,
+			amountUSD: 189.99,
+			status: 'Delivered',
+			txHash: '0x456def...123abc'
+		}
+	];
+
+	const achievements = [
+		{ name: 'First Purchase', description: 'Made your first crypto purchase', earned: true },
+		{ name: 'Loyal Customer', description: 'Made 5+ purchases', earned: false, progress: firestoreUser.stats.totalOrders },
+		{ name: 'Community Champion', description: 'Active in Discord for 30 days', earned: true },
+		{ name: 'Whale Status', description: 'Spent over 1 ETH total', earned: false, progress: firestoreUser.stats.totalSpent }
+	];
+
+	const getStatusColor = (status: string) => {
+		switch (status) {
+			case 'Delivered': return 'text-neonGreen';
+			case 'Shipped': return 'text-neonOrange';
+			case 'Processing': return 'text-yellow-400';
+			default: return 'text-gray-400';
+		}
+	};
+
+	return (
+		<div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+			<div className="space-y-8">
+				{/* Header with Back Button */}
+				<div className="flex items-center justify-between">
+					<div>
+						<div className="flex items-center space-x-4 mb-2">
+							<CyberButton
+								variant="outline"
+								size="sm"
+								onClick={() => window.location.href = '/dashboard'}
+								className="flex items-center space-x-2"
+							>
+								<ArrowLeft className="w-4 h-4" />
+								<span>Dashboard</span>
+							</CyberButton>
+							<h1 className="text-4xl font-heading font-bold text-white">
+								Profile
+							</h1>
+						</div>
+						<p className="text-gray-400">
+							Your Web3 protein journey and achievements
+						</p>
+					</div>
+				</div>
+
+				{/* Profile Completeness Alert */}
+				{!profileCompleteness.isComplete && (
+					<div className="bg-gradient-to-r from-neonOrange/10 to-yellow-500/10 border border-neonOrange/30 rounded-sm p-4">
+						<div className="flex items-start space-x-3">
+							<AlertCircle className="w-5 h-5 text-neonOrange mt-0.5" />
+							<div className="flex-1">
+								<h4 className="text-neonOrange font-semibold mb-1">
+									Complete Your Profile ({profileCompleteness.completionPercentage}%)
+								</h4>
+								<p className="text-sm text-gray-300 mb-3">
+									Add missing information to unlock all features and improve your experience.
+								</p>
+								<div className="w-full bg-dark-300 rounded-full h-2 mb-3">
+									<div
+										className="bg-gradient-to-r from-neonOrange to-yellow-500 h-2 rounded-full transition-all duration-300"
+										style={{ width: `${profileCompleteness.completionPercentage}%` }}
+									/>
+								</div>
+								<div className="flex flex-wrap gap-2 mb-3">
+									{profileCompleteness.missingFields.map((field, index) => (
+										<span key={index} className="text-xs bg-neonOrange/20 text-neonOrange px-2 py-1 rounded">
+											{field}
+										</span>
+									))}
+								</div>
+								<CyberButton
+									variant="outline"
+									size="sm"
+									onClick={() => setIsEditModalOpen(true)}
+									className="flex items-center space-x-2"
+								>
+									<Edit className="w-3 h-3" />
+									<span>Complete Profile</span>
+								</CyberButton>
+							</div>
+						</div>
+					</div>
+				)}
+
+				{/* Welcome Message */}
+				<div className="bg-gradient-to-r from-neonGreen/10 to-neonOrange/10 border border-neonGreen/30 rounded-sm p-4">
+					<div className="flex items-center justify-between">
+						<div className="flex items-center space-x-3">
+							<div className="w-10 h-10 bg-gradient-to-br from-neonGreen to-neonOrange rounded-full flex items-center justify-center">
+								{profileCompleteness.isComplete ? (
+									<CheckCircle className="w-5 h-5 text-black" />
+								) : (
+									<User className="w-5 h-5 text-black" />
+								)}
+							</div>
+							<div>
+								<h3 className="text-white font-semibold">Welcome back, {displayName}!</h3>
+								<p className="text-sm text-gray-400">
+									Connected via {user.providerData[0]?.providerId === 'google.com' ? 'Google' : 'Email'}
+									{user.emailVerified && <span className="text-neonGreen ml-2">✓ Verified</span>}
+									{profileCompleteness.isComplete && <span className="text-neonGreen ml-2">✓ Complete</span>}
+								</p>
+							</div>
+						</div>
+						<CyberButton
+							variant="outline"
+							size="sm"
+							onClick={() => setIsEditModalOpen(true)}
+							className="flex items-center space-x-2"
+						>
+							<Edit className="w-3 h-3" />
+							<span>Edit</span>
+						</CyberButton>
+					</div>
+				</div>
+
+				{/* Profile Overview */}
+				<div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+					{/* Main Profile Card */}
+					<CyberCard showEffects={false} className="lg:col-span-2">
+						<div className="flex items-start space-x-6">
+							{/* Avatar */}
+							<div className="flex-shrink-0">
+								{avatarUrl ? (
+									<img
+										src={avatarUrl}
+										alt="Profile"
+										className="w-20 h-20 rounded-full border-2 border-neonGreen"
+									/>
+								) : (
+									<div className="w-20 h-20 bg-gradient-to-br from-neonGreen to-neonOrange rounded-full flex items-center justify-center">
+										<span className="text-2xl font-bold text-black">
+											{initials}
+										</span>
+									</div>
+								)}
+							</div>
+
+							{/* Profile Info */}
+							<div className="flex-1">
+								<div className="flex items-center space-x-3 mb-2">
+									<h3 className="text-xl font-bold text-white">{displayName}</h3>
+									{firestoreUser.nickname && firestoreUser.nickname !== displayName && (
+										<span className="text-sm text-gray-400">({firestoreUser.nickname})</span>
+									)}
+								</div>
+
+								<div className="flex items-center space-x-2 mb-2">
+									<span className="text-sm text-gray-400">Email:</span>
+									<span className="text-sm text-gray-300">{firestoreUser.email}</span>
+									{user.emailVerified && (
+										<span className="text-xs bg-neonGreen/20 text-neonGreen px-2 py-1 rounded">Verified</span>
+									)}
+								</div>
+
+								<div className="flex items-center space-x-2 mb-4">
+									<Wallet className="w-4 h-4 text-gray-400" />
+									<span className="font-mono text-sm text-gray-300">
+										User ID: {firestoreUser.id.slice(0, 8)}...{firestoreUser.id.slice(-4)}
+									</span>
+									<button
+										onClick={handleCopyAddress}
+										className="text-gray-400 hover:text-neonGreen transition-colors"
+									>
+										{copiedAddress ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
+									</button>
+								</div>
+
+								<div className="grid grid-cols-2 gap-4">
+									<div>
+										<div className="text-sm text-gray-400">Member Since</div>
+										<div className="text-white font-semibold">{formatDate(firestoreUser.createdAt)}</div>
+									</div>
+									<div>
+										<div className="text-sm text-gray-400">Community Rank</div>
+										<div className="text-neonGreen font-semibold">{formattedStats.rankFormatted}</div>
+									</div>
+								</div>
+
+								{/* Address Display */}
+								<div className="mt-4 p-3 bg-dark-200/30 rounded-sm">
+									<div className="text-sm text-gray-400 mb-1">Address</div>
+									<div className="text-sm text-gray-300">{formatAddress(firestoreUser.address)}</div>
+								</div>
+							</div>
+						</div>
+					</CyberCard>
+
+					{/* Stats Card */}
+					<CyberCard title="Stats" showEffects={false}>
+						<div className="space-y-4">
+							<div className="flex justify-between items-center">
+								<span className="text-gray-400">Total Spent</span>
+								<div className="text-right">
+									<div className="text-neonGreen font-bold">{formattedStats.totalSpentFormatted}</div>
+									<div className="text-xs text-gray-500">{formattedStats.totalSpentUSDFormatted}</div>
+								</div>
+							</div>
+
+							<div className="flex justify-between items-center">
+								<span className="text-gray-400">Total Orders</span>
+								<span className="text-white font-semibold">{firestoreUser.stats.totalOrders}</span>
+							</div>
+
+							<div className="flex justify-between items-center">
+								<span className="text-gray-400">Badges Earned</span>
+								<span className="text-neonOrange font-semibold">{formattedStats.badgeCount}</span>
+							</div>
+
+							<div className="flex justify-between items-center">
+								<span className="text-gray-400">Profile Status</span>
+								<span className={`font-semibold ${profileCompleteness.isComplete ? 'text-neonGreen' : 'text-neonOrange'}`}>
+									{profileCompleteness.isComplete ? 'Complete' : `${profileCompleteness.completionPercentage}%`}
+								</span>
+							</div>
+						</div>
+					</CyberCard>
+				</div>
+
+				{/* Badges */}
+				<CyberCard title="Badges & Achievements" showEffects={false}>
+					<div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+						{firestoreUser.stats.badges.map((badge, index) => (
+							<div key={index} className="flex items-center space-x-3 p-3 border border-neonOrange/30 rounded-sm bg-neonOrange/5">
+								<Award className="w-5 h-5 text-neonOrange" />
+								<span className="text-white font-medium">{badge}</span>
+							</div>
+						))}
+					</div>
+				</CyberCard>
+
+				{/* Achievement Progress */}
+				<CyberCard title="Achievement Progress" showEffects={false}>
+					<div className="space-y-4">
+						{achievements.map((achievement, index) => (
+							<div key={index} className="flex items-center justify-between p-4 border border-dark-300 rounded-sm">
+								<div className="flex items-center space-x-3">
+									<Trophy className={`w-5 h-5 ${achievement.earned ? 'text-neonGreen' : 'text-gray-400'}`} />
+									<div>
+										<div className="text-white font-medium">{achievement.name}</div>
+										<div className="text-sm text-gray-400">{achievement.description}</div>
+									</div>
+								</div>
+
+								<div className="text-right">
+									{achievement.earned ? (
+										<span className="text-neonGreen font-semibold">Earned</span>
+									) : (
+										<div>
+											<div className="text-sm text-gray-400">
+												Progress: {achievement.progress}/{achievement.name === 'Loyal Customer' ? '5' : '1'}
+											</div>
+											<div className="w-24 h-2 bg-dark-300 rounded-full overflow-hidden">
+												<div
+													className="h-full bg-neonOrange transition-all duration-300"
+													style={{
+														width: `${achievement.name === 'Loyal Customer'
+															? (achievement.progress! / 5) * 100
+															: (achievement.progress! / 1) * 100}%`
+													}}
+												/>
+											</div>
+										</div>
+									)}
+								</div>
+							</div>
+						))}
+					</div>
+				</CyberCard>
+
+				{/* Order History */}
+				<CyberCard title="Recent Orders" showEffects={false}>
+					<div className="overflow-x-auto">
+						<table className="w-full">
+							<thead>
+								<tr className="border-b border-dark-300">
+									<th className="text-left py-3 px-4 text-sm font-medium text-gray-400">Date</th>
+									<th className="text-left py-3 px-4 text-sm font-medium text-gray-400">Product</th>
+									<th className="text-left py-3 px-4 text-sm font-medium text-gray-400">Amount</th>
+									<th className="text-left py-3 px-4 text-sm font-medium text-gray-400">Status</th>
+									<th className="text-left py-3 px-4 text-sm font-medium text-gray-400">Actions</th>
+								</tr>
+							</thead>
+							<tbody>
+								{orderHistory.map((order) => (
+									<tr key={order.id} className="border-b border-dark-300/50 hover:bg-dark-200/30 transition-colors">
+										<td className="py-4 px-4 text-sm text-gray-300">{formatDate(order.date)}</td>
+										<td className="py-4 px-4">
+											<div>
+												<div className="text-white font-medium">{order.product}</div>
+												<div className="text-xs text-gray-400">Qty: {order.quantity}</div>
+											</div>
+										</td>
+										<td className="py-4 px-4">
+											<div>
+												<div className="text-neonGreen font-bold">Ξ {order.amount}</div>
+												<div className="text-xs text-gray-400">${order.amountUSD}</div>
+											</div>
+										</td>
+										<td className="py-4 px-4">
+											<span className={`font-medium ${getStatusColor(order.status)}`}>
+												{order.status}
+											</span>
+										</td>
+										<td className="py-4 px-4">
+											<CyberButton variant="outline" size="sm" className="flex items-center space-x-1">
+												<ExternalLink className="w-3 h-3" />
+												<span>View</span>
+											</CyberButton>
+										</td>
+									</tr>
+								))}
+							</tbody>
+						</table>
+					</div>
+				</CyberCard>
+
+				{/* Profile Edit Modal */}
+				<ProfileEditModal
+					isOpen={isEditModalOpen}
+					onClose={() => setIsEditModalOpen(false)}
+					firestoreUser={firestoreUser}
+				/>
+			</div>
+		</div>
 	);
 }-e 
 ### FILE: ./src/app/components/home/layout/constants.ts
@@ -8593,23 +8892,30 @@ const Header = () => {
 								</div>
 							) : user ? (
 								<div className="flex items-center space-x-4">
-									{/* User Info */}
-									<div className="hidden lg:flex flex-col text-right">
-										<span className="text-xs text-gray-400">Welcome back</span>
-										<span className="text-sm text-white font-medium truncate max-w-32">
+									{/* User Info - クリック可能にしてプロフィールページへ */}
+									<button
+										onClick={() => window.location.href = '/profile'}
+										className="hidden lg:flex flex-col text-right hover:bg-dark-200/50 px-2 py-1 rounded-sm transition-colors group"
+									>
+										<span className="text-xs text-gray-400 group-hover:text-gray-300">Welcome back</span>
+										<span className="text-sm text-white font-medium truncate max-w-32 group-hover:text-neonGreen">
 											{user.displayName || user.email?.split('@')[0]}
 										</span>
-									</div>
+									</button>
 
-									{/* User Avatar */}
-									<div className="relative">
-										<div className="w-8 h-8 bg-gradient-to-br from-neonGreen to-neonOrange rounded-full flex items-center justify-center">
+									{/* User Avatar - クリック可能にしてプロフィールページへ */}
+									<button
+										onClick={() => window.location.href = '/profile'}
+										className="relative group"
+										title="View Profile"
+									>
+										<div className="w-8 h-8 bg-gradient-to-br from-neonGreen to-neonOrange rounded-full flex items-center justify-center group-hover:scale-110 transition-transform duration-200">
 											<span className="text-black font-bold text-sm">
 												{(user.displayName || user.email || 'U')[0].toUpperCase()}
 											</span>
 										</div>
-										<div className="absolute inset-0 w-8 h-8 bg-gradient-to-br from-neonGreen to-neonOrange rounded-full blur-sm opacity-50"></div>
-									</div>
+										<div className="absolute inset-0 w-8 h-8 bg-gradient-to-br from-neonGreen to-neonOrange rounded-full blur-sm opacity-50 group-hover:opacity-75 transition-opacity duration-200"></div>
+									</button>
 
 									{/* Logout Button */}
 									<button
@@ -8688,6 +8994,24 @@ const Header = () => {
 								</div>
 							) : user ? (
 								<div className="space-y-3 pt-4 border-t border-dark-300">
+									{/* Profile Link - Mobile */}
+									<button
+										onClick={() => {
+											window.location.href = '/profile';
+											setIsMobileMenuOpen(false);
+										}}
+										className="flex items-center justify-between w-full px-4 py-3 text-base font-medium text-gray-300 hover:text-white hover:bg-dark-200 transition-all duration-200 rounded-sm"
+									>
+										<div className="flex items-center space-x-3">
+											<div className="w-8 h-8 bg-gradient-to-br from-neonGreen to-neonOrange rounded-full flex items-center justify-center">
+												<span className="text-black font-bold text-sm">
+													{(user.displayName || user.email || 'U')[0].toUpperCase()}
+												</span>
+											</div>
+											<span>Profile</span>
+										</div>
+									</button>
+
 									{/* User Info */}
 									<div className="px-4 py-2 bg-neonGreen/5 rounded-sm border border-neonGreen/20">
 										<div className="text-xs text-gray-400">Logged in as</div>
@@ -13992,7 +14316,7 @@ export const CRYPTO_DEFAULTS = {
 ### FILE: ./types/dashboard.ts
 
 // types/dashboard.ts
-export type SectionType = 'shop' | 'how-to-buy' | 'purchase-scan' | 'whitepaper' | 'profile' | 'cart';
+export type SectionType = 'shop' | 'how-to-buy' | 'whitepaper' | 'profile' | 'cart';
 
 export interface DashboardState {
 	activeSection: SectionType | null;

@@ -120,6 +120,9 @@
 │   │   ├── globals.css
 │   │   ├── layout.tsx
 │   │   ├── page.tsx
+│   │   ├── profile
+│   │   │   ├── layout.tsx
+│   │   │   └── page.tsx
 │   │   └── styles
 │   │       └── cyber-components.css
 │   ├── contexts
@@ -148,4 +151,4 @@
     ├── react-three-fiber.d.ts
     └── user.ts
 
-38 directories, 110 files
+39 directories, 112 files

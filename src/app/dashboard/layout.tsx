@@ -10,7 +10,6 @@ import { DashboardProvider, usePanel } from './context/DashboardContext';
 // セクションコンポーネントのインポート
 import ShopSection from './components/sections/ShopSection';
 import HowToBuySection from './components/sections/HowToBuySection';
-import PurchaseScanSection from './components/sections/PurchaseScanSection';
 import WhitepaperSection from './components/sections/WhitepaperSection';
 import ProfileSection from './components/sections/ProfileSection';
 import CartSection from './components/sections/CartSection';
@@ -30,8 +29,6 @@ function DashboardPanelManager() {
 				return <ShopSection />;
 			case 'how-to-buy':
 				return <HowToBuySection />;
-			case 'purchase-scan':
-				return <PurchaseScanSection />;
 			case 'whitepaper':
 				return <WhitepaperSection />;
 			case 'profile':
@@ -47,7 +44,6 @@ function DashboardPanelManager() {
 		const titles = {
 			'shop': 'Shop',
 			'how-to-buy': 'How to Buy',
-			'purchase-scan': 'Purchase Scan',
 			'whitepaper': 'Whitepaper',
 			'profile': 'Profile',
 			'cart': 'Cart'

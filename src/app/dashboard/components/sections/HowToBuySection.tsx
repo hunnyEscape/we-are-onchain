@@ -125,7 +125,7 @@ const HowToBuySection: React.FC = () => {
 		},
 		{
 			id: 2,
-			title: 'Connect Wallet, Pay & Shipping Address',
+			title: 'Connect Wallet, Shipping Address & Pay',
 			description: 'Connect wallet, enter address, and complete payment',
 			details: 'Connect your crypto wallet, enter your shipping address, and complete the payment in one seamless process.'
 		}

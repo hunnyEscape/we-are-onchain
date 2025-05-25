@@ -3,6 +3,7 @@
 
 import React from 'react';
 import DashboardGrid from './components/DashboardGrid';
+import PurchaseScanSection from './components/sections/PurchaseScanSection';
 import { usePanel } from './context/DashboardContext';
 
 export default function DashboardPage() {
@@ -21,7 +22,14 @@ export default function DashboardPage() {
 			</div>
 
 			{/* ダッシュボードグリッド */}
-			<DashboardGrid onCardClick={openPanel} />
+			<div className="mb-12">
+				<DashboardGrid onCardClick={openPanel} />
+			</div>
+
+			{/* Purchase Scan セクション - 独立表示 */}
+			<div className="border-t border-dark-300 pt-12">
+				<PurchaseScanSection />
+			</div>
 		</>
 	);
 }

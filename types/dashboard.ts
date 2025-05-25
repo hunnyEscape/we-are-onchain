@@ -1,5 +1,5 @@
 // types/dashboard.ts
-export type SectionType = 'shop' | 'how-to-buy' | 'purchase-scan' | 'whitepaper' | 'profile' | 'cart';
+export type SectionType = 'shop' | 'how-to-buy' | 'whitepaper' | 'profile' | 'cart';
 
 export interface DashboardState {
 	activeSection: SectionType | null;

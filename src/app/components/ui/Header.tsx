@@ -184,23 +184,30 @@ const Header = () => {
 								</div>
 							) : user ? (
 								<div className="flex items-center space-x-4">
-									{/* User Info */}
-									<div className="hidden lg:flex flex-col text-right">
-										<span className="text-xs text-gray-400">Welcome back</span>
-										<span className="text-sm text-white font-medium truncate max-w-32">
+									{/* User Info - クリック可能にしてプロフィールページへ */}
+									<button
+										onClick={() => window.location.href = '/profile'}
+										className="hidden lg:flex flex-col text-right hover:bg-dark-200/50 px-2 py-1 rounded-sm transition-colors group"
+									>
+										<span className="text-xs text-gray-400 group-hover:text-gray-300">Welcome back</span>
+										<span className="text-sm text-white font-medium truncate max-w-32 group-hover:text-neonGreen">
 											{user.displayName || user.email?.split('@')[0]}
 										</span>
-									</div>
+									</button>
 
-									{/* User Avatar */}
-									<div className="relative">
-										<div className="w-8 h-8 bg-gradient-to-br from-neonGreen to-neonOrange rounded-full flex items-center justify-center">
+									{/* User Avatar - クリック可能にしてプロフィールページへ */}
+									<button
+										onClick={() => window.location.href = '/profile'}
+										className="relative group"
+										title="View Profile"
+									>
+										<div className="w-8 h-8 bg-gradient-to-br from-neonGreen to-neonOrange rounded-full flex items-center justify-center group-hover:scale-110 transition-transform duration-200">
 											<span className="text-black font-bold text-sm">
 												{(user.displayName || user.email || 'U')[0].toUpperCase()}
 											</span>
 										</div>
-										<div className="absolute inset-0 w-8 h-8 bg-gradient-to-br from-neonGreen to-neonOrange rounded-full blur-sm opacity-50"></div>
-									</div>
+										<div className="absolute inset-0 w-8 h-8 bg-gradient-to-br from-neonGreen to-neonOrange rounded-full blur-sm opacity-50 group-hover:opacity-75 transition-opacity duration-200"></div>
+									</button>
 
 									{/* Logout Button */}
 									<button
@@ -279,6 +286,24 @@ const Header = () => {
 								</div>
 							) : user ? (
 								<div className="space-y-3 pt-4 border-t border-dark-300">
+									{/* Profile Link - Mobile */}
+									<button
+										onClick={() => {
+											window.location.href = '/profile';
+											setIsMobileMenuOpen(false);
+										}}
+										className="flex items-center justify-between w-full px-4 py-3 text-base font-medium text-gray-300 hover:text-white hover:bg-dark-200 transition-all duration-200 rounded-sm"
+									>
+										<div className="flex items-center space-x-3">
+											<div className="w-8 h-8 bg-gradient-to-br from-neonGreen to-neonOrange rounded-full flex items-center justify-center">
+												<span className="text-black font-bold text-sm">
+													{(user.displayName || user.email || 'U')[0].toUpperCase()}
+												</span>
+											</div>
+											<span>Profile</span>
+										</div>
+									</button>
+
 									{/* User Info */}
 									<div className="px-4 py-2 bg-neonGreen/5 rounded-sm border border-neonGreen/20">
 										<div className="text-xs text-gray-400">Logged in as</div>

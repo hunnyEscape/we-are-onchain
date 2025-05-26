@@ -16,7 +16,7 @@ import {
 	WalletProvider,
 	ChainConfig,
 	WalletError
-} from '@/auth/types/wallet';
+} from '@/types/wallet';
 import { WalletAdapter } from './WalletAdapterInterface';
 import { chainUtils, getEVMChains, CHAIN_DISPLAY_NAMES } from '../config/chain-config';
 

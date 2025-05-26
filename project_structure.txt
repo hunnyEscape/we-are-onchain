@@ -49,7 +49,6 @@
 │   │   │       └── wallet-generator.ts
 │   │   ├── components
 │   │   │   ├── auth
-│   │   │   │   ├── AuthModal.tsx
 │   │   │   │   └── ExtendedAuthModal.tsx
 │   │   │   ├── common
 │   │   │   │   ├── CyberButton.tsx
@@ -180,4 +179,4 @@
     ├── user.ts
     └── wallet.ts
 
-48 directories, 132 files
+48 directories, 131 files

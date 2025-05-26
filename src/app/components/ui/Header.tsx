@@ -2,9 +2,11 @@
 
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
+import { useChainId, useAccount } from 'wagmi';
 import { useUnifiedAuth } from '@/contexts/UnifiedAuthContext';
 import { ExtendedAuthModal } from '../auth/ExtendedAuthModal';
 import { ShoppingCart } from 'lucide-react';
+import { chainUtils } from '@/wallet-auth/adapters/evm/chain-config';
 
 // ダッシュボードページでのみカート機能を使用するためのhook
 const useCartInDashboard = () => {
@@ -48,12 +50,22 @@ const Header = () => {
 	const { 
 		isAuthenticated, 
 		isLoading, 
-		walletAddress, 
 		displayName,
 		logout 
 	} = useUnifiedAuth();
 	
+	// Wagmi hooksを直接使用してリアルタイム情報を取得
+	const chainId = useChainId();
+	const { address: walletAddress, isConnected } = useAccount();
+	
 	const { cartItemCount, onCartClick } = useCartInDashboard();
+
+	// ハイドレーション対応のための状態
+	const [isClient, setIsClient] = useState(false);
+
+	useEffect(() => {
+		setIsClient(true);
+	}, []);
 
 	useEffect(() => {
 		// カスタムイベントリスナーを追加してプロフィールページからログインモーダルを開く
@@ -107,7 +119,7 @@ const Header = () => {
 	// ユーザー表示名の取得（Wallet専用）
 	const getUserDisplayName = () => {
 		if (displayName) return displayName;
-		if (walletAddress) return walletAddress.slice(0, 6) + '...' + walletAddress.slice(-4);
+		if (walletAddress) return chainUtils.formatAddress(walletAddress);
 		return 'User';
 	};
 
@@ -117,6 +129,38 @@ const Header = () => {
 		if (walletAddress) return walletAddress[2].toUpperCase(); // 0x の次の文字
 		return 'U';
 	};
+
+	// チェーン情報の取得（ハイドレーション対応）
+	const getChainInfo = () => {
+		if (!isClient || !chainId) {
+			return { 
+				name: 'Unknown', 
+				icon: '⚪', 
+				colors: { primary: '#6B7280', secondary: '#9CA3AF' } 
+			};
+		}
+		
+		return {
+			name: chainUtils.getDisplayName(chainId),
+			icon: chainUtils.getIcon(chainId),
+			colors: chainUtils.getColors(chainId)
+		};
+	};
+
+	const chainInfo = getChainInfo();
+	
+	// デバッグ用ログ（開発時のみ）
+	useEffect(() => {
+		if (isClient) {
+			console.log('🔗 Header Wallet Info:', {
+				walletAddress,
+				chainId,
+				isConnected,
+				isAuthenticated,
+				chainInfo
+			});
+		}
+	}, [walletAddress, chainId, isConnected, isAuthenticated, isClient]);
 
 	const navLinks = [
 		{ href: '/dashboard', label: 'Shop', isHome: true },
@@ -199,39 +243,40 @@ const Header = () => {
 								<div className="absolute inset-0 bg-gradient-to-r from-neonGreen/20 to-neonOrange/20 rounded-sm transform scale-0 group-hover:scale-100 transition-transform duration-200"></div>
 							</button>
 
-							{/* Authentication Section - Wallet Only */}
+							{/* Authentication Section - Enhanced Wallet Display */}
 							{isLoading ? (
 								<div className="px-6 py-2">
 									<div className="w-6 h-6 border-2 border-neonGreen border-t-transparent rounded-full animate-spin"></div>
 								</div>
-							) : isAuthenticated ? (
-								<div className="flex items-center space-x-4">
-									{/* User Info - クリック可能にしてプロフィールページへ */}
+							) : (isAuthenticated && isConnected && walletAddress && isClient) ? (
+								<div className="flex items-center space-x-3">
+									{/* Chain Info */}
+									<div className="flex items-center space-x-2 px-3 py-2 bg-black/50 border border-gray-700 rounded-sm">
+										<span className="text-lg" title={chainInfo.name}>
+											{chainInfo.icon}
+										</span>
+										<span className="text-sm text-gray-300 font-medium">
+											{chainInfo.name}
+										</span>
+									</div>
+
+									{/* Wallet Address Display */}
 									<button
 										onClick={() => window.location.href = '/profile'}
-										className="hidden lg:flex flex-col text-right hover:bg-dark-200/50 px-2 py-1 rounded-sm transition-colors group"
+										className="flex items-center space-x-2 px-3 py-2 bg-black/50 border border-gray-700 hover:border-neonGreen/50 rounded-sm transition-all duration-200 group"
+										title="View Profile"
 									>
-										<span className="text-xs text-gray-400 group-hover:text-gray-300">Connected</span>
-										<span className="text-sm text-white font-medium truncate max-w-32 group-hover:text-neonGreen">
+										<div className="w-6 h-6 bg-gradient-to-br from-neonGreen to-neonOrange rounded-full flex items-center justify-center">
+											<span className="text-black font-bold text-xs">
+												{getUserInitials()}
+											</span>
+										</div>
+										<span className="text-sm text-white font-mono group-hover:text-neonGreen transition-colors">
 											{getUserDisplayName()}
 										</span>
 									</button>
 
-									{/* User Avatar - クリック可能にしてプロフィールページへ */}
-									<button
-										onClick={() => window.location.href = '/profile'}
-										className="relative group"
-										title="View Profile"
-									>
-										<div className="w-8 h-8 bg-gradient-to-br from-neonGreen to-neonOrange rounded-full flex items-center justify-center group-hover:scale-110 transition-transform duration-200">
-											<span className="text-black font-bold text-sm">
-												{getUserInitials()}
-											</span>
-										</div>
-										<div className="absolute inset-0 w-8 h-8 bg-gradient-to-br from-neonGreen to-neonOrange rounded-full blur-sm opacity-50 group-hover:opacity-75 transition-opacity duration-200"></div>
-									</button>
-
-									{/* Logout Button */}
+									{/* Disconnect Button */}
 									<button
 										onClick={handleLogout}
 										className="relative px-4 py-2 bg-red-600/80 hover:bg-red-600 text-white text-sm font-medium rounded-sm transition-all duration-200 hover:shadow-lg hover:shadow-red-500/25 group"
@@ -301,13 +346,46 @@ const Header = () => {
 								)}
 							</button>
 
-							{/* Mobile Authentication Section - Wallet Only */}
+							{/* Mobile Authentication Section - Enhanced Display */}
 							{isLoading ? (
 								<div className="flex justify-center py-4">
 									<div className="w-6 h-6 border-2 border-neonGreen border-t-transparent rounded-full animate-spin"></div>
 								</div>
-							) : isAuthenticated ? (
+							) : (isAuthenticated && isConnected && walletAddress && isClient) ? (
 								<div className="space-y-3 pt-4 border-t border-dark-300">
+									{/* Enhanced Wallet Info Display */}
+									<div className="px-4 py-3 bg-black/70 rounded-sm border border-neonGreen/20">
+										<div className="text-xs text-gray-400 mb-2">Connected Wallet</div>
+										
+										{/* Chain Info */}
+										<div className="flex items-center space-x-2 mb-2">
+											<span className="text-lg">{chainInfo.icon}</span>
+											<span className="text-sm text-white font-medium">{chainInfo.name}</span>
+											<span className="text-xs text-gray-400">
+												Chain {chainId || 'Unknown'}
+											</span>
+										</div>
+										
+										{/* Wallet Address */}
+										<div className="flex items-center space-x-2">
+											<div className="w-6 h-6 bg-gradient-to-br from-neonGreen to-neonOrange rounded-full flex items-center justify-center">
+												<span className="text-black font-bold text-xs">
+													{getUserInitials()}
+												</span>
+											</div>
+											<div className="flex-1">
+												<div className="text-sm text-white font-mono">
+													{getUserDisplayName()}
+												</div>
+												{walletAddress && (
+													<div className="text-xs text-neonGreen font-mono">
+														{walletAddress.slice(0, 10)}...{walletAddress.slice(-8)}
+													</div>
+												)}
+											</div>
+										</div>
+									</div>
+
 									{/* Profile Link - Mobile */}
 									<button
 										onClick={() => {
@@ -316,28 +394,8 @@ const Header = () => {
 										}}
 										className="flex items-center justify-between w-full px-4 py-3 text-base font-medium text-gray-300 hover:text-white hover:bg-dark-200 transition-all duration-200 rounded-sm"
 									>
-										<div className="flex items-center space-x-3">
-											<div className="w-8 h-8 bg-gradient-to-br from-neonGreen to-neonOrange rounded-full flex items-center justify-center">
-												<span className="text-black font-bold text-sm">
-													{getUserInitials()}
-												</span>
-											</div>
-											<span>Profile</span>
-										</div>
+										<span>View Profile</span>
 									</button>
-
-									{/* User Info */}
-									<div className="px-4 py-2 bg-neonGreen/5 rounded-sm border border-neonGreen/20">
-										<div className="text-xs text-gray-400">Connected as</div>
-										<div className="text-sm text-white font-medium">
-											{getUserDisplayName()}
-										</div>
-										{walletAddress && (
-											<div className="text-xs text-neonGreen font-mono mt-1">
-												{walletAddress.slice(0, 10)}...{walletAddress.slice(-8)}
-											</div>
-										)}
-									</div>
 
 									{/* Disconnect Button */}
 									<button

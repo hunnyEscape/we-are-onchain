@@ -3,13 +3,13 @@
 'use client';
 
 import React, { useEffect, useState } from 'react';
-import styles from './styles.module.css';
+import styles from './effects/styles.module.css';
 import {
 	generateRandomBinary,
 	generateRandomHex,
 	systemStatusText,
 	cyberMessages
-} from './constants';
+} from './effects/constants';
 
 interface CyberInterfaceProps {
 }

@@ -48,14 +48,19 @@
 │   │   │       ├── qr-generator.ts
 │   │   │       └── wallet-generator.ts
 │   │   ├── components
-│   │   │   ├── auth
-│   │   │   │   └── ExtendedAuthModal.tsx
+│   │   │   ├── AuthModal.tsx
 │   │   │   ├── common
 │   │   │   │   ├── CyberButton.tsx
 │   │   │   │   ├── CyberCard.tsx
 │   │   │   │   ├── GridPattern.tsx
 │   │   │   │   └── PriceDisplay.tsx
 │   │   │   ├── home
+│   │   │   │   ├── CyberInterface.tsx
+│   │   │   │   ├── effects
+│   │   │   │   │   ├── PulsatingComponent.tsx
+│   │   │   │   │   ├── ScanlineEffect.tsx
+│   │   │   │   │   ├── constants.ts
+│   │   │   │   │   └── styles.module.css
 │   │   │   │   ├── glowing-3d-text
 │   │   │   │   │   ├── GlowingText.module.css
 │   │   │   │   │   ├── GlowingTextScene.tsx
@@ -70,12 +75,6 @@
 │   │   │   │   │   ├── HeroSection.module.css
 │   │   │   │   │   ├── HeroSection.tsx
 │   │   │   │   │   └── HeroTitle.tsx
-│   │   │   │   ├── layout
-│   │   │   │   │   ├── CyberInterface.tsx
-│   │   │   │   │   ├── PulsatingComponent.tsx
-│   │   │   │   │   ├── ScanlineEffect.tsx
-│   │   │   │   │   ├── constants.ts
-│   │   │   │   │   └── styles.module.css
 │   │   │   │   └── pepePush
 │   │   │   │       ├── PepeModel3D.tsx
 │   │   │   │       ├── PepePush.tsx
@@ -103,7 +102,6 @@
 │   │   │   └── ui
 │   │   │       ├── Footer.tsx
 │   │   │       ├── GlitchText.tsx
-│   │   │       ├── Header-updated.tsx
 │   │   │       ├── Header.tsx
 │   │   │       └── ScanlineEffect.module.css
 │   │   ├── dashboard
@@ -125,12 +123,9 @@
 │   │   │   └── page.tsx
 │   │   ├── favicon.ico
 │   │   ├── globals.css
-│   │   ├── layout-simplified.tsx
-│   │   ├── layout-updated.tsx
 │   │   ├── layout.tsx
 │   │   ├── page.tsx
 │   │   ├── profile
-│   │   │   ├── layout.tsx
 │   │   │   └── page.tsx
 │   │   ├── styles
 │   │   │   └── cyber-components.css
@@ -179,4 +174,4 @@
     ├── user.ts
     └── wallet.ts
 
-48 directories, 131 files
+47 directories, 127 files

@@ -133,18 +133,24 @@
 │   │       └── page.tsx
 │   ├── auth
 │   │   ├── components
-│   │   │   └── AuthModal.tsx
+│   │   │   ├── AuthModal.tsx
+│   │   │   ├── ChainCard.tsx
+│   │   │   ├── ChainSelector.module.css
+│   │   │   └── ChainSelector.tsx
 │   │   ├── config
-│   │   │   └── chain-config.ts
+│   │   │   ├── chain-config.ts
+│   │   │   └── testnet-chains.ts
 │   │   ├── contexts
 │   │   │   └── UnifiedAuthContext.tsx
 │   │   ├── providers
 │   │   │   ├── EVMWalletAdapterWrapper.tsx
 │   │   │   └── wagmi-provider.tsx
-│   │   └── services
-│   │       ├── EVMAuthService.ts
-│   │       ├── EVMWalletAdapter.ts
-│   │       └── WalletAdapterInterface.ts
+│   │   ├── services
+│   │   │   ├── EVMAuthService.ts
+│   │   │   ├── EVMWalletAdapter.ts
+│   │   │   └── WalletAdapterInterface.ts
+│   │   └── utils
+│   │       └── chain-utils.ts
 │   ├── contexts
 │   │   ├── AuthModalContext.tsx
 │   │   └── DashboardContext.tsx
@@ -164,6 +170,7 @@
 │   ├── types
 │   │   ├── api-wallet.ts
 │   │   ├── auth.ts
+│   │   ├── chain-selection.ts
 │   │   ├── crypto.ts
 │   │   ├── dashboard.ts
 │   │   ├── demo-payment.ts
@@ -179,4 +186,4 @@
 ├── tailwind.config.js
 └── tsconfig.json
 
-49 directories, 130 files
+50 directories, 136 files

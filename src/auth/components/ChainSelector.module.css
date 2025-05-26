@@ -1,0 +1,549 @@
+/* src/auth/components/ChainSelector.module.css */
+
+/* ベースコンテナ */
+.chainSelector {
+	@apply relative w-full;
+	font-family: var(--font-space-grotesk, monospace);
+}
+
+/* ヘッダーアニメーション */
+.header {
+	@apply mb-8;
+	animation: slideInFromTop 0.6s ease-out;
+}
+
+.headerTitle {
+	@apply text-2xl font-heading font-bold text-white mb-1;
+	background: linear-gradient(135deg, #ffffff, #00ff7f);
+	background-clip: text;
+	-webkit-background-clip: text;
+	-webkit-text-fill-color: transparent;
+	animation: titleGlow 3s ease-in-out infinite alternate;
+}
+
+.headerDescription {
+	@apply text-gray-400 text-sm;
+	animation: fadeInDelay 0.8s ease-out;
+}
+
+/* グリッドレイアウト */
+.chainGrid {
+	@apply grid gap-4;
+	animation: gridFadeIn 1s ease-out;
+}
+
+.chainGridDefault {
+	@apply grid-cols-1 md:grid-cols-2;
+}
+
+.chainGridCompact {
+	@apply grid-cols-1;
+}
+
+.chainGridSingle {
+	@apply grid-cols-1;
+}
+
+/* チェーンカードアニメーション */
+.chainCard {
+	animation: cardSlideIn 0.8s ease-out;
+	animation-fill-mode: both;
+}
+
+.chainCard:nth-child(1) {
+	animation-delay: 0.1s;
+}
+
+.chainCard:nth-child(2) {
+	animation-delay: 0.2s;
+}
+
+.chainCard:nth-child(3) {
+	animation-delay: 0.3s;
+}
+
+.chainCard:nth-child(4) {
+	animation-delay: 0.4s;
+}
+
+/* チェーンカードホバーエフェクト */
+.chainCard:hover {
+	transform: translateY(-2px);
+	transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.chainCard:hover::before {
+	content: '';
+	position: absolute;
+	inset: -1px;
+	background: linear-gradient(135deg, #00ff7f40, #ff691140);
+	border-radius: inherit;
+	z-index: -1;
+	opacity: 0;
+	animation: borderGlow 0.3s ease-out forwards;
+}
+
+/* 選択されたカードのエフェクト */
+.chainCardSelected {
+	position: relative;
+	transform: scale(1.02);
+	transition: transform 0.3s ease-out;
+}
+
+.chainCardSelected::after {
+	content: '';
+	position: absolute;
+	inset: 0;
+	background: linear-gradient(135deg, #00ff7f20, #ff691120);
+	border-radius: inherit;
+	animation: selectedPulse 2s ease-in-out infinite;
+}
+
+/* ローディング状態 */
+.chainCardLoading {
+	position: relative;
+	overflow: hidden;
+}
+
+.chainCardLoading::before {
+	content: '';
+	position: absolute;
+	top: 0;
+	left: -100%;
+	width: 100%;
+	height: 100%;
+	background: linear-gradient(90deg,
+			transparent,
+			rgba(0, 255, 127, 0.4),
+			transparent);
+	animation: shimmer 1.5s infinite;
+}
+
+/* 比較テーブル */
+.comparisonTable {
+	@apply bg-dark-200/50 border border-dark-300 rounded-sm overflow-hidden mb-6;
+	animation: tableSlideDown 0.5s ease-out;
+}
+
+.comparisonTableHeader {
+	@apply p-4 border-b border-dark-300;
+	background: linear-gradient(135deg, #1a1a1a, #2a2a2a);
+}
+
+.comparisonTableTitle {
+	@apply text-white font-semibold flex items-center space-x-2;
+}
+
+.comparisonTableBody {
+	@apply overflow-x-auto;
+}
+
+.comparisonTableRow {
+	@apply transition-colors duration-200;
+}
+
+.comparisonTableRow:hover {
+	@apply bg-neonGreen/5;
+}
+
+.comparisonTableCell {
+	@apply p-3 border-b border-dark-300/50;
+}
+
+/* 推奨セクション */
+.recommendationCard {
+	@apply mt-8 p-4 rounded-sm;
+	background: linear-gradient(135deg, #00ff7f10, #ff691110);
+	border: 1px solid #00ff7f30;
+	animation: recommendationGlow 0.8s ease-out;
+}
+
+.recommendationIcon {
+	@apply w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5;
+	background: radial-gradient(circle, #00ff7f40, #00ff7f20);
+}
+
+.recommendationTitle {
+	@apply text-white font-semibold text-sm mb-1;
+}
+
+.recommendationText {
+	@apply text-gray-300 text-xs leading-relaxed;
+}
+
+/* フッター */
+.footer {
+	@apply mt-8 pt-6 border-t border-dark-300;
+	animation: footerFadeIn 1.2s ease-out;
+}
+
+.footerGrid {
+	@apply grid grid-cols-1 md:grid-cols-3 gap-4 text-xs text-gray-400;
+}
+
+.footerItem {
+	@apply flex items-center space-x-2 transition-colors duration-200;
+}
+
+.footerItem:hover {
+	@apply text-gray-300;
+}
+
+/* エラー表示 */
+.errorAlert {
+	@apply mb-6 p-4 rounded-sm;
+	background: linear-gradient(135deg, #dc262620, #ef444420);
+	border: 1px solid #dc262650;
+	animation: errorSlideIn 0.5s ease-out;
+}
+
+.errorIcon {
+	@apply w-4 h-4 flex-shrink-0 text-red-400;
+}
+
+.errorText {
+	@apply text-sm text-red-300;
+}
+
+/* チェーン個別エラー */
+.chainError {
+	@apply absolute inset-x-0 -bottom-1 mx-2;
+	animation: chainErrorSlideUp 0.3s ease-out;
+}
+
+.chainErrorContent {
+	@apply bg-red-900/90 border border-red-500/50 text-red-300 text-xs p-2 rounded-sm backdrop-blur-sm;
+}
+
+/* ローディングオーバーレイ */
+.globalLoading {
+	@apply absolute inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center rounded-sm;
+	animation: overlayFadeIn 0.3s ease-out;
+}
+
+.globalLoadingContent {
+	@apply bg-dark-200 border border-neonGreen/30 rounded-sm p-6;
+	animation: loadingBounce 0.5s ease-out;
+}
+
+.globalLoadingSpinner {
+	@apply w-6 h-6 text-neonGreen animate-spin;
+}
+
+/* ボタンスタイル */
+.backButton {
+	@apply p-2 text-gray-400 hover:text-neonGreen transition-colors rounded-sm hover:bg-dark-200;
+}
+
+.compareButton {
+	@apply flex items-center space-x-2 px-3 py-2 bg-dark-200 hover:bg-dark-300 border border-gray-600 rounded-sm text-sm text-gray-300 transition-colors;
+}
+
+.compareButton:hover {
+	@apply border-neonGreen/50 text-white;
+}
+
+/* 空状態 */
+.emptyState {
+	@apply text-center py-12;
+	animation: emptyStateFade 0.8s ease-out;
+}
+
+.emptyStateIcon {
+	@apply w-12 h-12 text-gray-400 mx-auto mb-4;
+}
+
+.emptyStateTitle {
+	@apply text-lg font-semibold text-white mb-2;
+}
+
+.emptyStateText {
+	@apply text-gray-400 text-sm;
+}
+
+/* アニメーション定義 */
+@keyframes slideInFromTop {
+	from {
+		opacity: 0;
+		transform: translateY(-20px);
+	}
+
+	to {
+		opacity: 1;
+		transform: translateY(0);
+	}
+}
+
+@keyframes titleGlow {
+	0% {
+		text-shadow: 0 0 10px #00ff7f40;
+	}
+
+	100% {
+		text-shadow: 0 0 20px #00ff7f60, 0 0 30px #00ff7f40;
+	}
+}
+
+@keyframes fadeInDelay {
+	0% {
+		opacity: 0;
+	}
+
+	60% {
+		opacity: 0;
+	}
+
+	100% {
+		opacity: 1;
+	}
+}
+
+@keyframes gridFadeIn {
+	from {
+		opacity: 0;
+		transform: translateY(10px);
+	}
+
+	to {
+		opacity: 1;
+		transform: translateY(0);
+	}
+}
+
+@keyframes cardSlideIn {
+	from {
+		opacity: 0;
+		transform: translateY(20px) scale(0.95);
+	}
+
+	to {
+		opacity: 1;
+		transform: translateY(0) scale(1);
+	}
+}
+
+@keyframes borderGlow {
+	to {
+		opacity: 1;
+	}
+}
+
+@keyframes selectedPulse {
+
+	0%,
+	100% {
+		opacity: 0.3;
+	}
+
+	50% {
+		opacity: 0.6;
+	}
+}
+
+@keyframes shimmer {
+	to {
+		left: 100%;
+	}
+}
+
+@keyframes tableSlideDown {
+	from {
+		opacity: 0;
+		transform: translateY(-10px);
+		max-height: 0;
+	}
+
+	to {
+		opacity: 1;
+		transform: translateY(0);
+		max-height: 500px;
+	}
+}
+
+@keyframes recommendationGlow {
+	from {
+		opacity: 0;
+		transform: scale(0.95);
+		box-shadow: 0 0 0 #00ff7f00;
+	}
+
+	to {
+		opacity: 1;
+		transform: scale(1);
+		box-shadow: 0 0 20px #00ff7f20;
+	}
+}
+
+@keyframes footerFadeIn {
+	from {
+		opacity: 0;
+		transform: translateY(10px);
+	}
+
+	to {
+		opacity: 1;
+		transform: translateY(0);
+	}
+}
+
+@keyframes errorSlideIn {
+	from {
+		opacity: 0;
+		transform: translateX(-20px);
+	}
+
+	to {
+		opacity: 1;
+		transform: translateX(0);
+	}
+}
+
+@keyframes chainErrorSlideUp {
+	from {
+		opacity: 0;
+		transform: translateY(10px);
+	}
+
+	to {
+		opacity: 1;
+		transform: translateY(0);
+	}
+}
+
+@keyframes overlayFadeIn {
+	from {
+		opacity: 0;
+		backdrop-filter: blur(0px);
+	}
+
+	to {
+		opacity: 1;
+		backdrop-filter: blur(8px);
+	}
+}
+
+@keyframes loadingBounce {
+	0% {
+		opacity: 0;
+		transform: scale(0.8) translateY(-10px);
+	}
+
+	60% {
+		opacity: 1;
+		transform: scale(1.05) translateY(0);
+	}
+
+	100% {
+		opacity: 1;
+		transform: scale(1) translateY(0);
+	}
+}
+
+@keyframes emptyStateFade {
+	from {
+		opacity: 0;
+		transform: scale(0.95);
+	}
+
+	to {
+		opacity: 1;
+		transform: scale(1);
+	}
+}
+
+/* スキャンライン効果 */
+@keyframes scanline {
+	0% {
+		transform: translateX(-100%);
+	}
+
+	100% {
+		transform: translateX(200%);
+	}
+}
+
+/* レスポンシブ調整 */
+@media (max-width: 768px) {
+	.chainGrid {
+		@apply gap-3;
+	}
+
+	.chainCard {
+		animation-delay: 0s !important;
+	}
+
+	.headerTitle {
+		@apply text-xl;
+	}
+
+	.comparisonTableBody {
+		font-size: 0.75rem;
+	}
+
+	.recommendationCard {
+		@apply p-3;
+	}
+
+	.footerGrid {
+		@apply grid-cols-1 gap-2;
+	}
+}
+
+/* 高コントラストモード */
+@media (prefers-contrast: high) {
+	.chainCard {
+		border-width: 2px;
+	}
+
+	.chainCardSelected {
+		border-color: #00ff7f;
+		box-shadow: 0 0 0 2px #00ff7f;
+	}
+
+	.recommendationCard {
+		border-width: 2px;
+	}
+}
+
+/* モーション軽減 */
+@media (prefers-reduced-motion: reduce) {
+	.chainSelector * {
+		animation-duration: 0.1s !important;
+		animation-delay: 0s !important;
+		transition-duration: 0.1s !important;
+	}
+
+	.chainCard:hover {
+		transform: none;
+	}
+
+	.chainCardSelected {
+		transform: none;
+	}
+}
+
+/* フォーカス状態 */
+.chainCard:focus-visible {
+	outline: 2px solid #00ff7f;
+	outline-offset: 2px;
+}
+
+.backButton:focus-visible,
+.compareButton:focus-visible {
+	outline: 2px solid #00ff7f;
+	outline-offset: 2px;
+}
+
+/* プリント用スタイル */
+@media print {
+	.chainSelector {
+		color-adjust: exact;
+		-webkit-print-color-adjust: exact;
+	}
+
+	.chainCard::before,
+	.chainCard::after,
+	.globalLoading {
+		display: none !important;
+	}
+}

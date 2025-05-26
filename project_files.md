@@ -1134,6 +1134,270 @@ export interface WalletStats {
 		disconnectedAt?: Date;
 	}>;
 }-e 
+### FILE: ./src/types/chain-selection.ts
+
+// src/types/chain-selection.ts
+/**
+ * チェーン選択機能専用の型定義
+ * EVM内でのテストネット選択をサポート
+ */
+
+// チェーン選択で使用するチェーンID
+export type SelectableChainId = 'sepolia' | 'avalanche-fuji';
+
+// チェーン選択UI用の基本情報
+export interface SelectableChain {
+  // 識別子
+  id: SelectableChainId;
+  chainId: number;
+  
+  // 表示情報
+  name: string;
+  displayName: string;
+  description: string;
+  
+  // UI要素
+  icon: string;
+  colors: {
+    primary: string;
+    secondary: string;
+  };
+  
+  // ネットワーク情報
+  network: {
+    rpcUrl: string;
+    blockExplorer: string;
+    faucetUrls: string[];
+  };
+  
+  // 機能フラグ
+  isTestnet: boolean;
+  isSupported: boolean;
+  
+  // メタデータ
+  metadata: {
+    averageBlockTime: number; // seconds
+    confirmations: number;
+    gasTokenSymbol: string;
+    features: string[];
+  };
+}
+
+// チェーン選択の状態
+export interface ChainSelectionState {
+  // 現在の選択
+  selectedChain: SelectableChainId | null;
+  
+  // UI状態
+  isSelecting: boolean;
+  isLoading: boolean;
+  
+  // エラー状態
+  error: string | null;
+  
+  // 選択履歴
+  lastSelected: SelectableChainId | null;
+  selectionHistory: Array<{
+    chainId: SelectableChainId;
+    selectedAt: Date;
+    success: boolean;
+  }>;
+}
+
+// チェーン選択のアクション
+export interface ChainSelectionActions {
+  // チェーン選択
+  selectChain: (chainId: SelectableChainId) => Promise<boolean>;
+  
+  // リセット
+  resetSelection: () => void;
+  clearError: () => void;
+  
+  // 状態取得
+  getSelectedChain: () => SelectableChain | null;
+  getSupportedChains: () => SelectableChain[];
+  
+  // バリデーション
+  isChainSupported: (chainId: SelectableChainId) => boolean;
+  canSelectChain: (chainId: SelectableChainId) => boolean;
+}
+
+// チェーン選択コンポーネントのプロパティ
+export interface ChainSelectorProps {
+  // 動作設定
+  onChainSelect: (chain: SelectableChain) => void;
+  onBack?: () => void;
+  
+  // 表示設定
+  title?: string;
+  description?: string;
+  showBackButton?: boolean;
+  
+  // 制約
+  allowedChains?: SelectableChainId[];
+  disabledChains?: SelectableChainId[];
+  
+  // UI設定
+  variant?: 'default' | 'compact' | 'detailed';
+  columns?: 1 | 2;
+  
+  // 状態
+  loading?: boolean;
+  error?: string;
+  
+  // スタイル
+  className?: string;
+}
+
+// 個別チェーンカードのプロパティ
+export interface ChainCardProps {
+  // チェーン情報
+  chain: SelectableChain;
+  
+  // 状態
+  isSelected?: boolean;
+  isDisabled?: boolean;
+  isLoading?: boolean;
+  
+  // イベント
+  onClick: (chain: SelectableChain) => void;
+  onInfoClick?: (chain: SelectableChain) => void;
+  
+  // 表示設定
+  variant?: 'default' | 'compact' | 'detailed';
+  showDescription?: boolean;
+  showMetadata?: boolean;
+  
+  // スタイル
+  className?: string;
+}
+
+// チェーン選択のコンテキスト
+export interface ChainSelectionContext {
+  // 状態
+  state: ChainSelectionState;
+  
+  // アクション
+  actions: ChainSelectionActions;
+  
+  // 設定
+  config: {
+    supportedChains: SelectableChain[];
+    defaultChain: SelectableChainId | null;
+    allowManualInput: boolean;
+    maxSelectionHistory: number;
+  };
+  
+  // イベント
+  addEventListener: (
+    event: 'chainSelected' | 'selectionFailed' | 'stateChanged',
+    callback: (data: any) => void
+  ) => () => void;
+}
+
+// チェーン切り替えの結果
+export interface ChainSwitchResult {
+  success: boolean;
+  chainId?: number;
+  error?: string;
+  
+  // 詳細情報
+  details?: {
+    previousChain?: number;
+    newChain?: number;
+    switchTime?: number;
+    requiresUserAction?: boolean;
+  };
+}
+
+// チェーン互換性チェック
+export interface ChainCompatibility {
+  chainId: SelectableChainId;
+  isSupported: boolean;
+  
+  // 機能サポート
+  features: {
+    walletConnect: boolean;
+    metamask: boolean;
+    eip1559: boolean;
+    contracts: boolean;
+  };
+  
+  // 制限事項
+  limitations: string[];
+  
+  // 推奨設定
+  recommendations: {
+    gasPrice?: string;
+    gasLimit?: number;
+    priority?: 'speed' | 'cost';
+  };
+}
+
+// チェーン選択のバリデーション
+export interface ChainSelectionValidation {
+  isValid: boolean;
+  errors: string[];
+  warnings: string[];
+  
+  // 自動修正の提案
+  suggestions: Array<{
+    type: 'autoFix' | 'userAction' | 'configuration';
+    message: string;
+    action?: () => void;
+  }>;
+}
+
+// エクスポート用のユーティリティ型
+export type ChainSelectionEvent = 
+  | { type: 'chainSelected'; payload: { chain: SelectableChain } }
+  | { type: 'selectionFailed'; payload: { error: string; chainId: SelectableChainId } }
+  | { type: 'stateChanged'; payload: { state: ChainSelectionState } };
+
+// プリセット設定
+export interface ChainSelectionPreset {
+  name: string;
+  description: string;
+  chains: SelectableChainId[];
+  defaultChain: SelectableChainId;
+  
+  // UI設定
+  ui: {
+    title: string;
+    description: string;
+    variant: ChainSelectorProps['variant'];
+    columns: ChainSelectorProps['columns'];
+  };
+}
+
+// デバッグ情報
+export interface ChainSelectionDebugInfo {
+  // 現在の状態
+  currentState: ChainSelectionState;
+  
+  // 統計
+  stats: {
+    totalSelections: number;
+    successfulSelections: number;
+    failedSelections: number;
+    averageSelectionTime: number;
+  };
+  
+  // エラー履歴
+  errorHistory: Array<{
+    error: string;
+    chainId: SelectableChainId;
+    timestamp: Date;
+    context: string;
+  }>;
+  
+  // パフォーマンス
+  performance: {
+    lastSelectionTime: number;
+    componentRenderCount: number;
+    apiCallCount: number;
+  };
+}-e 
 ### FILE: ./src/types/user.ts
 
 // types/user.ts
@@ -1549,11 +1813,14 @@ export interface ExtendedUserQueryResult {
 }-e 
 ### FILE: ./src/types/auth.ts
 
-// types/auth.ts (Extended対応版)
+// types/auth.ts (Extended対応版 + チェーン選択)
 import { User as FirebaseUser } from 'firebase/auth';
 import { FirestoreUser } from './user';
 import { ExtendedFirestoreUser, WalletOperationResult } from './user-extended';
 import { WalletConnection, WalletAuthResult, ChainType } from './wallet';
+
+// チェーン選択関連のインポート
+import { SelectableChainId, SelectableChain, ChainSelectionPreset } from './chain-selection';
 
 // 統合認証方式
 export type AuthMethod = 'firebase' | 'wallet' | 'hybrid';
@@ -1605,7 +1872,59 @@ export interface AuthConfig {
 	};
 }
 
-// Extended認証アクション
+// ★ 新規追加: 認証フロー状態（チェーン選択対応）
+export interface AuthFlowState {
+	// 現在のステップ
+	currentStep: 'idle' | 'chain-select' | 'connecting' | 'signing' | 'verifying' | 'success' | 'error';
+	
+	// 進捗状況（0-100）
+	progress: number;
+	
+	// ステップ別の状態
+	signatureRequired: boolean;
+	verificationRequired: boolean;
+	
+	// ★ 新規追加: チェーン選択関連
+	chainSelection?: {
+		// 選択状態
+		selectedChain: SelectableChainId | null;
+		availableChains: SelectableChainId[];
+		
+		// 切り替え状態
+		isSwitching: boolean;
+		switchProgress: number;
+		
+		// エラー状態
+		switchError: string | null;
+		
+		// 履歴
+		selectionHistory: Array<{
+			chainId: SelectableChainId;
+			timestamp: Date;
+			success: boolean;
+		}>;
+	};
+	
+	// ★ 新規追加: ステップ管理
+	stepManagement?: {
+		// ステップ履歴
+		visitedSteps: AuthFlowState['currentStep'][];
+		
+		// ナビゲーション状態
+		canGoBack: boolean;
+		canSkipStep: boolean;
+		
+		// 自動進行設定
+		autoAdvance: boolean;
+		autoAdvanceDelay: number; // milliseconds
+	};
+	
+	// 既存のフィールド（互換性維持）
+	selectedChain?: ChainType;
+	selectedWallet?: string;
+}
+
+// Extended認証アクション（チェーン選択対応）
 export interface AuthActions {
 	// Firebase認証
 	signInWithEmail: (email: string, password: string) => Promise<void>;
@@ -1614,20 +1933,51 @@ export interface AuthActions {
 
 	// Wallet認証
 	connectWallet: (chainType?: ChainType, walletType?: string) => Promise<WalletConnection>;
-	authenticateWallet: (chainType?: ChainType,address?: string) => Promise<WalletAuthResult>;
+	authenticateWallet: (chainType?: ChainType, address?: string) => Promise<WalletAuthResult>;
 	switchWalletChain: (chainType: ChainType, chainId: number | string) => Promise<void>;
 
+	// ★ 新規追加: チェーン選択アクション
+	selectChain: (chainId: SelectableChainId) => Promise<{
+		success: boolean;
+		chain?: SelectableChain;
+		switched?: boolean;
+		error?: string;
+	}>;
+	
+	switchToSelectedChain: (chainId: SelectableChainId) => Promise<{
+		success: boolean;
+		previousChain?: SelectableChainId;
+		newChain?: SelectableChainId;
+		error?: string;
+	}>;
+	
+	resetChainSelection: () => void;
+	
+	// ★ 新規追加: フロー管理アクション
+	setAuthStep: (step: AuthFlowState['currentStep']) => void;
+	goBackStep: () => boolean;
+	skipCurrentStep: () => boolean;
+	resetAuthFlow: () => void;
+	
+	// ★ 新規追加: 認証フロー制御
+	startChainSelection: (options?: {
+		availableChains?: SelectableChainId[];
+		defaultChain?: SelectableChainId;
+	}) => void;
+	
+	completeChainSelection: (chainId: SelectableChainId) => Promise<void>;
+	
 	// 統合ログアウト
 	logout: () => Promise<void>;
 
-	// Extended プロフィール更新（戻り値型を変更）
+	// Extended プロフィール更新
 	updateProfile: (data: Partial<ExtendedFirestoreUser>) => Promise<WalletOperationResult>;
 
 	// Extended セッション管理
 	refreshSession: () => Promise<void>;
 }
 
-// 認証イベント
+// 認証イベント（チェーン選択対応）
 export type AuthEventType =
 	| 'firebase-login'
 	| 'firebase-logout'
@@ -1637,13 +1987,113 @@ export type AuthEventType =
 	| 'unified-login'
 	| 'unified-logout'
 	| 'profile-update'
-	| 'error';
+	| 'error'
+	// ★ 新規追加: チェーン選択イベント
+	| 'chain-selected'
+	| 'chain-switch-start'
+	| 'chain-switch-complete'
+	| 'chain-switch-failed'
+	| 'chain-selection-reset'
+	// ★ 新規追加: フローイベント
+	| 'step-changed'
+	| 'step-back'
+	| 'step-skip'
+	| 'flow-reset'
+	| 'flow-complete';
 
 export interface AuthEvent {
 	type: AuthEventType;
 	timestamp: Date;
 	data?: any;
 	error?: string;
+}
+
+// 認証モーダルのオプション設定（拡張版）
+export interface AuthModalOptions {
+	// 既存のオプション
+	preferredChain?: ChainType;
+	onSuccess?: (user: ExtendedFirestoreUser) => void;
+	onError?: (error: any) => void; // AppError型参照を一時的に削除
+	title?: string;
+	redirectAfterSuccess?: string;
+	autoClose?: boolean; // 成功時の自動クローズ
+	
+	// ★ 新規追加: チェーン選択機能
+	showChainSelector?: boolean; // チェーン選択の表示
+	
+	// ★ 新規追加: チェーン選択の詳細設定
+	chainSelection?: {
+		// 利用可能なチェーン
+		availableChains?: SelectableChainId[];
+		
+		// デフォルト選択チェーン
+		defaultChain?: SelectableChainId;
+		
+		// UI設定
+		variant?: 'default' | 'compact' | 'detailed';
+		columns?: 1 | 2;
+		
+		// 動作設定
+		allowChainSwitch?: boolean;
+		requireChainSwitch?: boolean;
+		
+		// プリセット使用
+		preset?: string; // プリセット名
+		
+		// カスタマイズ
+		customTitle?: string;
+		customDescription?: string;
+		
+		// コールバック
+		onChainSelect?: (chainId: SelectableChainId) => void;
+		onChainSwitchStart?: (chainId: SelectableChainId) => void;
+		onChainSwitchComplete?: (chainId: SelectableChainId) => void;
+		onChainSwitchError?: (error: string, chainId: SelectableChainId) => void;
+	};
+	
+	// ★ 新規追加: ステップ管理
+	step?: {
+		// 初期ステップ
+		initialStep?: 'chain-select' | 'wallet-connect' | 'wallet-sign';
+		
+		// ステップスキップ設定
+		skipChainSelection?: boolean;
+		skipWalletConnection?: boolean;
+		
+		// ステップ間の動作
+		allowStepBack?: boolean;
+		showStepProgress?: boolean;
+		
+		// ステップ別のタイトル
+		stepTitles?: {
+			chainSelect?: string;
+			walletConnect?: string;
+			walletSign?: string;
+			success?: string;
+			error?: string;
+		};
+	};
+	
+	// ★ 新規追加: 高度な設定
+	advanced?: {
+		// デバッグモード
+		debugMode?: boolean;
+		
+		// 実験的機能
+		experimentalFeatures?: string[];
+		
+		// パフォーマンス設定
+		enablePreloading?: boolean;
+		cacheChainData?: boolean;
+		
+		// アクセシビリティ
+		reducedMotion?: boolean;
+		highContrast?: boolean;
+		
+		// 分析
+		trackingEnabled?: boolean;
+		analyticsId?: string;
+	};
 }
 
 // Extended認証フック用の戻り値
@@ -1739,7 +2189,7 @@ export interface UnifiedAuthContextType extends UseAuthReturn {
 
 	// Extended状態
 	extendedUser: ExtendedFirestoreUser | null;
-	authFlowState: any; // AuthFlowState
+	authFlowState: AuthFlowState; // 型を更新
 
 	// Extended操作
 	refreshExtendedUser: () => Promise<void>;
@@ -3466,6 +3916,379 @@ export const useAuthActions = () => {
 		refreshExtendedUser,
 	};
 };-e 
+### FILE: ./src/auth/config/testnet-chains.ts
+
+// src/auth/config/testnet-chains.ts
+import { SelectableChain, SelectableChainId, ChainSelectionPreset } from '@/types/chain-selection';
+import { sepolia, avalancheFuji } from 'wagmi/chains';
+
+/**
+ * テストネット用チェーン設定
+ * Ethereum Sepolia と Avalanche Fuji の詳細設定
+ */
+
+// Ethereum Sepolia テストネット設定
+export const SEPOLIA_TESTNET: SelectableChain = {
+	// 識別子
+	id: 'sepolia',
+	chainId: sepolia.id, // 11155111
+
+	// 表示情報
+	name: sepolia.name,
+	displayName: 'Ethereum Testnet',
+	description: 'Ethereum testnet for development and testing',
+
+	// UI要素
+	icon: '🔵',
+	colors: {
+		primary: '#627EEA',
+		secondary: '#8B9DC3',
+	},
+
+	// ネットワーク情報
+	network: {
+		rpcUrl: sepolia.rpcUrls.default.http[0],
+		blockExplorer: sepolia.blockExplorers?.default.url || 'https://sepolia.etherscan.io',
+		faucetUrls: [
+			'https://sepoliafaucet.com/',
+			'https://faucet.sepolia.dev/',
+			'https://faucet.quicknode.com/ethereum/sepolia'
+		],
+	},
+
+	// 機能フラグ
+	isTestnet: true,
+	isSupported: true,
+
+	// メタデータ
+	metadata: {
+		averageBlockTime: 12, // seconds
+		confirmations: 3,
+		gasTokenSymbol: 'ETH',
+		features: [
+			'EIP-1559 Gas Optimization',
+			'Smart Contracts',
+			'NFT Support',
+			'DeFi Compatible',
+			'MetaMask Native Support'
+		],
+	},
+};
+
+// Avalanche Fuji テストネット設定
+export const AVALANCHE_FUJI_TESTNET: SelectableChain = {
+	// 識別子
+	id: 'avalanche-fuji',
+	chainId: avalancheFuji.id, // 43113
+
+	// 表示情報
+	name: avalancheFuji.name,
+	displayName: 'Avalanche Testnet',
+	description: 'Avalanche testnet for high-speed development',
+
+	// UI要素
+	icon: '🔺',
+	colors: {
+		primary: '#E84142',
+		secondary: '#ED6B6C',
+	},
+
+	// ネットワーク情報
+	network: {
+		rpcUrl: avalancheFuji.rpcUrls.default.http[0],
+		blockExplorer: avalancheFuji.blockExplorers?.default.url || 'https://testnet.snowtrace.io',
+		faucetUrls: [
+			'https://faucet.avax.network/',
+			'https://core.app/tools/testnet-faucet/',
+		],
+	},
+
+	// 機能フラグ
+	isTestnet: true,
+	isSupported: true,
+
+	// メタデータ
+	metadata: {
+		averageBlockTime: 3, // seconds
+		confirmations: 1,
+		gasTokenSymbol: 'AVAX',
+		features: [
+			'High-Speed Transactions',
+			'Low Gas Fees',
+			'EVM Compatible',
+			'Subnet Support',
+			'Cross-Chain Bridge'
+		],
+	},
+};
+
+// サポートされているテストネットの配列
+export const SUPPORTED_TESTNETS: SelectableChain[] = [
+	SEPOLIA_TESTNET,
+	AVALANCHE_FUJI_TESTNET,
+];
+
+// チェーンIDでの検索マップ
+export const TESTNET_CHAIN_MAP: Record<SelectableChainId, SelectableChain> = {
+	'sepolia': SEPOLIA_TESTNET,
+	'avalanche-fuji': AVALANCHE_FUJI_TESTNET,
+};
+
+// Wagmi ChainIdでの検索マップ
+export const WAGMI_CHAIN_ID_MAP: Record<number, SelectableChain> = {
+	[sepolia.id]: SEPOLIA_TESTNET,
+	[avalancheFuji.id]: AVALANCHE_FUJI_TESTNET,
+};
+
+// デフォルトチェーン設定
+export const DEFAULT_TESTNET_CHAIN: SelectableChainId = 'sepolia';
+
+// 環境別の推奨チェーン
+export const getRecommendedChain = (): SelectableChainId => {
+	// 開発環境での推奨チェーン
+	const isDevelopment = process.env.NODE_ENV === 'development';
+
+	// Avalancheの方が高速なので開発時に推奨
+	return isDevelopment ? 'avalanche-fuji' : 'sepolia';
+};
+
+// プリセット設定
+export const TESTNET_PRESETS: Record<string, ChainSelectionPreset> = {
+	// 標準的な開発環境用
+	development: {
+		name: 'Development',
+		description: 'Standard setup for development',
+		chains: ['sepolia', 'avalanche-fuji'],
+		defaultChain: 'avalanche-fuji',
+		ui: {
+			title: 'Select Development Network',
+			description: 'Choose a testnet for development and testing',
+			variant: 'default',
+			columns: 2,
+		},
+	},
+
+	// Ethereum 中心の開発
+	ethereum: {
+		name: 'Ethereum Focus',
+		description: 'Ethereum-centric development',
+		chains: ['sepolia'],
+		defaultChain: 'sepolia',
+		ui: {
+			title: 'Connect to Ethereum',
+			description: 'Connect to Ethereum testnet',
+			variant: 'compact',
+			columns: 1,
+		},
+	},
+
+	// Avalanche 中心の開発
+	avalanche: {
+		name: 'Avalanche Focus',
+		description: 'Avalanche-centric development',
+		chains: ['avalanche-fuji'],
+		defaultChain: 'avalanche-fuji',
+		ui: {
+			title: 'Connect to Avalanche',
+			description: 'Connect to Avalanche testnet',
+			variant: 'compact',
+			columns: 1,
+		},
+	},
+
+	// プロダクション準備用
+	production: {
+		name: 'Production Ready',
+		description: 'Production-ready testnet setup',
+		chains: ['sepolia', 'avalanche-fuji'],
+		defaultChain: 'sepolia',
+		ui: {
+			title: 'Select Network',
+			description: 'Choose your preferred blockchain network',
+			variant: 'detailed',
+			columns: 2,
+		},
+	},
+};
+
+// チェーン固有のユーティリティ関数
+export const testnetUtils = {
+	/**
+	 * チェーンIDからSelectableChainを取得
+	 */
+	getChainById(chainId: SelectableChainId): SelectableChain | null {
+		return TESTNET_CHAIN_MAP[chainId] || null;
+	},
+
+	/**
+	 * WagmiチェーンIDからSelectableChainを取得
+	 */
+	getChainByWagmiId(wagmiChainId: number): SelectableChain | null {
+		return WAGMI_CHAIN_ID_MAP[wagmiChainId] || null;
+	},
+
+	/**
+	 * すべてのサポートされているチェーンを取得
+	 */
+	getAllSupportedChains(): SelectableChain[] {
+		return SUPPORTED_TESTNETS.filter(chain => chain.isSupported);
+	},
+
+	/**
+	 * チェーンがサポートされているかチェック
+	 */
+	isChainSupported(chainId: SelectableChainId): boolean {
+		const chain = this.getChainById(chainId);
+		return chain?.isSupported ?? false;
+	},
+
+	/**
+	 * チェーンの表示名を取得
+	 */
+	getDisplayName(chainId: SelectableChainId): string {
+		const chain = this.getChainById(chainId);
+		return chain?.displayName || 'Unknown Network';
+	},
+
+	/**
+	 * チェーンのアイコンを取得
+	 */
+	getIcon(chainId: SelectableChainId): string {
+		const chain = this.getChainById(chainId);
+		return chain?.icon || '⚪';
+	},
+
+	/**
+	 * チェーンの色を取得
+	 */
+	getColors(chainId: SelectableChainId): { primary: string; secondary: string } {
+		const chain = this.getChainById(chainId);
+		return chain?.colors || { primary: '#6B7280', secondary: '#9CA3AF' };
+	},
+
+	/**
+	 * フォーセットURLsを取得
+	 */
+	getFaucetUrls(chainId: SelectableChainId): string[] {
+		const chain = this.getChainById(chainId);
+		return chain?.network.faucetUrls || [];
+	},
+
+	/**
+	 * ブロックエクスプローラーURLを取得
+	 */
+	getExplorerUrl(chainId: SelectableChainId): string {
+		const chain = this.getChainById(chainId);
+		return chain?.network.blockExplorer || '';
+	},
+
+	/**
+	 * アドレスのエクスプローラーURLを生成
+	 */
+	getAddressExplorerUrl(chainId: SelectableChainId, address: string): string {
+		const explorerUrl = this.getExplorerUrl(chainId);
+		return explorerUrl ? `${explorerUrl}/address/${address}` : '';
+	},
+
+	/**
+	 * トランザクションのエクスプローラーURLを生成
+	 */
+	getTxExplorerUrl(chainId: SelectableChainId, txHash: string): string {
+		const explorerUrl = this.getExplorerUrl(chainId);
+		return explorerUrl ? `${explorerUrl}/tx/${txHash}` : '';
+	},
+
+	/**
+	 * チェーンの平均ブロック時間を取得
+	 */
+	getBlockTime(chainId: SelectableChainId): number {
+		const chain = this.getChainById(chainId);
+		return chain?.metadata.averageBlockTime || 12;
+	},
+
+	/**
+	 * 推奨確認数を取得
+	 */
+	getConfirmations(chainId: SelectableChainId): number {
+		const chain = this.getChainById(chainId);
+		return chain?.metadata.confirmations || 3;
+	},
+
+	/**
+	 * ガストークンのシンボルを取得
+	 */
+	getGasTokenSymbol(chainId: SelectableChainId): string {
+		const chain = this.getChainById(chainId);
+		return chain?.metadata.gasTokenSymbol || 'ETH';
+	},
+
+	/**
+	 * プリセット設定を取得
+	 */
+	getPreset(presetName: string): ChainSelectionPreset | null {
+		return TESTNET_PRESETS[presetName] || null;
+	},
+
+	/**
+	 * 環境に適したプリセットを取得
+	 */
+	getEnvironmentPreset(): ChainSelectionPreset {
+		const isDevelopment = process.env.NODE_ENV === 'development';
+		return isDevelopment ? TESTNET_PRESETS.development : TESTNET_PRESETS.production;
+	},
+
+	/**
+	 * チェーンの機能一覧を取得
+	 */
+	getFeatures(chainId: SelectableChainId): string[] {
+		const chain = this.getChainById(chainId);
+		return chain?.metadata.features || [];
+	},
+
+	/**
+	 * アドレスを短縮表示
+	 */
+	formatAddress(address: string): string {
+		if (!address || address.length < 10) return address;
+		return `${address.slice(0, 6)}...${address.slice(-4)}`;
+	},
+
+	/**
+	 * チェーン比較用の統計情報
+	 */
+	getComparisonStats(): Array<{
+		chainId: SelectableChainId;
+		name: string;
+		blockTime: number;
+		confirmations: number;
+		features: number;
+	}> {
+		return SUPPORTED_TESTNETS.map(chain => ({
+			chainId: chain.id,
+			name: chain.displayName,
+			blockTime: chain.metadata.averageBlockTime,
+			confirmations: chain.metadata.confirmations,
+			features: chain.metadata.features.length,
+		}));
+	},
+};
+
+// 開発環境用のデバッグ情報
+export const debugInfo = {
+	supportedChains: SUPPORTED_TESTNETS.length,
+	defaultChain: DEFAULT_TESTNET_CHAIN,
+	recommendedChain: getRecommendedChain(),
+	availablePresets: Object.keys(TESTNET_PRESETS),
+
+	// 各チェーンの基本情報
+	chainSummary: SUPPORTED_TESTNETS.map(chain => ({
+		id: chain.id,
+		name: chain.displayName,
+		chainId: chain.chainId,
+		isSupported: chain.isSupported,
+		blockTime: chain.metadata.averageBlockTime,
+	})),
+};-e 
 ### FILE: ./src/auth/config/chain-config.ts
 
 // src/wallet-auth/adapters/evm/chain-config.ts
@@ -4523,6 +5346,525 @@ export const useWagmiConfigInfo = () => {
 		};
 	}, []);
 };-e 
+### FILE: ./src/auth/utils/chain-utils.ts
+
+// src/auth/utils/chain-utils.ts
+import { 
+  SelectableChain, 
+  SelectableChainId, 
+  ChainSwitchResult, 
+  ChainCompatibility,
+  ChainSelectionValidation 
+} from '@/types/chain-selection';
+import { testnetUtils, TESTNET_CHAIN_MAP } from '@/auth/config/testnet-chains';
+import { ChainType } from '@/types/wallet';
+
+/**
+ * チェーン操作とバリデーション用のユーティリティ関数
+ */
+
+// エラータイプの定義
+export type ChainUtilError = 
+  | 'CHAIN_NOT_SUPPORTED'
+  | 'WALLET_NOT_CONNECTED'
+  | 'USER_REJECTED'
+  | 'NETWORK_ERROR'
+  | 'INVALID_CHAIN_ID'
+  | 'SWITCH_FAILED'
+  | 'UNKNOWN_ERROR';
+
+// チェーン切り替えのオプション
+export interface ChainSwitchOptions {
+  // 動作設定
+  forceSwitch?: boolean;
+  skipConfirmation?: boolean;
+  
+  // 失敗時の設定
+  retryCount?: number;
+  retryDelay?: number; // milliseconds
+  
+  // UI設定
+  showProgress?: boolean;
+  showNotification?: boolean;
+  
+  // コールバック
+  onProgress?: (step: string, progress: number) => void;
+  onSuccess?: (result: ChainSwitchResult) => void;
+  onError?: (error: string) => void;
+}
+
+// バリデーションオプション
+export interface ValidationOptions {
+  // 厳密性
+  strict?: boolean;
+  
+  // チェック項目
+  checkWalletSupport?: boolean;
+  checkNetworkConnectivity?: boolean;
+  checkFeatureSupport?: boolean;
+  
+  // 警告レベル
+  warningLevel?: 'none' | 'basic' | 'detailed';
+}
+
+/**
+ * チェーン選択の主要ユーティリティクラス
+ */
+export class ChainSelectionUtils {
+  // 現在選択されているチェーンの状態
+  private static currentChain: SelectableChainId | null = null;
+  private static lastSwitchTime: number = 0;
+  
+  /**
+   * チェーンの基本バリデーション
+   */
+  static validateChain(chainId: SelectableChainId, options: ValidationOptions = {}): ChainSelectionValidation {
+    const {
+      strict = false,
+      checkWalletSupport = true,
+      checkNetworkConnectivity = false,
+      warningLevel = 'basic'
+    } = options;
+
+    const errors: string[] = [];
+    const warnings: string[] = [];
+    const suggestions: ChainSelectionValidation['suggestions'] = [];
+
+    // 基本的なチェーン存在確認
+    const chain = testnetUtils.getChainById(chainId);
+    if (!chain) {
+      errors.push(`Chain ${chainId} is not defined`);
+      return { isValid: false, errors, warnings, suggestions };
+    }
+
+    // サポート状況確認
+    if (!chain.isSupported) {
+      errors.push(`Chain ${chainId} is not currently supported`);
+      suggestions.push({
+        type: 'configuration',
+        message: 'This chain may be supported in future versions',
+      });
+    }
+
+    // テストネット確認
+    if (!chain.isTestnet && process.env.NODE_ENV === 'development') {
+      if (strict) {
+        errors.push('Mainnet chains are not allowed in development environment');
+      } else {
+        warnings.push('Using mainnet chain in development environment');
+      }
+    }
+
+    // ネットワーク接続確認（オプション）
+    if (checkNetworkConnectivity) {
+      // 実際のネットワーク確認は非同期になるため、ここでは基本チェックのみ
+      if (!chain.network.rpcUrl) {
+        errors.push('No RPC URL configured for this chain');
+      }
+    }
+
+    // ウォレットサポート確認
+    if (checkWalletSupport) {
+      const compatibility = this.getChainCompatibility(chainId);
+      if (!compatibility.isSupported) {
+        warnings.push('Limited wallet support for this chain');
+        suggestions.push({
+          type: 'userAction',
+          message: 'Consider using a different wallet or browser',
+        });
+      }
+    }
+
+    // 警告レベルに応じた追加チェック
+    if (warningLevel === 'detailed') {
+      // ブロック時間の警告
+      if (chain.metadata.averageBlockTime > 15) {
+        warnings.push('This chain has slower block times (>15s)');
+      }
+
+      // 確認数の警告
+      if (chain.metadata.confirmations > 10) {
+        warnings.push('This chain requires many confirmations for safety');
+      }
+    }
+
+    return {
+      isValid: errors.length === 0,
+      errors,
+      warnings,
+      suggestions,
+    };
+  }
+
+  /**
+   * チェーン互換性の確認
+   */
+  static getChainCompatibility(chainId: SelectableChainId): ChainCompatibility {
+    const chain = testnetUtils.getChainById(chainId);
+    
+    if (!chain) {
+      return {
+        chainId,
+        isSupported: false,
+        features: {
+          walletConnect: false,
+          metamask: false,
+          eip1559: false,
+          contracts: false,
+        },
+        limitations: ['Chain not found'],
+        recommendations: {},
+      };
+    }
+
+    // ブラウザ環境の確認
+    const hasMetaMask = typeof window !== 'undefined' && 
+      typeof (window as any).ethereum !== 'undefined';
+    
+    // 機能サポートの確認
+    const features = {
+      walletConnect: true, // WalletConnectは基本的に全チェーンサポート
+      metamask: hasMetaMask,
+      eip1559: chain.chainId === 11155111, // Sepoliaのみ
+      contracts: true, // EVMチェーンは基本的にサポート
+    };
+
+    const limitations: string[] = [];
+    
+    if (!hasMetaMask) {
+      limitations.push('MetaMask not detected');
+    }
+    
+    if (chain.metadata.averageBlockTime > 10) {
+      limitations.push('Slower transaction confirmation');
+    }
+
+    const recommendations: ChainCompatibility['recommendations'] = {};
+    
+    if (chain.id === 'avalanche-fuji') {
+      recommendations.gasPrice = 'auto';
+      recommendations.gasLimit = 2000000;
+      recommendations.priority = 'speed';
+    } else if (chain.id === 'sepolia') {
+      recommendations.gasPrice = 'auto';
+      recommendations.gasLimit = 21000;
+      recommendations.priority = 'cost';
+    }
+
+    return {
+      chainId,
+      isSupported: chain.isSupported && features.metamask,
+      features,
+      limitations,
+      recommendations,
+    };
+  }
+
+  /**
+   * チェーン間の比較
+   */
+  static compareChains(
+    chainA: SelectableChainId, 
+    chainB: SelectableChainId
+  ): {
+    speed: 'A' | 'B' | 'equal';
+    cost: 'A' | 'B' | 'equal';
+    features: 'A' | 'B' | 'equal';
+    recommendation: SelectableChainId;
+  } {
+    const chainDataA = testnetUtils.getChainById(chainA);
+    const chainDataB = testnetUtils.getChainById(chainB);
+
+    if (!chainDataA || !chainDataB) {
+      throw new Error('Invalid chain IDs for comparison');
+    }
+
+    // 速度比較（ブロック時間）
+    const speedComparison = 
+      chainDataA.metadata.averageBlockTime < chainDataB.metadata.averageBlockTime ? 'A' :
+      chainDataA.metadata.averageBlockTime > chainDataB.metadata.averageBlockTime ? 'B' : 'equal';
+
+    // コスト比較（一般的にAvalancheの方が安い）
+    const costComparison = chainA === 'avalanche-fuji' ? 'A' : 'B';
+
+    // 機能比較
+    const featuresComparison = 
+      chainDataA.metadata.features.length > chainDataB.metadata.features.length ? 'A' :
+      chainDataA.metadata.features.length < chainDataB.metadata.features.length ? 'B' : 'equal';
+
+    // 総合推奨（開発環境ではAvalanche優先）
+    const recommendation = process.env.NODE_ENV === 'development' ? 'avalanche-fuji' : 'sepolia';
+
+    return {
+      speed: speedComparison,
+      cost: costComparison,
+      features: featuresComparison,
+      recommendation,
+    };
+  }
+
+  /**
+   * チェーン切り替えの実行
+   */
+  static async switchChain(
+    chainId: SelectableChainId,
+    wagmiSwitchChain: (params: { chainId: number }) => Promise<any>,
+    options: ChainSwitchOptions = {}
+  ): Promise<ChainSwitchResult> {
+    const {
+      forceSwitch = false,
+      retryCount = 3,
+      retryDelay = 1000,
+      onProgress,
+      onSuccess,
+      onError,
+    } = options;
+
+    try {
+      onProgress?.('Validating chain', 0);
+
+      // チェーンバリデーション
+      const validation = this.validateChain(chainId, { strict: true });
+      if (!validation.isValid) {
+        const errorMsg = `Chain validation failed: ${validation.errors.join(', ')}`;
+        onError?.(errorMsg);
+        return {
+          success: false,
+          error: errorMsg,
+        };
+      }
+
+      const chain = testnetUtils.getChainById(chainId)!;
+      const startTime = Date.now();
+
+      onProgress?.('Switching to chain', 25);
+
+      // 既に同じチェーンの場合はスキップ
+      if (!forceSwitch && this.currentChain === chainId) {
+        const result: ChainSwitchResult = {
+          success: true,
+          chainId: chain.chainId,
+          details: {
+            previousChain: chain.chainId,
+            newChain: chain.chainId,
+            switchTime: 0,
+            requiresUserAction: false,
+          },
+        };
+        onSuccess?.(result);
+        return result;
+      }
+
+      onProgress?.('Requesting wallet switch', 50);
+
+      // リトライロジック付きでチェーン切り替え実行
+      let lastError: Error | null = null;
+      
+      for (let attempt = 0; attempt < retryCount; attempt++) {
+        try {
+          await wagmiSwitchChain({ chainId: chain.chainId });
+          
+          onProgress?.('Verifying switch', 75);
+
+          // 切り替え成功
+          const previousChain = this.currentChain;
+          this.currentChain = chainId;
+          this.lastSwitchTime = Date.now();
+
+          onProgress?.('Switch completed', 100);
+
+          const result: ChainSwitchResult = {
+            success: true,
+            chainId: chain.chainId,
+            details: {
+              previousChain: previousChain ? testnetUtils.getChainById(previousChain)?.chainId : undefined,
+              newChain: chain.chainId,
+              switchTime: Date.now() - startTime,
+              requiresUserAction: attempt > 0,
+            },
+          };
+
+          onSuccess?.(result);
+          return result;
+
+        } catch (error) {
+          lastError = error as Error;
+          
+          if (attempt < retryCount - 1) {
+            onProgress?.(`Retrying... (${attempt + 1}/${retryCount})`, 25 + (attempt * 15));
+            await new Promise(resolve => setTimeout(resolve, retryDelay));
+          }
+        }
+      }
+
+      // すべてのリトライが失敗
+      const errorType = this.classifyChainError(lastError);
+      const errorMsg = `Chain switch failed after ${retryCount} attempts: ${lastError?.message || 'Unknown error'}`;
+      
+      onError?.(errorMsg);
+
+      return {
+        success: false,
+        error: errorMsg,
+        details: {
+          previousChain: this.currentChain ? testnetUtils.getChainById(this.currentChain)?.chainId : undefined,
+          switchTime: Date.now() - startTime,
+          requiresUserAction: true,
+        },
+      };
+
+    } catch (error) {
+      const errorMsg = `Unexpected error during chain switch: ${error instanceof Error ? error.message : 'Unknown error'}`;
+      onError?.(errorMsg);
+      
+      return {
+        success: false,
+        error: errorMsg,
+      };
+    }
+  }
+
+  /**
+   * エラーの分類
+   */
+  private static classifyChainError(error: Error | null): ChainUtilError {
+    if (!error) return 'UNKNOWN_ERROR';
+
+    const message = error.message.toLowerCase();
+
+    if (message.includes('user rejected') || message.includes('user denied')) {
+      return 'USER_REJECTED';
+    }
+    
+    if (message.includes('network') || message.includes('connection')) {
+      return 'NETWORK_ERROR';
+    }
+    
+    if (message.includes('unsupported') || message.includes('not supported')) {
+      return 'CHAIN_NOT_SUPPORTED';
+    }
+    
+    if (message.includes('wallet') || message.includes('not connected')) {
+      return 'WALLET_NOT_CONNECTED';
+    }
+    
+    if (message.includes('invalid') || message.includes('chain id')) {
+      return 'INVALID_CHAIN_ID';
+    }
+
+    return 'SWITCH_FAILED';
+  }
+
+  /**
+   * 現在のチェーン状態を取得
+   */
+  static getCurrentChain(): SelectableChainId | null {
+    return this.currentChain;
+  }
+
+  /**
+   * 最後の切り替え時刻を取得
+   */
+  static getLastSwitchTime(): number {
+    return this.lastSwitchTime;
+  }
+
+  /**
+   * チェーン状態をリセット
+   */
+  static resetChainState(): void {
+    this.currentChain = null;
+    this.lastSwitchTime = 0;
+  }
+
+  /**
+   * デバッグ情報の取得
+   */
+  static getDebugInfo() {
+    return {
+      currentChain: this.currentChain,
+      lastSwitchTime: this.lastSwitchTime,
+      supportedChains: Object.keys(TESTNET_CHAIN_MAP),
+      compatibility: Object.keys(TESTNET_CHAIN_MAP).map(chainId => ({
+        chainId,
+        compatibility: this.getChainCompatibility(chainId as SelectableChainId),
+      })),
+    };
+  }
+}
+
+/**
+ * 便利なヘルパー関数
+ */
+
+// チェーンの簡易バリデーション
+export const isValidChain = (chainId: SelectableChainId): boolean => {
+  return ChainSelectionUtils.validateChain(chainId).isValid;
+};
+
+// チェーン互換性の簡易チェック
+export const isChainCompatible = (chainId: SelectableChainId): boolean => {
+  return ChainSelectionUtils.getChainCompatibility(chainId).isSupported;
+};
+
+// 推奨チェーンの取得
+export const getRecommendedChain = (availableChains: SelectableChainId[]): SelectableChainId => {
+  // 開発環境では Avalanche 優先
+  if (process.env.NODE_ENV === 'development' && availableChains.includes('avalanche-fuji')) {
+    return 'avalanche-fuji';
+  }
+  
+  // デフォルトは Sepolia
+  if (availableChains.includes('sepolia')) {
+    return 'sepolia';
+  }
+  
+  // フォールバック
+  return availableChains[0];
+};
+
+// チェーン選択のプリフライトチェック
+export const preflightCheck = async (chainId: SelectableChainId): Promise<{
+  canProceed: boolean;
+  warnings: string[];
+  blockers: string[];
+}> => {
+  const validation = ChainSelectionUtils.validateChain(chainId, {
+    strict: false,
+    checkWalletSupport: true,
+    warningLevel: 'detailed',
+  });
+
+  const compatibility = ChainSelectionUtils.getChainCompatibility(chainId);
+
+  return {
+    canProceed: validation.isValid && compatibility.isSupported,
+    warnings: validation.warnings,
+    blockers: validation.errors,
+  };
+};
+
+// エラーメッセージの人間読みやすい形式への変換
+export const formatChainError = (error: ChainUtilError, chainId?: SelectableChainId): string => {
+  const chainName = chainId ? testnetUtils.getDisplayName(chainId) : 'the selected network';
+  
+  switch (error) {
+    case 'USER_REJECTED':
+      return 'Connection was cancelled. Please try again and approve the network switch.';
+    case 'CHAIN_NOT_SUPPORTED':
+      return `${chainName} is not supported by your wallet.`;
+    case 'WALLET_NOT_CONNECTED':
+      return 'Please connect your wallet before switching networks.';
+    case 'NETWORK_ERROR':
+      return `Unable to connect to ${chainName}. Please check your internet connection.`;
+    case 'INVALID_CHAIN_ID':
+      return `Invalid network configuration for ${chainName}.`;
+    case 'SWITCH_FAILED':
+      return `Failed to switch to ${chainName}. Please try again.`;
+    default:
+      return 'An unexpected error occurred while switching networks.';
+  }
+};-e 
 ### FILE: ./src/auth/components/AuthModal.tsx
 
 // src/auth/components/AuthModal.tsx
@@ -4942,6 +6284,746 @@ export const ExtendedAuthModal = ({
 		</div>
 	);
 };-e 
+### FILE: ./src/auth/components/ChainCard.tsx
+
+// src/auth/components/ChainCard.tsx
+'use client';
+
+import React from 'react';
+import { ChainCardProps } from '@/types/chain-selection';
+import { testnetUtils } from '@/auth/config/testnet-chains';
+import {
+	Check,
+	Info,
+	Clock,
+	Zap,
+	Shield,
+	ExternalLink,
+	Loader2,
+	AlertTriangle
+} from 'lucide-react';
+
+/**
+ * 個別チェーン選択カードコンポーネント
+ * サイバーパンクテーマに合致したデザイン
+ */
+export const ChainCard: React.FC<ChainCardProps> = ({
+	chain,
+	isSelected = false,
+	isDisabled = false,
+	isLoading = false,
+	onClick,
+	onInfoClick,
+	variant = 'default',
+	showDescription = true,
+	showMetadata = true,
+	className = '',
+}) => {
+	const handleClick = () => {
+		if (!isDisabled && !isLoading) {
+			onClick(chain);
+		}
+	};
+
+	const handleInfoClick = (e: React.MouseEvent) => {
+		e.stopPropagation();
+		if (onInfoClick) {
+			onInfoClick(chain);
+		}
+	};
+
+	// バリアント別のスタイリング
+	const getCardClasses = () => {
+		const baseClasses = `
+      relative cursor-pointer transition-all duration-300 rounded-sm border overflow-hidden
+      ${isDisabled ? 'opacity-50 cursor-not-allowed' : 'hover:shadow-lg'}
+      ${className}
+    `;
+
+		const variantClasses = {
+			default: `
+        p-6 min-h-[160px]
+        ${isSelected
+					? 'bg-gradient-to-br from-neonGreen/10 to-neonOrange/10 border-neonGreen'
+					: 'bg-dark-200/50 border-dark-300 hover:border-neonGreen/50'
+				}
+      `,
+			compact: `
+        p-4 min-h-[100px]
+        ${isSelected
+					? 'bg-gradient-to-br from-neonGreen/10 to-neonOrange/10 border-neonGreen'
+					: 'bg-dark-200/50 border-dark-300 hover:border-neonGreen/50'
+				}
+      `,
+			detailed: `
+        p-8 min-h-[200px]
+        ${isSelected
+					? 'bg-gradient-to-br from-neonGreen/10 to-neonOrange/10 border-neonGreen'
+					: 'bg-dark-200/50 border-dark-300 hover:border-neonGreen/50'
+				}
+      `,
+		};
+
+		return `${baseClasses} ${variantClasses[variant]}`;
+	};
+
+	// チェーンの状態インジケーター
+	const renderStatusIndicator = () => {
+		if (isLoading) {
+			return (
+				<div className="absolute top-3 right-3">
+					<Loader2 className="w-4 h-4 text-neonGreen animate-spin" />
+				</div>
+			);
+		}
+
+		if (isSelected) {
+			return (
+				<div className="absolute top-3 right-3">
+					<div className="w-6 h-6 bg-neonGreen rounded-full flex items-center justify-center">
+						<Check className="w-4 h-4 text-black" />
+					</div>
+				</div>
+			);
+		}
+
+		if (!chain.isSupported) {
+			return (
+				<div className="absolute top-3 right-3">
+					<AlertTriangle className="w-4 h-4 text-yellow-400" />
+				</div>
+			);
+		}
+
+		return null;
+	};
+
+	// チェーンアイコンとタイトル
+	const renderHeader = () => (
+		<div className="flex items-start justify-between mb-3">
+			<div className="flex items-center space-x-3">
+				{/* チェーンアイコン */}
+				<div
+					className="w-10 h-10 rounded-sm flex items-center justify-center text-2xl"
+					style={{
+						background: `linear-gradient(135deg, ${chain.colors.primary}20, ${chain.colors.secondary}20)`,
+						border: `1px solid ${chain.colors.primary}40`,
+					}}
+				>
+					{chain.icon}
+				</div>
+
+				<div>
+					<h3 className="text-white font-heading font-bold text-lg">
+						{chain.displayName}
+					</h3>
+					{variant !== 'compact' && (
+						<p className="text-gray-400 text-sm">
+							Chain ID: {chain.chainId}
+						</p>
+					)}
+				</div>
+			</div>
+
+			{/* 情報ボタン */}
+			{onInfoClick && variant === 'detailed' && (
+				<button
+					onClick={handleInfoClick}
+					className="p-1 text-gray-400 hover:text-neonGreen transition-colors"
+					title="More information"
+				>
+					<Info className="w-4 h-4" />
+				</button>
+			)}
+		</div>
+	);
+
+	// 説明文
+	const renderDescription = () => {
+		if (!showDescription || variant === 'compact') return null;
+
+		return (
+			<p className="text-gray-300 text-sm mb-4 leading-relaxed">
+				{chain.description}
+			</p>
+		);
+	};
+
+	// メタデータ（スペック情報）
+	const renderMetadata = () => {
+		if (!showMetadata || variant === 'compact') return null;
+
+		return (
+			<div className="space-y-2 mb-4">
+				{/* ブロック時間 */}
+				<div className="flex items-center justify-between text-xs">
+					<div className="flex items-center space-x-1 text-gray-400">
+						<Clock className="w-3 h-3" />
+						<span>Block Time</span>
+					</div>
+					<span className="text-white">~{chain.metadata.averageBlockTime}s</span>
+				</div>
+
+				{/* 確認数 */}
+				<div className="flex items-center justify-between text-xs">
+					<div className="flex items-center space-x-1 text-gray-400">
+						<Shield className="w-3 h-3" />
+						<span>Confirmations</span>
+					</div>
+					<span className="text-white">{chain.metadata.confirmations}</span>
+				</div>
+
+				{/* ガストークン */}
+				<div className="flex items-center justify-between text-xs">
+					<div className="flex items-center space-x-1 text-gray-400">
+						<Zap className="w-3 h-3" />
+						<span>Gas Token</span>
+					</div>
+					<span className="text-white">{chain.metadata.gasTokenSymbol}</span>
+				</div>
+			</div>
+		);
+	};
+
+	// 機能バッジ（詳細表示時のみ）
+	const renderFeatures = () => {
+		if (variant !== 'detailed' || !chain.metadata.features.length) return null;
+
+		return (
+			<div className="space-y-2">
+				<div className="text-xs text-gray-400 font-medium">Features</div>
+				<div className="flex flex-wrap gap-1">
+					{chain.metadata.features.slice(0, 3).map((feature, index) => (
+						<span
+							key={index}
+							className="px-2 py-1 bg-dark-300 border border-gray-600 rounded-sm text-xs text-gray-300"
+						>
+							{feature}
+						</span>
+					))}
+					{chain.metadata.features.length > 3 && (
+						<span className="px-2 py-1 bg-dark-300 border border-gray-600 rounded-sm text-xs text-gray-400">
+							+{chain.metadata.features.length - 3} more
+						</span>
+					)}
+				</div>
+			</div>
+		);
+	};
+
+	// ネットワーク状況インジケーター
+	const renderNetworkStatus = () => {
+		if (variant === 'compact') return null;
+
+		return (
+			<div className="absolute bottom-3 left-3">
+				<div className="flex items-center space-x-1">
+					<div
+						className={`w-2 h-2 rounded-full ${chain.isSupported ? 'bg-neonGreen' : 'bg-red-400'
+							}`}
+					/>
+					<span className="text-xs text-gray-400">
+						{chain.isSupported ? 'Available' : 'Unavailable'}
+					</span>
+				</div>
+			</div>
+		);
+	};
+
+	// エクスプローラーリンク（詳細表示時のみ）
+	const renderExplorerLink = () => {
+		if (variant !== 'detailed' || !chain.network.blockExplorer) return null;
+
+		return (
+			<div className="absolute bottom-3 right-3">
+				<a
+					href={chain.network.blockExplorer}
+					target="_blank"
+					rel="noopener noreferrer"
+					onClick={(e) => e.stopPropagation()}
+					className="text-gray-400 hover:text-neonGreen transition-colors"
+					title="View on explorer"
+				>
+					<ExternalLink className="w-4 h-4" />
+				</a>
+			</div>
+		);
+	};
+
+	// ホバーエフェクト
+	const renderHoverEffects = () => {
+		if (isDisabled || isLoading) return null;
+
+		return (
+			<>
+				{/* グロー効果 */}
+				<div
+					className={`absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-300 rounded-sm blur-sm ${isSelected ? 'bg-neonGreen/20' : 'bg-neonGreen/10'
+						}`}
+				/>
+
+				{/* スキャンライン効果 */}
+				<div className="absolute inset-0 overflow-hidden pointer-events-none opacity-0 group-hover:opacity-30 transition-opacity duration-300">
+					<div className="absolute w-full h-px bg-gradient-to-r from-transparent via-neonGreen to-transparent animate-scanline top-1/2" />
+				</div>
+
+				{/* パルス効果（選択時） */}
+				{isSelected && (
+					<div className="absolute inset-0 bg-neonGreen/5 animate-pulse rounded-sm" />
+				)}
+			</>
+		);
+	};
+
+	return (
+		<div
+			className={`group ${getCardClasses()}`}
+			onClick={handleClick}
+			role="button"
+			tabIndex={isDisabled ? -1 : 0}
+			onKeyDown={(e) => {
+				if (e.key === 'Enter' || e.key === ' ') {
+					e.preventDefault();
+					handleClick();
+				}
+			}}
+			aria-selected={isSelected}
+			aria-disabled={isDisabled}
+		>
+			{/* 背景エフェクト */}
+			{renderHoverEffects()}
+
+			{/* ステータスインジケーター */}
+			{renderStatusIndicator()}
+
+			{/* メインコンテンツ */}
+			<div className="relative z-10">
+				{/* ヘッダー */}
+				{renderHeader()}
+
+				{/* 説明文 */}
+				{renderDescription()}
+
+				{/* メタデータ */}
+				{renderMetadata()}
+
+				{/* 機能バッジ */}
+				{renderFeatures()}
+			</div>
+
+			{/* フッター要素 */}
+			{renderNetworkStatus()}
+			{renderExplorerLink()}
+
+			{/* ローディングオーバーレイ */}
+			{isLoading && (
+				<div className="absolute inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center rounded-sm">
+					<div className="flex items-center space-x-2 text-neonGreen">
+						<Loader2 className="w-5 h-5 animate-spin" />
+						<span className="text-sm">Connecting...</span>
+					</div>
+				</div>
+			)}
+
+			{/* 選択時のボーダー強調 */}
+			{isSelected && (
+				<div
+					className="absolute inset-0 rounded-sm pointer-events-none"
+					style={{
+						boxShadow: `0 0 0 2px ${chain.colors.primary}40, 0 0 20px ${chain.colors.primary}20`,
+					}}
+				/>
+			)}
+		</div>
+	);
+};
+
+export default ChainCard;-e 
+### FILE: ./src/auth/components/ChainSelector.tsx
+
+// src/auth/components/ChainSelector.tsx
+'use client';
+
+import React, { useState, useEffect, useMemo } from 'react';
+import { ChainSelectorProps, SelectableChain, SelectableChainId } from '@/types/chain-selection';
+import { testnetUtils, SUPPORTED_TESTNETS } from '@/auth/config/testnet-chains';
+import { ChainSelectionUtils } from '@/auth/utils/chain-utils';
+import ChainCard from './ChainCard';
+import {
+	ArrowLeft,
+	AlertCircle,
+	Info,
+	Zap,
+	Shield,
+	Clock,
+	ChevronRight,
+	RefreshCw,
+	Loader2
+} from 'lucide-react';
+
+/**
+ * チェーン選択メイン画面コンポーネント
+ * 複数チェーンの選択UIとメタデータ表示
+ */
+export const ChainSelector: React.FC<ChainSelectorProps> = ({
+	onChainSelect,
+	onBack,
+	title = 'Select Network',
+	description = 'Choose your preferred blockchain network',
+	showBackButton = false,
+	allowedChains,
+	disabledChains = [],
+	variant = 'default',
+	columns = 2,
+	loading = false,
+	error,
+	className = '',
+}) => {
+	// ローカル状態
+	const [selectedChain, setSelectedChain] = useState<SelectableChainId | null>(null);
+	const [loadingChain, setLoadingChain] = useState<SelectableChainId | null>(null);
+	const [chainErrors, setChainErrors] = useState<Record<SelectableChainId, string>>();
+	const [showComparison, setShowComparison] = useState(false);
+
+	// 利用可能なチェーンをフィルタリング
+	const availableChains = useMemo(() => {
+		let chains = SUPPORTED_TESTNETS;
+
+		// allowedChainsが指定されている場合はフィルタリング
+		if (allowedChains && allowedChains.length > 0) {
+			chains = chains.filter(chain => allowedChains.includes(chain.id));
+		}
+
+		return chains.filter(chain => chain.isSupported);
+	}, [allowedChains]);
+
+	// チェーン選択のハンドラー
+	const handleChainSelect = async (chain: SelectableChain) => {
+		if (disabledChains.includes(chain.id) || loadingChain) return;
+
+		try {
+			setLoadingChain(chain.id);
+			setChainErrors(prev => ({ ...prev, [chain.id]: '' }));
+
+			// チェーンバリデーション
+			const validation = ChainSelectionUtils.validateChain(chain.id, {
+				strict: true,
+				checkWalletSupport: true,
+				warningLevel: 'basic',
+			});
+
+			if (!validation.isValid) {
+				throw new Error(validation.errors.join(', '));
+			}
+
+			setSelectedChain(chain.id);
+
+			// 少し遅延させてから選択を完了（UX向上）
+			setTimeout(() => {
+				onChainSelect(chain);
+			}, 300);
+
+		} catch (error) {
+			const errorMessage = error instanceof Error ? error.message : 'Chain selection failed';
+			setChainErrors(prev => ({ ...prev, [chain.id]: errorMessage }));
+			console.error('Chain selection error:', error);
+		} finally {
+			setLoadingChain(null);
+		}
+	};
+
+	// エラークリア
+	const clearChainError = (chainId: SelectableChainId) => {
+		setChainErrors(prev => ({ ...prev, [chainId]: '' }));
+	};
+
+	// グリッドレイアウトのクラス
+	const getGridClasses = () => {
+		const baseClasses = 'grid gap-4';
+
+		if (variant === 'compact') {
+			return `${baseClasses} grid-cols-1`;
+		}
+
+		return `${baseClasses} ${columns === 1 ? 'grid-cols-1' : 'grid-cols-1 md:grid-cols-2'}`;
+	};
+
+	// 比較データの生成
+	const comparisonData = useMemo(() => {
+		if (availableChains.length < 2) return null;
+
+		return testnetUtils.getComparisonStats().filter(stat =>
+			availableChains.some(chain => chain.id === stat.chainId)
+		);
+	}, [availableChains]);
+
+	// ヘッダー部分
+	const renderHeader = () => (
+		<div className="mb-8">
+			{/* タイトル行 */}
+			<div className="flex items-center justify-between mb-4">
+				<div className="flex items-center space-x-3">
+					{showBackButton && onBack && (
+						<button
+							onClick={onBack}
+							className="p-2 text-gray-400 hover:text-neonGreen transition-colors rounded-sm hover:bg-dark-200"
+							aria-label="Go back"
+						>
+							<ArrowLeft className="w-5 h-5" />
+						</button>
+					)}
+					<div>
+						<h2 className="text-2xl font-heading font-bold text-white">
+							{title}
+						</h2>
+						<p className="text-gray-400 text-sm mt-1">
+							{description}
+						</p>
+					</div>
+				</div>
+
+				{/* 比較表示切り替え */}
+				{availableChains.length > 1 && variant !== 'compact' && (
+					<button
+						onClick={() => setShowComparison(!showComparison)}
+						className="flex items-center space-x-2 px-3 py-2 bg-dark-200 hover:bg-dark-300 border border-gray-600 rounded-sm text-sm text-gray-300 transition-colors"
+					>
+						<Info className="w-4 h-4" />
+						<span>{showComparison ? 'Hide' : 'Compare'}</span>
+					</button>
+				)}
+			</div>
+
+			{/* エラー表示 */}
+			{error && (
+				<div className="mb-6 p-4 bg-red-900/30 border border-red-500/50 text-red-300 rounded-sm">
+					<div className="flex items-center space-x-2">
+						<AlertCircle className="w-4 h-4 flex-shrink-0" />
+						<span className="text-sm">{error}</span>
+					</div>
+				</div>
+			)}
+
+			{/* 比較テーブル */}
+			{showComparison && comparisonData && renderComparisonTable()}
+		</div>
+	);
+
+	// 比較テーブル
+	const renderComparisonTable = () => {
+		if (!comparisonData) return null;
+
+		return (
+			<div className="mb-6 bg-dark-200/50 border border-dark-300 rounded-sm overflow-hidden">
+				<div className="p-4 border-b border-dark-300">
+					<h3 className="text-white font-semibold flex items-center space-x-2">
+						<Zap className="w-4 h-4 text-neonGreen" />
+						<span>Network Comparison</span>
+					</h3>
+				</div>
+
+				<div className="overflow-x-auto">
+					<table className="w-full text-sm">
+						<thead className="bg-dark-300">
+							<tr>
+								<th className="text-left p-3 text-gray-300">Network</th>
+								<th className="text-left p-3 text-gray-300">Block Time</th>
+								<th className="text-left p-3 text-gray-300">Confirmations</th>
+								<th className="text-left p-3 text-gray-300">Features</th>
+							</tr>
+						</thead>
+						<tbody>
+							{comparisonData.map((stat, index) => {
+								const chain = testnetUtils.getChainById(stat.chainId);
+								return (
+									<tr key={stat.chainId} className={index % 2 === 0 ? 'bg-dark-100/30' : 'bg-transparent'}>
+										<td className="p-3">
+											<div className="flex items-center space-x-2">
+												<span className="text-lg">{chain?.icon}</span>
+												<span className="text-white">{stat.name}</span>
+											</div>
+										</td>
+										<td className="p-3 text-gray-300">~{stat.blockTime}s</td>
+										<td className="p-3 text-gray-300">{stat.confirmations}</td>
+										<td className="p-3 text-gray-300">{stat.features}</td>
+									</tr>
+								);
+							})}
+						</tbody>
+					</table>
+				</div>
+			</div>
+		);
+	};
+
+	// チェーンリスト
+	const renderChainList = () => {
+		if (loading) {
+			return (
+				<div className="flex items-center justify-center py-12">
+					<div className="flex items-center space-x-2 text-neonGreen">
+						<Loader2 className="w-6 h-6 animate-spin" />
+						<span>Loading networks...</span>
+					</div>
+				</div>
+			);
+		}
+
+		if (availableChains.length === 0) {
+			return (
+				<div className="text-center py-12">
+					<AlertCircle className="w-12 h-12 text-gray-400 mx-auto mb-4" />
+					<h3 className="text-lg font-semibold text-white mb-2">No Networks Available</h3>
+					<p className="text-gray-400 text-sm">
+						No supported networks found for your configuration.
+					</p>
+				</div>
+			);
+		}
+
+		return (
+			<div className={getGridClasses()}>
+				{availableChains.map((chain) => {
+					const isDisabled = disabledChains.includes(chain.id);
+					const isLoading = loadingChain === chain.id;
+					const isSelected = selectedChain === chain.id;
+					const hasError = chainErrors[chain.id];
+
+					return (
+						<div key={chain.id} className="relative">
+							<ChainCard
+								chain={chain}
+								isSelected={isSelected}
+								isDisabled={isDisabled}
+								isLoading={isLoading}
+								onClick={handleChainSelect}
+								variant={variant}
+								showDescription={variant !== 'compact'}
+								showMetadata={variant === 'detailed'}
+							/>
+
+							{/* チェーン固有のエラー表示 */}
+							{hasError && (
+								<div className="absolute inset-x-0 -bottom-1 mx-2">
+									<div className="bg-red-900/90 border border-red-500/50 text-red-300 text-xs p-2 rounded-sm backdrop-blur-sm">
+										<div className="flex items-center justify-between">
+											<span>{hasError}</span>
+											<button
+												onClick={() => clearChainError(chain.id)}
+												className="text-red-400 hover:text-red-300 ml-2"
+											>
+												×
+											</button>
+										</div>
+									</div>
+								</div>
+							)}
+						</div>
+					);
+				})}
+			</div>
+		);
+	};
+
+	// 推奨情報
+	const renderRecommendations = () => {
+		if (variant === 'compact' || availableChains.length <= 1) return null;
+
+		const isDevelopment = process.env.NODE_ENV === 'development';
+		const recommendedChain = isDevelopment ? 'avalanche-fuji' : 'sepolia';
+		const recommended = availableChains.find(chain => chain.id === recommendedChain);
+
+		if (!recommended) return null;
+
+		return (
+			<div className="mt-8 p-4 bg-gradient-to-r from-neonGreen/10 to-neonOrange/10 border border-neonGreen/30 rounded-sm">
+				<div className="flex items-start space-x-3">
+					<div className="w-8 h-8 bg-neonGreen/20 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5">
+						<Zap className="w-4 h-4 text-neonGreen" />
+					</div>
+					<div>
+						<h4 className="text-white font-semibold text-sm mb-1">
+							Recommended for {isDevelopment ? 'Development' : 'Testing'}
+						</h4>
+						<p className="text-gray-300 text-xs leading-relaxed">
+							<span className="text-neonGreen font-medium">{recommended.displayName}</span>
+							{' '}is recommended for {isDevelopment ? 'fast development with low fees' : 'stable testing environment'}.
+							{' '}{recommended.metadata.averageBlockTime < 5 && 'Features quick block times '}
+							and {recommended.metadata.gasTokenSymbol} for gas fees.
+						</p>
+					</div>
+				</div>
+			</div>
+		);
+	};
+
+	// フッター情報
+	const renderFooter = () => {
+		if (variant === 'compact') return null;
+
+		return (
+			<div className="mt-8 pt-6 border-t border-dark-300">
+				<div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-xs text-gray-400">
+					<div className="flex items-center space-x-2">
+						<Shield className="w-4 h-4 text-neonGreen" />
+						<span>All networks are testnets</span>
+					</div>
+					<div className="flex items-center space-x-2">
+						<Clock className="w-4 h-4 text-neonBlue" />
+						<span>No real funds required</span>
+					</div>
+					<div className="flex items-center space-x-2">
+						<Zap className="w-4 h-4 text-neonOrange" />
+						<span>Free testnet tokens available</span>
+					</div>
+				</div>
+			</div>
+		);
+	};
+
+	return (
+		<div className={`chain-selector ${className}`}>
+			{/* メインコンテンツ */}
+			<div className="relative">
+				{/* ヘッダー */}
+				{renderHeader()}
+
+				{/* チェーンリスト */}
+				{renderChainList()}
+
+				{/* 推奨情報 */}
+				{renderRecommendations()}
+
+				{/* フッター */}
+				{renderFooter()}
+			</div>
+
+			{/* グローバルローディングオーバーレイ */}
+			{loading && (
+				<div className="absolute inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center rounded-sm">
+					<div className="bg-dark-200 border border-neonGreen/30 rounded-sm p-6">
+						<div className="flex items-center space-x-3">
+							<Loader2 className="w-6 h-6 text-neonGreen animate-spin" />
+							<div>
+								<div className="text-white font-medium">Loading Networks</div>
+								<div className="text-gray-400 text-sm">Please wait...</div>
+							</div>
+						</div>
+					</div>
+				</div>
+			)}
+
+			{/* 選択アニメーション効果 */}
+			{selectedChain && (
+				<div className="fixed inset-0 pointer-events-none z-50">
+					<div className="absolute inset-0 bg-neonGreen/5 animate-pulse" />
+				</div>
+			)}
+		</div>
+	);
+};
+
+export default ChainSelector;-e 
 ### FILE: ./src/contexts/DashboardContext.tsx
 
 // src/app/dashboard/context/DashboardContext.tsx
@@ -10347,6 +12429,7 @@ const ShopSection: React.FC = () => {
 	const [loading, setLoading] = useState(true);
 	const [product, setProduct] = useState<ProductDetails | null>(null);
 	const [isAddingToCart, setIsAddingToCart] = useState(false);
+	const [showCheckoutButton, setShowCheckoutButton] = useState(false); // 追加
 
 	const { addToCart, cartItems } = useCart();
 
@@ -10360,13 +12443,13 @@ const ShopSection: React.FC = () => {
 		const loadProduct = async () => {
 			try {
 				setLoading(true);
-				
+
 				// 初回データ取得
 				const productData = await getProductDetails(PRODUCT_ID);
 				if (productData) {
 					setProduct(productData);
 				}
-				
+
 				// リアルタイム監視を開始
 				unsubscribe = subscribeToProduct(PRODUCT_ID, (firestoreProduct) => {
 					if (firestoreProduct) {
@@ -10399,13 +12482,13 @@ const ShopSection: React.FC = () => {
 								updatedAt: firestoreProduct.timestamps.updatedAt.toDate()
 							}
 						};
-						
+
 						setProduct(productDetails);
 					} else {
 						setProduct(null);
 					}
 				});
-				
+
 			} catch (error) {
 				console.error('Error loading product:', error);
 				setProduct(null);
@@ -10432,34 +12515,34 @@ const ShopSection: React.FC = () => {
 	// 簡易在庫チェック（Firestoreトランザクションなし）
 	const checkSimpleStock = (requestedQuantity: number) => {
 		if (!product) return { canAdd: false, message: 'Product not found' };
-		
+
 		const currentCartQuantity = getCartQuantity();
 		const totalRequested = currentCartQuantity + requestedQuantity;
-		
+
 		// 在庫チェック
 		if (totalRequested > product.inventory.inStock) {
-			return { 
-				canAdd: false, 
-				message: `Only ${product.inventory.inStock - currentCartQuantity} items available` 
+			return {
+				canAdd: false,
+				message: `Only ${product.inventory.inStock - currentCartQuantity} items available`
 			};
 		}
-		
+
 		// 注文制限チェック
 		if (totalRequested > product.settings.maxOrderQuantity) {
-			return { 
-				canAdd: false, 
-				message: `Maximum ${product.settings.maxOrderQuantity} items per order` 
+			return {
+				canAdd: false,
+				message: `Maximum ${product.settings.maxOrderQuantity} items per order`
 			};
 		}
-		
+
 		// 商品アクティブチェック
 		if (!product.settings) {
-			return { 
-				canAdd: false, 
-				message: 'Product is currently unavailable' 
+			return {
+				canAdd: false,
+				message: 'Product is currently unavailable'
 			};
 		}
-		
+
 		return { canAdd: true, message: '' };
 	};
 
@@ -10473,7 +12556,7 @@ const ShopSection: React.FC = () => {
 		}
 
 		const stockCheck = checkSimpleStock(newQuantity - quantity);
-		
+
 		if (!stockCheck.canAdd && newQuantity > quantity) {
 			setStockWarningMessage(stockCheck.message);
 			setShowStockWarning(true);
@@ -10498,7 +12581,7 @@ const ShopSection: React.FC = () => {
 
 			// 簡易在庫チェック
 			const stockCheck = checkSimpleStock(quantity);
-			
+
 			if (!stockCheck.canAdd) {
 				setStockWarningMessage(stockCheck.message);
 				setShowStockWarning(true);
@@ -10516,6 +12599,7 @@ const ShopSection: React.FC = () => {
 
 			addToCart(cartItem, product.inventory.inStock);
 			setShowSuccessMessage(true);
+			setShowCheckoutButton(true); // チェックアウトボタンを表示
 
 			setTimeout(() => {
 				setShowSuccessMessage(false);
@@ -10534,6 +12618,12 @@ const ShopSection: React.FC = () => {
 		}
 	};
 
+	// チェックアウト処理（現在は空の関数）
+	const handleCheckout = () => {
+		console.log('🛒 Checkout initiated');
+		// TODO: 将来的にチェックアウト処理を実装
+	};
+
 	// ローディング状態
 	if (loading) {
 		return (
@@ -10546,7 +12636,7 @@ const ShopSection: React.FC = () => {
 						Loading product information...
 					</p>
 				</div>
-				
+
 				<div className="flex justify-center items-center h-64">
 					<Loader2 className="w-8 h-8 text-neonGreen animate-spin" />
 				</div>
@@ -10566,7 +12656,7 @@ const ShopSection: React.FC = () => {
 						Product not found or currently unavailable
 					</p>
 				</div>
-				
+
 				<CyberCard showEffects={false} className="text-center py-12">
 					<AlertTriangle className="w-16 h-16 text-yellow-400 mx-auto mb-4" />
 					<h3 className="text-xl font-semibold text-white mb-2">Product Unavailable</h3>
@@ -10660,13 +12750,12 @@ const ShopSection: React.FC = () => {
 									<span className="text-sm text-gray-400">• {product.metadata.reviewCount} reviews</span>
 								)}
 							</div>
-							<span className={`text-sm ${
-								product.inventory.stockLevel === 'high' ? 'text-neonGreen' : 
-								product.inventory.stockLevel === 'medium' ? 'text-yellow-400' : 
-								product.inventory.stockLevel === 'low' ? 'text-orange-400' : 'text-red-400'
-							}`}>
-								{product.inventory.isAvailable ? 
-									`${product.inventory.inStock} in stock` : 
+							<span className={`text-sm ${product.inventory.stockLevel === 'high' ? 'text-neonGreen' :
+									product.inventory.stockLevel === 'medium' ? 'text-yellow-400' :
+										product.inventory.stockLevel === 'low' ? 'text-orange-400' : 'text-red-400'
+								}`}>
+								{product.inventory.isAvailable ?
+									`${product.inventory.inStock} in stock` :
 									'Out of stock'
 								}
 							</span>
@@ -10703,24 +12792,21 @@ const ShopSection: React.FC = () => {
 
 					{/* Stock Level Indicator */}
 					{product.inventory.isAvailable && (
-						<div className={`flex items-center space-x-2 p-2 rounded-sm ${
-							product.inventory.stockLevel === 'high' ? 'bg-neonGreen/5 border border-neonGreen/20' :
-							product.inventory.stockLevel === 'medium' ? 'bg-yellow-400/5 border border-yellow-400/20' :
-							'bg-orange-400/5 border border-orange-400/20'
-						}`}>
-							<div className={`w-2 h-2 rounded-full ${
-								product.inventory.stockLevel === 'high' ? 'bg-neonGreen' :
-								product.inventory.stockLevel === 'medium' ? 'bg-yellow-400' :
-								'bg-orange-400'
-							}`}></div>
-							<span className={`text-xs ${
-								product.inventory.stockLevel === 'high' ? 'text-neonGreen' :
-								product.inventory.stockLevel === 'medium' ? 'text-yellow-400' :
-								'text-orange-400'
+						<div className={`flex items-center space-x-2 p-2 rounded-sm ${product.inventory.stockLevel === 'high' ? 'bg-neonGreen/5 border border-neonGreen/20' :
+								product.inventory.stockLevel === 'medium' ? 'bg-yellow-400/5 border border-yellow-400/20' :
+									'bg-orange-400/5 border border-orange-400/20'
 							}`}>
+							<div className={`w-2 h-2 rounded-full ${product.inventory.stockLevel === 'high' ? 'bg-neonGreen' :
+									product.inventory.stockLevel === 'medium' ? 'bg-yellow-400' :
+										'bg-orange-400'
+								}`}></div>
+							<span className={`text-xs ${product.inventory.stockLevel === 'high' ? 'text-neonGreen' :
+									product.inventory.stockLevel === 'medium' ? 'text-yellow-400' :
+										'text-orange-400'
+								}`}>
 								{product.inventory.stockLevel === 'high' ? 'In Stock' :
-								 product.inventory.stockLevel === 'medium' ? 'Limited Stock' :
-								 'Low Stock'}
+									product.inventory.stockLevel === 'medium' ? 'Limited Stock' :
+										'Low Stock'}
 							</span>
 						</div>
 					)}
@@ -10748,9 +12834,9 @@ const ShopSection: React.FC = () => {
 							</button>
 						</div>
 						<div className="text-xs text-gray-400">
-							{isOutOfStock ? 'Out of stock' : 
-							 isAtOrderLimit ? 'Max limit reached' :
-							 `Max ${product.settings.maxOrderQuantity}`}
+							{isOutOfStock ? 'Out of stock' :
+								isAtOrderLimit ? 'Max limit reached' :
+									`Max ${product.settings.maxOrderQuantity}`}
 						</div>
 					</div>
 
@@ -10760,12 +12846,14 @@ const ShopSection: React.FC = () => {
 							<AlertTriangle className="w-4 h-4 text-yellow-400 flex-shrink-0 mt-0.5" />
 							<div className="text-xs text-gray-300">
 								{isOutOfStock ? 'This item is currently out of stock.' :
-								 `Maximum order limit (${product.settings.maxOrderQuantity} items) reached for this product.`}
+									`Maximum order limit (${product.settings.maxOrderQuantity} items) reached for this product.`}
 							</div>
 						</div>
 					)}
 
+					{/* Action Buttons */}
 					<div className="space-y-3">
+						{/* Add to Cart Button */}
 						<CyberButton
 							variant="outline"
 							className="w-full flex items-center justify-center space-x-2"
@@ -10779,6 +12867,19 @@ const ShopSection: React.FC = () => {
 							)}
 							<span>{isAddingToCart ? 'Adding...' : 'Add to Cart'}</span>
 						</CyberButton>
+
+						{/* Checkout Now Button - アニメーション付きで表示 */}
+						{showCheckoutButton && (
+							<div className="animate-fade-in">
+								<CyberButton
+									variant="primary"
+									className="w-full flex items-center justify-center space-x-2"
+									onClick={handleCheckout}
+								>
+									<span>Checkout Now</span>
+								</CyberButton>
+							</div>
+						)}
 					</div>
 
 					{/* Features */}
@@ -10800,7 +12901,7 @@ const ShopSection: React.FC = () => {
 							<h4 className="text-lg font-semibold text-white">Tags</h4>
 							<div className="flex flex-wrap gap-2">
 								{product.metadata.tags.map((tag, index) => (
-									<span 
+									<span
 										key={index}
 										className="px-2 py-1 text-xs bg-dark-200 text-neonGreen border border-neonGreen/30 rounded-sm"
 									>
@@ -10882,6 +12983,24 @@ const ShopSection: React.FC = () => {
 					</div>
 				</CyberCard>
 			</div>
+
+			{/* CSS for fade-in animation */}
+			<style jsx>{`
+				@keyframes fade-in {
+					from {
+						opacity: 0;
+						transform: translateY(10px);
+					}
+					to {
+						opacity: 1;
+						transform: translateY(0);
+					}
+				}
+				
+				.animate-fade-in {
+					animation: fade-in 0.3s ease-out;
+				}
+			`}</style>
 		</div>
 	);
 };
@@ -11198,7 +13317,7 @@ import Header from '../components/ui/Header';
 import Footer from '../components/ui/Footer';
 import GridPattern from '../components/common/GridPattern';
 import SlideInPanel from './components/SlideInPanel';
-import { DashboardProvider, usePanel } from '@/contexts/DashboardContext';
+import { usePanel } from '@/contexts/DashboardContext'; // DashboardProviderは削除
 
 // セクションコンポーネントのインポート
 import ShopSection from './components/sections/ShopSection';
@@ -11207,7 +13326,7 @@ import WhitepaperSection from './components/sections/WhitepaperSection';
 import ProfileSection from './components/sections/ProfileSection';
 import CartSection from './components/sections/CartSection';
 import { SectionType } from '@/types/dashboard';
-import { useUnifiedAuth } from '@/auth/contexts/UnifiedAuthContext';
+
 interface DashboardLayoutProps {
 	children: React.ReactNode;
 }
@@ -11257,35 +13376,34 @@ function DashboardPanelManager() {
 
 export default function DashboardLayout({ children }: DashboardLayoutProps) {
 	return (
-		<DashboardProvider>
-			<div className="min-h-screen bg-black text-white relative">
-				{/* Header */}
-				<Header />
+		// DashboardProviderを削除 - ルートレイアウトに移動済み
+		<div className="min-h-screen bg-black text-white relative">
+			{/* Header */}
+			<Header />
 
-				{/* Background Effects */}
-				<div className="fixed inset-0 z-0">
-					<div className="absolute inset-0 bg-gradient-to-b from-black via-dark-100 to-black opacity-80" />
-					<GridPattern
-						size={40}
-						opacity={0.02}
-						color="rgba(0, 255, 127, 0.05)"
-					/>
-				</div>
-
-				{/* Main Content */}
-				<main className="relative z-10 pt-16 min-h-[calc(100vh-4rem)]">
-					<div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-						{children}
-					</div>
-				</main>
-
-				{/* Footer */}
-				<Footer />
-
-				{/* SlideInPanel - 最前面に配置 */}
-				<DashboardPanelManager />
+			{/* Background Effects */}
+			<div className="fixed inset-0 z-0">
+				<div className="absolute inset-0 bg-gradient-to-b from-black via-dark-100 to-black opacity-80" />
+				<GridPattern
+					size={40}
+					opacity={0.02}
+					color="rgba(0, 255, 127, 0.05)"
+				/>
 			</div>
-		</DashboardProvider>
+
+			{/* Main Content */}
+			<main className="relative z-10 pt-16 min-h-[calc(100vh-4rem)]">
+				<div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+					{children}
+				</div>
+			</main>
+
+			{/* Footer */}
+			<Footer />
+
+			{/* SlideInPanel - 最前面に配置 */}
+			<DashboardPanelManager />
+		</div>
 	);
 }-e 
 ### FILE: ./src/app/dashboard/page.tsx
@@ -14528,38 +16646,7 @@ import { useRouter } from 'next/navigation';
 import { ShoppingCart } from 'lucide-react';
 import WalletConnectButton from '../common/WalletConnectButton';
 import { useAuthModal } from '@/contexts/AuthModalContext';
-
-// ダッシュボードページでのみカート機能を使用するためのhook
-const useCartInDashboard = () => {
-	const [cartItemCount, setCartItemCount] = useState(0);
-	const [onCartClick, setOnCartClick] = useState<(() => void) | null>(null);
-	const [isHydrated, setIsHydrated] = useState(false);
-
-	useEffect(() => {
-		// ハイドレーション完了を待つ
-		setIsHydrated(true);
-
-		// カスタムイベントリスナーを追加してダッシュボードからカート情報を受信
-		const handleCartUpdate = (event: CustomEvent) => {
-			console.log('📨 Header received cart update:', event.detail.itemCount);
-			setCartItemCount(event.detail.itemCount);
-		};
-
-		const handleCartClickHandler = (event: CustomEvent) => {
-			setOnCartClick(() => event.detail.clickHandler);
-		};
-
-		window.addEventListener('cartUpdated', handleCartUpdate as EventListener);
-		window.addEventListener('cartClickHandlerSet', handleCartClickHandler as EventListener);
-
-		return () => {
-			window.removeEventListener('cartUpdated', handleCartUpdate as EventListener);
-			window.removeEventListener('cartClickHandlerSet', handleCartClickHandler as EventListener);
-		};
-	}, []);
-
-	return { cartItemCount: isHydrated ? cartItemCount : 0, onCartClick };
-};
+import { useCart, usePanel } from '@/contexts/DashboardContext'; // DashboardContextを直接使用
 
 const Header = () => {
 	const router = useRouter();
@@ -14567,7 +16654,10 @@ const Header = () => {
 	const [lastScrollY, setLastScrollY] = useState(0);
 	const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
-	const { cartItemCount, onCartClick } = useCartInDashboard();
+	// DashboardContextから直接カート情報を取得
+	const { getCartItemCount } = useCart();
+	const { openPanel } = usePanel();
+	const cartItemCount = getCartItemCount();
 
 	// グローバル認証モーダル管理
 	const { openAuthModal } = useAuthModal();
@@ -14593,9 +16683,8 @@ const Header = () => {
 	}, [lastScrollY]);
 
 	const handleCartClick = () => {
-		if (onCartClick) {
-			onCartClick();
-		}
+		// DashboardContextのopenPanelを直接使用
+		openPanel('cart');
 		setIsMobileMenuOpen(false);
 	};
 
@@ -14661,8 +16750,8 @@ const Header = () => {
 								key={link.href}
 								href={link.href}
 								className={`relative px-4 py-2 text-sm font-medium transition-all duration-200 group ${link.isHome
-										? 'text-neonGreen'
-										: 'text-gray-300 hover:text-white'
+									? 'text-neonGreen'
+									: 'text-gray-300 hover:text-white'
 									}`}
 								style={{ animationDelay: `${index * 100}ms` }}
 							>
@@ -14691,7 +16780,7 @@ const Header = () => {
 
 							{/* Cart Badge */}
 							{cartItemCount > 0 && (
-								<div className="absolute -top-1 -right-1 w-5 h-5 bg-gradient-to-r from-neonGreen to-neonOrange rounded-full flex items-center justify-center">
+								<div className="absolute -top-1 -right-1 w-5 h-5 bg-gradient-to-r from-neonGreen to-neonOrange rounded-full flex items-center justify-center animate-pulse">
 									<span className="text-xs font-bold text-black">
 										{cartItemCount > 99 ? '99+' : cartItemCount}
 									</span>
@@ -14701,7 +16790,6 @@ const Header = () => {
 							{/* Glow effect */}
 							<div className="absolute inset-0 bg-gradient-to-r from-neonGreen/20 to-neonOrange/20 rounded-sm transform scale-0 group-hover:scale-100 transition-transform duration-200"></div>
 						</button>
-
 
 						<WalletConnectButton
 							variant="desktop"
@@ -14739,8 +16827,8 @@ const Header = () => {
 								key={link.href}
 								href={link.href}
 								className={`block px-4 py-3 text-base font-medium transition-all duration-200 rounded-sm ${link.isHome
-										? 'text-neonGreen bg-neonGreen/10 border border-neonGreen/20'
-										: 'text-gray-300 hover:text-white hover:bg-dark-200'
+									? 'text-neonGreen bg-neonGreen/10 border border-neonGreen/20'
+									: 'text-gray-300 hover:text-white hover:bg-dark-200'
 									}`}
 								onClick={() => setIsMobileMenuOpen(false)}
 								style={{ animationDelay: `${index * 50}ms` }}
@@ -14759,7 +16847,7 @@ const Header = () => {
 								<span>Shopping Cart</span>
 							</div>
 							{cartItemCount > 0 && (
-								<div className="w-6 h-6 bg-gradient-to-r from-neonGreen to-neonOrange rounded-full flex items-center justify-center">
+								<div className="w-6 h-6 bg-gradient-to-r from-neonGreen to-neonOrange rounded-full flex items-center justify-center animate-pulse">
 									<span className="text-xs font-bold text-black">
 										{cartItemCount > 99 ? '99+' : cartItemCount}
 									</span>
@@ -17225,6 +19313,7 @@ import { EVMWalletProvider } from '@/auth/providers/wagmi-provider';
 import { EVMWalletProvider as EVMWalletContextProvider } from '@/auth/providers/EVMWalletAdapterWrapper';
 import { UnifiedAuthProvider } from '@/auth/contexts/UnifiedAuthContext';
 import { AuthModalProvider } from '@/contexts/AuthModalContext';
+import { DashboardProvider } from '@/contexts/DashboardContext'; // 追加
 import { GlobalAuthModal } from './components/modals/AuthModalProvider';
 
 // フォント設定の最適化
@@ -17305,17 +19394,18 @@ export default function RootLayout({
 					<EVMWalletContextProvider>
 						<UnifiedAuthProvider config={AUTH_CONFIG}>
 							<AuthModalProvider defaultOptions={GLOBAL_MODAL_CONFIG}>
-								{/* メインコンテンツ */}
-								{children}
-								
-								{/* グローバル認証モーダル - 最上位レイヤー */}
-								<GlobalAuthModal />
+								{/* DashboardProvider を追加 - 全ページでカート機能使用可能 */}
+								<DashboardProvider>
+									{/* メインコンテンツ */}
+									{children}
+
+									{/* グローバル認証モーダル - 最上位レイヤー */}
+									<GlobalAuthModal />
+								</DashboardProvider>
 							</AuthModalProvider>
 						</UnifiedAuthProvider>
 					</EVMWalletContextProvider>
 				</EVMWalletProvider>
-
-
 
 				{/* 開発環境用のデバッグスクリプト */}
 				{process.env.NODE_ENV === 'development' && (
@@ -17339,11 +19429,29 @@ export default function RootLayout({
 									}
 								};
 								
+								// カート機能のデバッグヘルパー
+								window.debugCart = {
+									test: () => {
+										console.log('🛒 Testing Cart Events...');
+										window.dispatchEvent(new CustomEvent('cartUpdated', { 
+											detail: { itemCount: 5 } 
+										}));
+									},
+									clear: () => {
+										window.dispatchEvent(new CustomEvent('cartUpdated', { 
+											detail: { itemCount: 0 } 
+										}));
+									}
+								};
+								
 								// コンソールにヘルプを表示
 								console.log('🔐 AuthModal Debug Commands:');
 								console.log('  window.debugAuthModal.open({ title: "Test" })');
 								console.log('  window.debugAuthModal.close()');
 								console.log('  window.debugAuthModal.test()');
+								console.log('🛒 Cart Debug Commands:');
+								console.log('  window.debugCart.test() - Test cart update');
+								console.log('  window.debugCart.clear() - Clear cart count');
 							`,
 						}}
 					/>

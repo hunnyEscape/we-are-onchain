@@ -238,23 +238,24 @@ export class AuthActionsService {
 			this.authFlow.updateProgress(25);
 
 			const chainSelected = await this.chainSelection.selectChain(chainId);
-			if (!chainSelected) {
-				throw new Error('Chain selection failed');
-			}
-
+			console.log('🔗 chainSelected is ',chainSelected);
 			this.authFlow.updateProgress(50);
+			// 3. ウォレット接続
+			const connection = await this.connectWallet('evm', walletType);
 
-			// 2. チェーン切り替え（必要な場合）
 			const selectedChain = this.chainSelection.getSelectedChain();
+			console.log('selectedChain is',selectedChain);
 			if (selectedChain && this.evmWallet.chainId !== selectedChain.chainId) {
-				console.log(`🔄 Switching to chain: ${selectedChain.displayName}`);
-				await this.chainSelection.switchToChain(chainId);
+				console.log(`🔄 Connected chain (${this.evmWallet.chainId}) differs from selected (${selectedChain.chainId}). Switching...`);
+				try {
+					await this.chainSelection.switchToChain(chainId);
+				} catch (switchError) {
+					console.warn('⚠️ Chain switch failed, continuing with current chain:', switchError);
+					// エラーを投げずに継続（ユーザーが拒否した場合など）
+				}
 			}
 
 			this.authFlow.updateProgress(75);
-
-			// 3. ウォレット接続
-			const connection = await this.connectWallet('evm', walletType);
 
 			console.log('✅ Chain selection + wallet connection completed');
 			return connection;

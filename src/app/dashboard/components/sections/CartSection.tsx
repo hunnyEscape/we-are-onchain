@@ -4,7 +4,7 @@
 import React from 'react';
 import CyberCard from '../../../components/common/CyberCard';
 import CyberButton from '../../../components/common/CyberButton';
-import { useCart, usePanel } from '../../context/DashboardContext';
+import { useCart, usePanel } from '@/contexts/DashboardContext';
 import { useUnifiedAuth } from '@/contexts/UnifiedAuthContext';
 import {
 	ShoppingCart,

@@ -1,6 +1,6 @@
 // src/lib/firestore/users-wallet.ts
 import { getAdminFirestore, handleAdminError } from '@/lib/firebase-admin';
-import { ChainType, WalletConnection } from '../../../types/wallet';
+import { ChainType, WalletConnection } from '@/types/wallet';
 import { Timestamp } from 'firebase-admin/firestore';
 
 /**

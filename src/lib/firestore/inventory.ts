@@ -24,7 +24,7 @@ import {
 	UpdateInventoryData,
 	BatchInventoryUpdate,
 	ProductError
-} from '../../../types/product';
+} from '@/types/product';
 import { getProductById } from './products';
 import { handleAsyncOperation } from '@/utils/errorHandling';
 

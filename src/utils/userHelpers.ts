@@ -1,8 +1,8 @@
 // src/utils/userHelpers.ts
 import { Timestamp } from 'firebase/firestore';
 import { User as FirebaseUser } from 'firebase/auth';
-import { FirestoreUser, ProfileCompleteness } from '../../types/user';
-import { UserProfile } from '../../types/dashboard';
+import { FirestoreUser, ProfileCompleteness } from '@/types/user';
+import { UserProfile } from '@/types/dashboard';
 
 /**
  * FirestoreUserを既存のUserProfile形式に変換

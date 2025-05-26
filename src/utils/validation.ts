@@ -1,5 +1,5 @@
 // src/utils/validation.ts
-import { FirestoreUser, UpdateUserProfile } from '../../types/user';
+import { FirestoreUser, UpdateUserProfile } from '@/types/user';
 
 // バリデーションエラーの型
 export interface ValidationError {

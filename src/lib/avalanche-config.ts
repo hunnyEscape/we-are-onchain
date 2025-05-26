@@ -1,5 +1,5 @@
 // src/lib/avalanche-config.ts
-import { AvalancheConfig, PaymentMonitorConfig, QRCodeConfig, RateLimitConfig } from '../../types/demo-payment';
+import { AvalancheConfig, PaymentMonitorConfig, QRCodeConfig, RateLimitConfig } from '@/types/demo-payment';
 
 /**
  * Avalanche FUJI Testnet 設定

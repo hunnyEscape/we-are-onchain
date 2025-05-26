@@ -8,7 +8,7 @@ import {
 	SupportedCryptoSymbol,
 	PriceConversionResult,
 	CRYPTO_DEFAULTS
-} from '../../types/crypto';
+} from '@/types/crypto';
 
 interface UsePriceConverterReturn {
 	convertUSDTo: (usdAmount: number, targetCurrency: string) => number;

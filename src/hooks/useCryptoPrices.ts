@@ -12,7 +12,7 @@ import {
 	CryptoLoadingState,
 	CRYPTO_DEFAULTS,
 	SUPPORTED_CRYPTOS
-} from '../../types/crypto';
+} from '@/types/crypto';
 
 interface UseCryptoPricesOptions {
 	enableRealtime?: boolean;

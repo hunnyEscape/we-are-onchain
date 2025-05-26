@@ -4,7 +4,7 @@
 import React from 'react';
 import DashboardCard from './DashboardCard';
 import { SectionType } from '../../../../types/dashboard';
-import { useCart } from '../context/DashboardContext';
+import { useCart } from '@/contexts/DashboardContext';
 import { 
   ShoppingBag, 
   FileText, 

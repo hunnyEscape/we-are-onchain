@@ -5,7 +5,7 @@ import Header from '../components/ui/Header';
 import Footer from '../components/ui/Footer';
 import GridPattern from '../components/common/GridPattern';
 import SlideInPanel from './components/SlideInPanel';
-import { DashboardProvider, usePanel } from './context/DashboardContext';
+import { DashboardProvider, usePanel } from '@/contexts/DashboardContext';
 
 // セクションコンポーネントのインポート
 import ShopSection from './components/sections/ShopSection';
@@ -13,7 +13,7 @@ import HowToBuySection from './components/sections/HowToBuySection';
 import WhitepaperSection from './components/sections/WhitepaperSection';
 import ProfileSection from './components/sections/ProfileSection';
 import CartSection from './components/sections/CartSection';
-import { SectionType } from '../../../types/dashboard';
+import { SectionType } from '@/types/dashboard';
 import { useUnifiedAuth } from '@/contexts/UnifiedAuthContext';
 interface DashboardLayoutProps {
 	children: React.ReactNode;

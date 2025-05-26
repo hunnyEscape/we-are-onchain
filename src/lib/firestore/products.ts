@@ -25,7 +25,7 @@ import {
 	ProductSummary,
 	ProductDetails,
 	ProductError
-} from '../../../types/product';
+} from '@/types/product';
 import { handleAsyncOperation } from '@/utils/errorHandling';
 
 // コレクション名

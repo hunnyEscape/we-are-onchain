@@ -4,7 +4,7 @@
 import React from 'react';
 import DashboardGrid from './components/DashboardGrid';
 import PurchaseScanSection from './components/sections/PurchaseScanSection';
-import { usePanel } from './context/DashboardContext';
+import { usePanel } from '@/contexts/DashboardContext';
 
 export default function DashboardPage() {
 	const { openPanel } = usePanel();

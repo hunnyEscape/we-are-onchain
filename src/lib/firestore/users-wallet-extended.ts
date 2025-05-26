@@ -1,6 +1,6 @@
 // src/lib/firestore/users-wallet-extended.ts
 import { getAdminFirestore, handleAdminError } from '@/lib/firebase-admin';
-import { ChainType } from '../../../types/wallet';
+import { ChainType } from '@/types/wallet';
 import { 
   ExtendedFirestoreUser, 
   CreateExtendedUserData,
@@ -10,7 +10,7 @@ import {
   ExtendedUserQuery,
   ExtendedUserQueryResult,
   UserSettings
-} from '../../../types/user-extended';
+} from '@/types/user-extended';
 import { Timestamp } from 'firebase-admin/firestore';
 
 /**

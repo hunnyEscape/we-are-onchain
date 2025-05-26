@@ -52,7 +52,8 @@
 │   │   │   │   ├── CyberButton.tsx
 │   │   │   │   ├── CyberCard.tsx
 │   │   │   │   ├── GridPattern.tsx
-│   │   │   │   └── PriceDisplay.tsx
+│   │   │   │   ├── PriceDisplay.tsx
+│   │   │   │   └── WalletConnectButton.tsx
 │   │   │   ├── home
 │   │   │   │   ├── CyberInterface.tsx
 │   │   │   │   ├── effects
@@ -95,6 +96,8 @@
 │   │   │   │       │   └── types.ts
 │   │   │   │       └── types
 │   │   │   │           └── index.ts
+│   │   │   ├── modals
+│   │   │   │   └── AuthModalProvider.tsx
 │   │   │   ├── payment
 │   │   │   │   ├── LiveDemoSection.tsx
 │   │   │   │   └── QRCodeDisplay.tsx
@@ -143,6 +146,7 @@
 │   │       ├── EVMWalletAdapter.ts
 │   │       └── WalletAdapterInterface.ts
 │   ├── contexts
+│   │   ├── AuthModalContext.tsx
 │   │   └── DashboardContext.tsx
 │   ├── hooks
 │   │   ├── useCryptoPrices.ts
@@ -175,4 +179,4 @@
 ├── tailwind.config.js
 └── tsconfig.json
 
-48 directories, 127 files
+49 directories, 130 files

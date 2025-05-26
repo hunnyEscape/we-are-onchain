@@ -639,7 +639,6 @@ export const CRYPTO_DEFAULTS = {
 ### FILE: ./src/types/dashboard.ts
 
 // types/dashboard.ts
-export type SectionType = 'shop' | 'how-to-buy' | 'whitepaper' | 'profile' | 'cart';
 
 export interface DashboardState {
 	activeSection: SectionType | null;
@@ -665,19 +664,9 @@ export interface CartItem {
 	name: string;
 	price: number;
 	quantity: number;
-	currency: 'BTC' | 'ETH' | 'SOL' | 'AVAX' | 'SUI'; // 更新: 新しい暗号通貨に対応
 	image?: string;
 }
 
-export interface UserProfile {
-	walletAddress: string;
-	displayName?: string;
-	totalSpent: number;
-	totalOrders: number;
-	rank: number;
-	badges: string[];
-	joinDate: Date;
-}
 
 export interface SlideInPanelProps {
 	isOpen: boolean;
@@ -778,6 +767,63 @@ export interface HowToBuyConfig {
 	demoSettings: DemoPaymentSettings;
 	supportedChains: string[];
 	faucetLinks: Record<string, string>;
+}
+
+
+// types/dashboard.ts (修正版)
+export type SectionType = 'shop' | 'how-to-buy' | 'whitepaper' | 'profile' | 'cart';
+
+export interface CartItem {
+	id: string;
+	name: string;
+	price: number; // USD価格
+	quantity: number;
+	// currency フィールドを削除 - 支払い時に選択
+	image?: string;
+}
+
+export interface UserProfile {
+  id: string;
+  name: string;
+  email: string;
+  avatar?: string;
+  walletAddress?: string;
+  preferences?: {
+    theme: 'dark' | 'light';
+    notifications: boolean;
+    currency: 'USD' | 'EUR' | 'JPY';
+  };
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+export interface DashboardState {
+  // Panel Management
+  activeSection: SectionType | null;
+  isSlideOpen: boolean;
+  
+  // Cart Management
+  cartItems: CartItem[];
+  
+  // User Management
+  userProfile: UserProfile | null;
+  walletConnected: boolean;
+}
+
+// Payment types (将来の支払い時に使用)
+export interface PaymentCurrency {
+  symbol: 'ETH' | 'BTC' | 'SOL' | 'AVAX' | 'SUI' | 'USDC' | 'USDT';
+  name: string;
+  network?: string;
+  contractAddress?: string;
+}
+
+export interface CheckoutSession {
+  cartItems: CartItem[];
+  selectedCurrency: PaymentCurrency;
+  totalUSD: number;
+  totalCrypto: number;
+  exchangeRate: number;
 }-e 
 ### FILE: ./src/types/api-wallet.ts
 
@@ -2156,7 +2202,7 @@ import {
 	WalletError,
 	ChainConfig,
 	WalletProvider
-} from '@/auth/types/wallet';
+} from '@/types/wallet';
 
 /**
  * 全チェーン共通のWallet Adapterインターフェース
@@ -2364,7 +2410,7 @@ import {
 	WalletProvider,
 	ChainConfig,
 	WalletError
-} from '@/auth/types/wallet';
+} from '@/types/wallet';
 import { WalletAdapter } from './WalletAdapterInterface';
 import { chainUtils, getEVMChains, CHAIN_DISPLAY_NAMES } from '../config/chain-config';
 
@@ -3735,7 +3781,7 @@ import {
 	WalletSignatureData,
 	WalletState,
 	WalletAuthResult
-} from '@/auth/types/wallet';
+} from '@/types/wallet';
 import { EVMAuthService } from '../services/EVMAuthService';
 
 interface EVMWalletContextType {
@@ -5312,6 +5358,379 @@ export function useWallet() {
 		disconnectWallet,
 	};
 }-e 
+### FILE: ./src/contexts/AuthModalContext.tsx
+
+// src/contexts/AuthModalContext.tsx
+'use client';
+
+import React, { createContext, useContext, useState, useCallback, useEffect } from 'react';
+import { ChainType } from '@/types/wallet';
+import { ExtendedFirestoreUser } from '@/types/user-extended';
+import { AppError } from '@/utils/errorHandling';
+
+/**
+ * 認証モーダルのオプション設定
+ */
+export interface AuthModalOptions {
+	preferredChain?: ChainType;
+	onSuccess?: (user: ExtendedFirestoreUser) => void;
+	onError?: (error: AppError) => void;
+	title?: string;
+	redirectAfterSuccess?: string;
+	autoClose?: boolean; // 成功時の自動クローズ
+	showChainSelector?: boolean; // チェーン選択の表示
+}
+
+/**
+ * 認証モーダルのコンテキスト型
+ */
+export interface AuthModalContextType {
+	// 基本状態
+	isOpen: boolean;
+	modalOptions: AuthModalOptions;
+
+	// 操作
+	openAuthModal: (options?: AuthModalOptions) => void;
+	closeAuthModal: () => void;
+	updateModalOptions: (options: Partial<AuthModalOptions>) => void;
+
+	// 内部状態（デバッグ用）
+	_debug: {
+		openCount: number;
+		lastOpened: Date | null;
+		lastClosed: Date | null;
+	};
+}
+
+/**
+ * デフォルトのモーダルオプション
+ */
+const DEFAULT_MODAL_OPTIONS: AuthModalOptions = {
+	preferredChain: 'evm',
+	autoClose: true,
+	showChainSelector: true,
+	title: 'Connect Wallet',
+};
+
+/**
+ * AuthModalContextの作成
+ */
+const AuthModalContext = createContext<AuthModalContextType | undefined>(undefined);
+
+/**
+ * AuthModalProviderのプロパティ
+ */
+interface AuthModalProviderProps {
+	children: React.ReactNode;
+	defaultOptions?: Partial<AuthModalOptions>;
+}
+
+/**
+ * グローバル認証モーダル管理プロバイダー
+ */
+export const AuthModalProvider = ({
+	children,
+	defaultOptions = {}
+}: AuthModalProviderProps) => {
+	// 基本状態
+	const [isOpen, setIsOpen] = useState(false);
+	const [modalOptions, setModalOptions] = useState<AuthModalOptions>({
+		...DEFAULT_MODAL_OPTIONS,
+		...defaultOptions
+	});
+
+	// デバッグ情報
+	const [debugInfo, setDebugInfo] = useState({
+		openCount: 0,
+		lastOpened: null as Date | null,
+		lastClosed: null as Date | null,
+	});
+
+	// モーダルを開く
+	const openAuthModal = useCallback((options: AuthModalOptions = {}) => {
+		const mergedOptions = {
+			...DEFAULT_MODAL_OPTIONS,
+			...defaultOptions,
+			...options
+		};
+
+		setModalOptions(mergedOptions);
+		setIsOpen(true);
+
+		// デバッグ情報更新
+		setDebugInfo(prev => ({
+			...prev,
+			openCount: prev.openCount + 1,
+			lastOpened: new Date()
+		}));
+
+		console.log('🔓 AuthModal opened with options:', mergedOptions);
+	}, [defaultOptions]);
+
+	// モーダルを閉じる
+	const closeAuthModal = useCallback(() => {
+		setIsOpen(false);
+
+		// デバッグ情報更新
+		setDebugInfo(prev => ({
+			...prev,
+			lastClosed: new Date()
+		}));
+
+		console.log('🔒 AuthModal closed');
+
+		// クローズ後のクリーンアップ（オプションリセット）
+		setTimeout(() => {
+			setModalOptions({
+				...DEFAULT_MODAL_OPTIONS,
+				...defaultOptions
+			});
+		}, 300); // アニメーション完了後
+	}, [defaultOptions]);
+
+	// モーダルオプションを更新
+	const updateModalOptions = useCallback((options: Partial<AuthModalOptions>) => {
+		setModalOptions(prev => ({
+			...prev,
+			...options
+		}));
+
+		console.log('⚙️ AuthModal options updated:', options);
+	}, []);
+
+	// 外部からのイベントリスニング（後方互換性）
+	useEffect(() => {
+		const handleOpenAuthModal = (event: Event) => {
+			const customEvent = event as CustomEvent;
+			const eventOptions = customEvent.detail || {};
+
+			console.log('📡 Received openAuthModal event:', eventOptions);
+			openAuthModal(eventOptions);
+		};
+
+		const handleCloseAuthModal = () => {
+			console.log('📡 Received closeAuthModal event');
+			closeAuthModal();
+		};
+
+		// カスタムイベントリスナーを追加
+		window.addEventListener('openAuthModal', handleOpenAuthModal);
+		window.addEventListener('closeAuthModal', handleCloseAuthModal);
+
+		return () => {
+			window.removeEventListener('openAuthModal', handleOpenAuthModal);
+			window.removeEventListener('closeAuthModal', handleCloseAuthModal);
+		};
+	}, [openAuthModal, closeAuthModal]);
+
+	// ESCキーでモーダルを閉じる
+	useEffect(() => {
+		const handleEscKey = (event: KeyboardEvent) => {
+			if (event.key === 'Escape' && isOpen) {
+				closeAuthModal();
+			}
+		};
+
+		if (isOpen) {
+			document.addEventListener('keydown', handleEscKey);
+			// ボディスクロールを無効化
+			document.body.style.overflow = 'hidden';
+		} else {
+			// ボディスクロールを復元
+			document.body.style.overflow = '';
+		}
+
+		return () => {
+			document.removeEventListener('keydown', handleEscKey);
+			document.body.style.overflow = '';
+		};
+	}, [isOpen, closeAuthModal]);
+
+	// 成功/エラー時のコールバックハンドラー
+	const handleSuccess = useCallback((user: ExtendedFirestoreUser) => {
+		console.log('✅ AuthModal success:', user.walletAddress);
+
+		// 成功コールバックを実行
+		if (modalOptions.onSuccess) {
+			modalOptions.onSuccess(user);
+		}
+
+		// リダイレクト処理
+		if (modalOptions.redirectAfterSuccess) {
+			setTimeout(() => {
+				window.location.href = modalOptions.redirectAfterSuccess!;
+			}, 1000);
+		}
+
+		// 自動クローズ
+		if (modalOptions.autoClose !== false) {
+			setTimeout(() => {
+				closeAuthModal();
+			}, 2000);
+		}
+	}, [modalOptions, closeAuthModal]);
+
+	const handleError = useCallback((error: AppError) => {
+		console.error('❌ AuthModal error:', error);
+
+		// エラーコールバックを実行
+		if (modalOptions.onError) {
+			modalOptions.onError(error);
+		}
+
+		// エラー時は自動クローズしない（ユーザーがリトライできるように）
+	}, [modalOptions]);
+
+	// コンテキスト値
+	const contextValue: AuthModalContextType = {
+		// 基本状態
+		isOpen,
+		modalOptions,
+
+		// 操作
+		openAuthModal,
+		closeAuthModal,
+		updateModalOptions,
+
+		// デバッグ情報
+		_debug: debugInfo,
+	};
+
+	// 成功/エラーハンドラーをコンテキストに注入
+	const extendedContextValue = {
+		...contextValue,
+		_internal: {
+			handleSuccess,
+			handleError,
+		},
+	};
+
+	return (
+		<AuthModalContext.Provider value={extendedContextValue as AuthModalContextType}>
+			{children}
+		</AuthModalContext.Provider>
+	);
+};
+
+/**
+ * AuthModalContextを使用するhook
+ */
+export const useAuthModal = (): AuthModalContextType => {
+	const context = useContext(AuthModalContext);
+	if (!context) {
+		throw new Error('useAuthModal must be used within AuthModalProvider');
+	}
+	return context;
+};
+
+/**
+ * モーダル状態のみを取得する軽量hook
+ */
+export const useAuthModalState = () => {
+	const { isOpen, modalOptions } = useAuthModal();
+	return { isOpen, modalOptions };
+};
+
+/**
+ * モーダル操作のみを取得するhook
+ */
+export const useAuthModalActions = () => {
+	const { openAuthModal, closeAuthModal, updateModalOptions } = useAuthModal();
+	return { openAuthModal, closeAuthModal, updateModalOptions };
+};
+
+/**
+ * 特定の設定でモーダルを開くヘルパーhook
+ */
+export const useAuthModalHelpers = () => {
+	const { openAuthModal } = useAuthModal();
+
+	const openWalletConnect = useCallback((onSuccess?: (user: ExtendedFirestoreUser) => void) => {
+		openAuthModal({
+			title: 'Connect Wallet',
+			preferredChain: 'evm',
+			onSuccess,
+			autoClose: true,
+		});
+	}, [openAuthModal]);
+
+	const openWalletAuth = useCallback((onSuccess?: (user: ExtendedFirestoreUser) => void) => {
+		openAuthModal({
+			title: 'Authenticate Wallet',
+			preferredChain: 'evm',
+			onSuccess,
+			autoClose: true,
+		});
+	}, [openAuthModal]);
+
+	const openProfileSetup = useCallback((onSuccess?: (user: ExtendedFirestoreUser) => void) => {
+		openAuthModal({
+			title: 'Complete Your Profile',
+			preferredChain: 'evm',
+			onSuccess,
+			autoClose: false, // プロフィール設定時は手動クローズ
+		});
+	}, [openAuthModal]);
+
+	return {
+		openWalletConnect,
+		openWalletAuth,
+		openProfileSetup,
+	};
+};
+
+/**
+ * デバッグ情報を表示するコンポーネント（開発環境のみ）
+ */
+export const AuthModalDebugInfo = () => {
+	const { isOpen, modalOptions, _debug } = useAuthModal();
+
+	if (process.env.NODE_ENV !== 'development') {
+		return null;
+	}
+
+	return (
+		<div className="fixed bottom-4 left-4 p-3 bg-black/90 border border-purple-500/30 rounded-sm text-xs text-white z-[90] max-w-xs">
+			<div className="font-bold text-purple-400 mb-2">🔐 AuthModal Debug</div>
+
+			<div className="space-y-1 mb-3">
+				<div className="flex justify-between">
+					<span>Status:</span>
+					<span className={isOpen ? 'text-green-400' : 'text-gray-400'}>
+						{isOpen ? 'Open' : 'Closed'}
+					</span>
+				</div>
+				<div className="flex justify-between">
+					<span>Opens:</span>
+					<span className="text-white">{_debug.openCount}</span>
+				</div>
+				<div className="flex justify-between">
+					<span>Chain:</span>
+					<span className="text-purple-300">{modalOptions.preferredChain}</span>
+				</div>
+				<div className="flex justify-between">
+					<span>Auto Close:</span>
+					<span className={modalOptions.autoClose ? 'text-green-400' : 'text-red-400'}>
+						{modalOptions.autoClose ? 'Yes' : 'No'}
+					</span>
+				</div>
+			</div>
+
+			{modalOptions.title && (
+				<div className="mb-3">
+					<div className="text-gray-400 mb-1">Title:</div>
+					<div className="text-purple-300 text-xs">{modalOptions.title}</div>
+				</div>
+			)}
+
+			{_debug.lastOpened && (
+				<div className="text-xs text-gray-400">
+					Last opened: {_debug.lastOpened.toLocaleTimeString()}
+				</div>
+			)}
+		</div>
+	);
+};-e 
 ### FILE: ./src/lib/firebase.ts
 
 // src/lib/firebase.ts
@@ -8500,21 +8919,6 @@ const HowToBuySection: React.FC = () => {
 		}
 	];
 
-	const steps = [
-		{
-			id: 1,
-			title: 'Add to Cart & Checkout',
-			description: 'Select products and proceed to checkout',
-			details: 'No wallet connection or login required at this step'
-		},
-		{
-			id: 2,
-			title: 'Connect Wallet, Shipping Address & Pay',
-			description: 'Connect wallet, enter address, and complete payment',
-			details: 'Connect your crypto wallet, enter your shipping address, and complete the payment in one seamless process.'
-		}
-	];
-
 	const getFilteredWallets = () => {
 		if (selectedChainType === 'all') return walletOptions;
 		if (selectedChainType === 'evm') {
@@ -8532,7 +8936,7 @@ const HowToBuySection: React.FC = () => {
 	const comingSoonChains = paymentChains.filter(chain => chain.status === 'coming-soon');
 
 	return (
-		<div className="space-y-8">
+		<div className="space-y-8 w-full">
 			{/* Header */}
 			<div className="text-center space-y-4">
 				<h2 className="text-3xl font-heading font-bold text-white mb-2">
@@ -8549,178 +8953,128 @@ const HowToBuySection: React.FC = () => {
 
 			{/* Step-by-Step Guide */}
 			<CyberCard title="Purchase Process" showEffects={false}>
-				<div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-					{/* Step Navigation */}
-					<div className="lg:col-span-1">
-						<div className="space-y-2">
-							{steps.map((step) => (
-								<button
-									key={step.id}
-									onClick={() => setActiveStep(step.id)}
-									className={`
-										w-full text-left p-4 rounded-lg border transition-all duration-200
-										${activeStep === step.id
-											? 'bg-neonGreen/10 border-neonGreen text-neonGreen'
-											: 'border-dark-300 text-gray-300 hover:border-gray-500 hover:text-white'
-										}
-									`}
-								>
-									<div className="flex items-center space-x-3">
-										<div className={`
-											w-8 h-8 rounded-full flex items-center justify-center font-bold text-sm
-											${activeStep === step.id ? 'bg-neonGreen text-black' : 'bg-dark-300 text-gray-400'}
-										`}>
-											{step.id}
-										</div>
-										<div>
-											<div className="font-medium">{step.title}</div>
+
+				<div className="space-y-6">
+					<div>
+						<h3 className="text-xl font-bold text-white mb-2">
+							Step 1 : Add to Cart & Checkout
+						</h3>
+						<p className="text-gray-300 leading-relaxed">
+							No wallet connection or login required at this step
+						</p>
+					</div>
+					<div>
+						<h3 className="text-xl font-bold text-white mb-2">
+							Step 2 : Connect Wallet, Shipping Address & Pay
+						</h3>
+						<p className="text-gray-300 leading-relaxed">
+							Connect your crypto wallet, enter your shipping address, and complete the payment in one seamless process.
+						</p>
+					</div>
+					<div className="space-y-6">
+						<div>
+							<h4 className="text-lg font-semibold text-white mb-4">Choose Payment Method</h4>
+							<div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+								{activeChains.map((chain) => (
+									<div key={chain.id} className={`
+															p-4 border rounded-lg transition-all duration-200 hover:border-neonGreen/50
+														`}>
+										<div className="flex items-center space-x-3 mb-3">
+											<Wallet className="w-5 h-5 text-gray-400" />
+											<div>
+												<div className="text-white font-medium">{chain.name}</div>
+												<div className="text-sm text-gray-400">{chain.symbol}</div>
+											</div>
 										</div>
 									</div>
-								</button>
-							))}
+								))}
+							</div>
+						</div>
+
+						{/* Supported Wallets */}
+						<div>
+							<div className="flex items-center justify-between mb-4">
+								<h4 className="text-lg font-semibold text-white">Supported Wallets</h4>
+								<div className="flex space-x-2">
+									<button
+										onClick={() => setSelectedChainType('all')}
+										className={`px-3 py-1 rounded text-xs transition-colors ${selectedChainType === 'all'
+											? 'bg-neonGreen/20 text-neonGreen border border-neonGreen/50'
+											: 'bg-dark-300 text-gray-400 hover:text-white'
+											}`}
+									>
+										All
+									</button>
+									<button
+										onClick={() => setSelectedChainType('evm')}
+										className={`px-3 py-1 rounded text-xs transition-colors ${selectedChainType === 'evm'
+											? 'bg-neonGreen/20 text-neonGreen border border-neonGreen/50'
+											: 'bg-dark-300 text-gray-400 hover:text-white'
+											}`}
+									>
+										EVM
+									</button>
+									<button
+										onClick={() => setSelectedChainType('solana')}
+										className={`px-3 py-1 rounded text-xs transition-colors ${selectedChainType === 'solana'
+											? 'bg-neonGreen/20 text-neonGreen border border-neonGreen/50'
+											: 'bg-dark-300 text-gray-400 hover:text-white'
+											}`}
+									>
+										Solana
+									</button>
+								</div>
+							</div>
+
+							<div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+								{getFilteredWallets().map((wallet, index) => (
+									<div key={index} className="p-3 border border-dark-300 rounded-lg hover:border-gray-500 transition-colors">
+										<div className="flex items-center space-x-3 mb-2">
+											{wallet.icon}
+											<div className="flex-1 min-w-0">
+												<div className="text-white font-medium text-sm flex items-center">
+													{wallet.name}
+													{wallet.popular && <Star className="w-3 h-3 text-yellow-400 ml-1" />}
+												</div>
+											</div>
+										</div>
+										<div className="text-xs text-gray-400 mb-2">{wallet.description}</div>
+										<div className="flex items-center space-x-2">
+											{wallet.type === 'both' ? (
+												<>
+													<Monitor className="w-3 h-3 text-gray-500" />
+													<Smartphone className="w-3 h-3 text-gray-500" />
+												</>
+											) : wallet.type === 'mobile' ? (
+												<Smartphone className="w-3 h-3 text-gray-500" />
+											) : (
+												<Monitor className="w-3 h-3 text-gray-500" />
+											)}
+										</div>
+									</div>
+								))}
+							</div>
+						</div>
+
+						{/* Shipping Address Info */}
+						<div className="p-4 border border-blue-600/30 rounded-lg bg-blue-600/5">
+							<div className="flex items-start space-x-3">
+								<MapPin className="w-5 h-5 text-blue-400 flex-shrink-0 mt-0.5" />
+								<div>
+									<div className="text-blue-400 font-medium mb-1">Shipping Address</div>
+									<div className="text-sm text-gray-300">
+										Your wallet address and shipping information will be saved for future purchases. Worldwide delivery available.
+									</div>
+								</div>
+							</div>
 						</div>
 					</div>
 
-					{/* Step Content */}
-					<div className="lg:col-span-2">
-						{steps.map((step) => (
-							activeStep === step.id && (
-								<div key={step.id} className="space-y-6">
-									<div>
-										<h3 className="text-xl font-bold text-white mb-2">
-											Step {step.id}: {step.title}
-										</h3>
-										<p className="text-gray-300 leading-relaxed">
-											{step.details}
-										</p>
-									</div>
-
-									{/* Step 1: Add to Cart */}
-									{step.id === 1 && (
-										<div className="space-y-6">
-											<div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-												<div className="p-4 border border-dark-300 rounded-lg">
-													<ShoppingCart className="w-6 h-6 text-neonGreen mb-2" />
-													<div className="text-white font-medium mb-1">Browse & Add</div>
-													<div className="text-sm text-gray-400">Select products and add to cart</div>
-												</div>
-												<div className="p-4 border border-dark-300 rounded-lg">
-													<Zap className="w-6 h-6 text-neonOrange mb-2" />
-													<div className="text-white font-medium mb-1">Quick Checkout</div>
-													<div className="text-sm text-gray-400">Proceed to payment when ready</div>
-												</div>
-											</div>
-										</div>
-									)}
-
-									{/* Step 2: Connect, Pay & Address */}
-									{step.id === 2 && (
-										<div className="space-y-6">
-											<div>
-												<h4 className="text-lg font-semibold text-white mb-4">Choose Payment Method</h4>
-												<div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-													{activeChains.map((chain) => (
-														<div key={chain.id} className={`
-															p-4 border rounded-lg transition-all duration-200 hover:border-neonGreen/50
-														`}>
-															<div className="flex items-center space-x-3 mb-3">
-																<Wallet className="w-5 h-5 text-gray-400" />
-																<div>
-																	<div className="text-white font-medium">{chain.name}</div>
-																	<div className="text-sm text-gray-400">{chain.symbol}</div>
-																</div>
-															</div>
-														</div>
-													))}
-												</div>
-											</div>
-
-											{/* Supported Wallets */}
-											<div>
-												<div className="flex items-center justify-between mb-4">
-													<h4 className="text-lg font-semibold text-white">Supported Wallets</h4>
-													<div className="flex space-x-2">
-														<button
-															onClick={() => setSelectedChainType('all')}
-															className={`px-3 py-1 rounded text-xs transition-colors ${selectedChainType === 'all'
-																? 'bg-neonGreen/20 text-neonGreen border border-neonGreen/50'
-																: 'bg-dark-300 text-gray-400 hover:text-white'
-																}`}
-														>
-															All
-														</button>
-														<button
-															onClick={() => setSelectedChainType('evm')}
-															className={`px-3 py-1 rounded text-xs transition-colors ${selectedChainType === 'evm'
-																? 'bg-neonGreen/20 text-neonGreen border border-neonGreen/50'
-																: 'bg-dark-300 text-gray-400 hover:text-white'
-																}`}
-														>
-															EVM
-														</button>
-														<button
-															onClick={() => setSelectedChainType('solana')}
-															className={`px-3 py-1 rounded text-xs transition-colors ${selectedChainType === 'solana'
-																? 'bg-neonGreen/20 text-neonGreen border border-neonGreen/50'
-																: 'bg-dark-300 text-gray-400 hover:text-white'
-																}`}
-														>
-															Solana
-														</button>
-													</div>
-												</div>
-
-												<div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-													{getFilteredWallets().map((wallet, index) => (
-														<div key={index} className="p-3 border border-dark-300 rounded-lg hover:border-gray-500 transition-colors">
-															<div className="flex items-center space-x-3 mb-2">
-																{wallet.icon}
-																<div className="flex-1 min-w-0">
-																	<div className="text-white font-medium text-sm flex items-center">
-																		{wallet.name}
-																		{wallet.popular && <Star className="w-3 h-3 text-yellow-400 ml-1" />}
-																	</div>
-																</div>
-															</div>
-															<div className="text-xs text-gray-400 mb-2">{wallet.description}</div>
-															<div className="flex items-center space-x-2">
-																{wallet.type === 'both' ? (
-																	<>
-																		<Monitor className="w-3 h-3 text-gray-500" />
-																		<Smartphone className="w-3 h-3 text-gray-500" />
-																	</>
-																) : wallet.type === 'mobile' ? (
-																	<Smartphone className="w-3 h-3 text-gray-500" />
-																) : (
-																	<Monitor className="w-3 h-3 text-gray-500" />
-																)}
-															</div>
-														</div>
-													))}
-												</div>
-											</div>
-
-											{/* Shipping Address Info */}
-											<div className="p-4 border border-blue-600/30 rounded-lg bg-blue-600/5">
-												<div className="flex items-start space-x-3">
-													<MapPin className="w-5 h-5 text-blue-400 flex-shrink-0 mt-0.5" />
-													<div>
-														<div className="text-blue-400 font-medium mb-1">Shipping Address</div>
-														<div className="text-sm text-gray-300">
-															Your wallet address and shipping information will be saved for future purchases. Worldwide delivery available.
-														</div>
-													</div>
-												</div>
-											</div>
-										</div>
-									)}
-								</div>
-							)
-						))}
-					</div>
 				</div>
-			</CyberCard>
-		</div>
+
+
+			</CyberCard >
+		</div >
 	);
 };
 
@@ -9973,7 +10327,7 @@ const WhitepaperSection: React.FC = () => {
 export default WhitepaperSection;-e 
 ### FILE: ./src/app/dashboard/components/sections/ShopSection.tsx
 
-// src/app/dashboard/components/sections/ShopSection.tsx (簡易版)
+// src/app/dashboard/components/sections/ShopSection.tsx (修正版)
 'use client';
 
 import React, { useState, useEffect } from 'react';
@@ -9987,7 +10341,6 @@ import { getProductDetails, subscribeToProduct } from '@/lib/firestore/products'
 
 const ShopSection: React.FC = () => {
 	const [quantity, setQuantity] = useState(1);
-	const [selectedCurrency, setSelectedCurrency] = useState<'ETH' | 'USDC' | 'USDT'>('ETH');
 	const [showSuccessMessage, setShowSuccessMessage] = useState(false);
 	const [showStockWarning, setShowStockWarning] = useState(false);
 	const [stockWarningMessage, setStockWarningMessage] = useState('');
@@ -10153,16 +10506,15 @@ const ShopSection: React.FC = () => {
 				return;
 			}
 
-			// ローカルカートに追加（Firestore予約なし）
+			// ローカルカートに追加（通貨フィールドを削除）
 			const cartItem = {
 				id: product.id,
 				name: product.name,
 				price: product.price.usd,
 				quantity: quantity,
-				currency: selectedCurrency,
 			};
 
-			//addToCart(cartItem, product.inventory.inStock);
+			addToCart(cartItem, product.inventory.inStock);
 			setShowSuccessMessage(true);
 
 			setTimeout(() => {
@@ -10240,7 +10592,7 @@ const ShopSection: React.FC = () => {
 					Premium Protein Store
 				</h2>
 				<p className="text-gray-400">
-					Pay with cryptocurrency - No wallet connection required
+					Pay with cryptocurrency - Currency selection at checkout
 				</p>
 			</div>
 
@@ -10334,7 +10686,7 @@ const ShopSection: React.FC = () => {
 							</div>
 							<div className="text-right">
 								<div className="text-xs text-gray-500">per 50g serving</div>
-								<div className="text-xs text-gray-500">Invoice-based payment</div>
+								<div className="text-xs text-gray-500">Currency selection at checkout</div>
 							</div>
 						</div>
 					</div>
@@ -10980,6 +11332,7 @@ export default function DashboardPage() {
 
 import React, { useState, useEffect } from 'react';
 import { useUnifiedAuth } from '@/auth/contexts/UnifiedAuthContext';
+import { useAuthModal } from '@/contexts/AuthModalContext';
 import CyberCard from '../components/common/CyberCard';
 import CyberButton from '../components/common/CyberButton';
 import { ProfileEditModal } from '../dashboard/components/sections/ProfileEditModal';
@@ -11014,6 +11367,9 @@ export default function ProfilePage() {
 		firestoreLoading
 	} = useUnifiedAuth();
 
+	// グローバル認証モーダル
+	const { openAuthModal } = useAuthModal();
+
 	const [copiedAddress, setCopiedAddress] = useState(false);
 	const [isEditModalOpen, setIsEditModalOpen] = useState(false);
 
@@ -11024,6 +11380,22 @@ export default function ProfilePage() {
 			document.title = 'We are on-chain';
 		};
 	}, []);
+
+	// グローバルモーダル経由での認証
+	const handleConnectWallet = () => {
+		openAuthModal({
+			title: 'Connect Your Wallet',
+			preferredChain: 'evm',
+			onSuccess: (user) => {
+				console.log('🎉 Profile: User authenticated successfully:', user.walletAddress);
+				// プロフィールページでは特別な処理は不要（自動的にリダイレクトされる）
+			},
+			onError: (error) => {
+				console.error('❌ Profile: Authentication failed:', error);
+			},
+			autoClose: true,
+		});
+	};
 
 	// ローディング状態
 	if (isLoading || firestoreLoading) {
@@ -11084,10 +11456,7 @@ export default function ProfilePage() {
 								<CyberButton
 									variant="primary"
 									className="flex items-center space-x-2"
-									onClick={() => {
-										const loginEvent = new CustomEvent('openAuthModal');
-										window.dispatchEvent(loginEvent);
-									}}
+									onClick={handleConnectWallet}
 								>
 									<Wallet className="w-4 h-4" />
 									<span>Connect Wallet</span>
@@ -13948,12 +14317,13 @@ export default LightingSetup;-e
 ### FILE: ./src/app/components/ui/Footer.tsx
 
 'use client';
-
+import WalletConnectButton from '../common/WalletConnectButton';
 import Link from 'next/link';
-
+import CyberButton from '../common/CyberButton';
+import { useRouter } from 'next/navigation';
 const Footer = () => {
 	const currentYear = new Date().getFullYear();
-
+	const router = useRouter();
 	const productLinks = [
 		{ href: '/products/whey-protein', label: 'Whey Protein' },
 		{ href: '/products/bcaa', label: 'BCAA' },
@@ -13980,6 +14350,10 @@ const Footer = () => {
 		{ href: '/terms', label: 'Terms of Service' },
 		{ href: '/cookies', label: 'Cookie Policy' },
 	];
+
+	const handleNavigateToDashboard = () => {
+		router.push('/dashboard');
+	};
 
 	return (
 		<footer className="w-full relative bg-black border-t border-dark-300 overflow-hidden z-20">
@@ -14021,10 +14395,9 @@ const Footer = () => {
 							</p>
 
 
-							{/* Connect Wallet */}
-							<button className="w-full px-6 py-3 bg-gradient-to-r from-neonGreen to-neonOrange text-black font-semibold rounded-sm transition-all duration-200 hover:shadow-lg hover:shadow-neonGreen/25 group">
-								<span className="relative z-10 text-sm">Login</span>
-							</button>
+							<CyberButton variant="primary" className="px-4 py-2 text-l" onClick={handleNavigateToDashboard}>
+								How to buy
+							</CyberButton>
 						</div>
 
 						{/* Products */}
@@ -14048,7 +14421,7 @@ const Footer = () => {
 								))}
 							</ul>
 						</div>
-						
+
 						<div>
 							<h3 className="text-white font-heading font-semibold mb-4 relative">
 								Company
@@ -14105,7 +14478,7 @@ const Footer = () => {
 						</div>
 					</div>
 
-			
+
 					<div className="flex flex-col lg:flex-row justify-between items-center space-y-4 lg:space-y-0">
 						{/* Legal Links */}
 						<div className="flex flex-wrap items-center space-x-6">
@@ -14151,11 +14524,10 @@ export default Footer;-e
 
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { useChainId, useAccount } from 'wagmi';
-import { useUnifiedAuth } from '@/auth/contexts/UnifiedAuthContext';
-import { ExtendedAuthModal } from '../../../auth/components/AuthModal';
+import { useRouter } from 'next/navigation';
 import { ShoppingCart } from 'lucide-react';
-import { chainUtils } from '@/auth/config/chain-config';
+import WalletConnectButton from '../common/WalletConnectButton';
+import { useAuthModal } from '@/contexts/AuthModalContext';
 
 // ダッシュボードページでのみカート機能を使用するためのhook
 const useCartInDashboard = () => {
@@ -14166,7 +14538,7 @@ const useCartInDashboard = () => {
 	useEffect(() => {
 		// ハイドレーション完了を待つ
 		setIsHydrated(true);
-		
+
 		// カスタムイベントリスナーを追加してダッシュボードからカート情報を受信
 		const handleCartUpdate = (event: CustomEvent) => {
 			console.log('📨 Header received cart update:', event.detail.itemCount);
@@ -14190,40 +14562,17 @@ const useCartInDashboard = () => {
 };
 
 const Header = () => {
+	const router = useRouter();
 	const [isVisible, setIsVisible] = useState(true);
 	const [lastScrollY, setLastScrollY] = useState(0);
 	const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
-	const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
 
-	// Wallet認証のみ使用
-	const { 
-		isAuthenticated, 
-		isLoading, 
-		displayName,
-		logout 
-	} = useUnifiedAuth();
-	
-	// Wagmi hooksを直接使用してリアルタイム情報を取得
-	const chainId = useChainId();
-	const { address: walletAddress, isConnected } = useAccount();
-	
 	const { cartItemCount, onCartClick } = useCartInDashboard();
 
-	// ハイドレーション対応のための状態
-	const [isClient, setIsClient] = useState(false);
+	// グローバル認証モーダル管理
+	const { openAuthModal } = useAuthModal();
 
 	useEffect(() => {
-		setIsClient(true);
-	}, []);
-
-	useEffect(() => {
-		// カスタムイベントリスナーを追加してプロフィールページからログインモーダルを開く
-		const handleOpenAuthModal = () => {
-			setIsAuthModalOpen(true);
-		};
-
-		window.addEventListener('openAuthModal', handleOpenAuthModal);
-
 		const handleScroll = () => {
 			const currentScrollY = window.scrollY;
 
@@ -14240,23 +14589,8 @@ const Header = () => {
 
 		return () => {
 			window.removeEventListener('scroll', handleScroll);
-			window.removeEventListener('openAuthModal', handleOpenAuthModal);
 		};
 	}, [lastScrollY]);
-
-	const handleLogout = async () => {
-		try {
-			await logout();
-			setIsMobileMenuOpen(false);
-		} catch (error) {
-			console.error('ログアウトエラー:', error);
-		}
-	};
-
-	const handleLoginClick = () => {
-		setIsAuthModalOpen(true);
-		setIsMobileMenuOpen(false);
-	};
 
 	const handleCartClick = () => {
 		if (onCartClick) {
@@ -14265,51 +14599,27 @@ const Header = () => {
 		setIsMobileMenuOpen(false);
 	};
 
-	// ユーザー表示名の取得（Wallet専用）
-	const getUserDisplayName = () => {
-		if (displayName) return displayName;
-		if (walletAddress) return chainUtils.formatAddress(walletAddress);
-		return 'User';
+	const handleProfileClick = () => {
+		router.push('/profile');
+		setIsMobileMenuOpen(false);
 	};
 
-	// ユーザーイニシャルの取得（Wallet専用）
-	const getUserInitials = () => {
-		if (displayName) return displayName[0].toUpperCase();
-		if (walletAddress) return walletAddress[2].toUpperCase(); // 0x の次の文字
-		return 'U';
+	// グローバルモーダル経由での認証
+	const handleAuthModalOpen = () => {
+		openAuthModal({
+			title: 'Connect Your Wallet',
+			preferredChain: 'evm',
+			onSuccess: (user) => {
+				console.log('🎉 Header: User authenticated successfully:', user.walletAddress);
+				// 必要に応じて追加の処理（例：リダイレクト）
+			},
+			onError: (error) => {
+				console.error('❌ Header: Authentication failed:', error);
+			},
+			autoClose: true,
+		});
+		setIsMobileMenuOpen(false);
 	};
-
-	// チェーン情報の取得（ハイドレーション対応）
-	const getChainInfo = () => {
-		if (!isClient || !chainId) {
-			return { 
-				name: 'Unknown', 
-				icon: '⚪', 
-				colors: { primary: '#6B7280', secondary: '#9CA3AF' } 
-			};
-		}
-		
-		return {
-			name: chainUtils.getDisplayName(chainId),
-			icon: chainUtils.getIcon(chainId),
-			colors: chainUtils.getColors(chainId)
-		};
-	};
-
-	const chainInfo = getChainInfo();
-	
-	// デバッグ用ログ（開発時のみ）
-	useEffect(() => {
-		if (isClient) {
-			console.log('🔗 Header Wallet Info:', {
-				walletAddress,
-				chainId,
-				isConnected,
-				isAuthenticated,
-				chainInfo
-			});
-		}
-	}, [walletAddress, chainId, isConnected, isAuthenticated, isClient]);
 
 	const navLinks = [
 		{ href: '/dashboard', label: 'Shop', isHome: true },
@@ -14318,262 +14628,162 @@ const Header = () => {
 	];
 
 	return (
-		<>
-			<header
-				className={`fixed top-0 left-0 right-0 z-50 transition-transform duration-300 ease-out ${isVisible ? 'translate-y-0' : '-translate-y-full'
-					}`}
-			>
-				{/* Background with blur effect */}
-				<div className="absolute inset-0 bg-black/90 backdrop-blur-md border-b border-dark-300"></div>
+		<header
+			className={`fixed top-0 left-0 right-0 z-50 transition-transform duration-300 ease-out ${isVisible ? 'translate-y-0' : '-translate-y-full'
+				}`}
+		>
+			{/* Background with blur effect */}
+			<div className="absolute inset-0 bg-black/90 backdrop-blur-md border-b border-dark-300"></div>
 
-				{/* Scanline effect */}
-				<div className="absolute inset-0 overflow-hidden pointer-events-none">
-					<div className="absolute w-full h-px bg-gradient-to-r from-transparent via-neonGreen to-transparent animate-scanline opacity-30"></div>
+			{/* Scanline effect */}
+			<div className="absolute inset-0 overflow-hidden pointer-events-none">
+				<div className="absolute w-full h-px bg-gradient-to-r from-transparent via-neonGreen to-transparent animate-scanline opacity-30"></div>
+			</div>
+
+			<nav className="relative px-4 sm:px-6 lg:px-8">
+				<div className="flex items-center justify-between h-16 max-w-7xl mx-auto">
+					{/* Logo/Brand */}
+					<Link href="/" className="flex items-center space-x-2 group">
+						<div className="relative">
+							<div className="w-8 h-8 bg-gradient-to-br from-neonGreen to-neonOrange rounded-sm animate-pulse-fast"></div>
+							<div className="absolute inset-0 w-8 h-8 bg-gradient-to-br from-neonGreen to-neonOrange rounded-sm blur-sm opacity-50"></div>
+						</div>
+						<span className="text-xl font-heading font-bold text-white group-hover:text-neonGreen transition-colors duration-200 md:animate-glitch-slow">
+							We are on-chain
+						</span>
+					</Link>
+
+					{/* Desktop Navigation */}
+					<div className="hidden md:flex items-center space-x-8">
+						{/* Navigation Links */}
+						{navLinks.map((link, index) => (
+							<Link
+								key={link.href}
+								href={link.href}
+								className={`relative px-4 py-2 text-sm font-medium transition-all duration-200 group ${link.isHome
+										? 'text-neonGreen'
+										: 'text-gray-300 hover:text-white'
+									}`}
+								style={{ animationDelay: `${index * 100}ms` }}
+							>
+								<span className="relative z-10">{link.label}</span>
+
+								{/* Hover effect */}
+								<div className="absolute inset-0 bg-gradient-to-r from-neonGreen/20 to-neonOrange/20 rounded-sm transform scale-0 group-hover:scale-100 transition-transform duration-200"></div>
+
+								{/* Border animation */}
+								<div className="absolute bottom-0 left-0 w-0 h-px bg-gradient-to-r from-neonGreen to-neonOrange group-hover:w-full transition-all duration-300"></div>
+
+								{/* Glitch effect for active link */}
+								{link.isHome && (
+									<div className="absolute inset-0 bg-neonGreen/10 rounded-sm animate-glitch opacity-30"></div>
+								)}
+							</Link>
+						))}
+
+						{/* Cart Icon - Desktop */}
+						<button
+							onClick={handleCartClick}
+							className="relative p-2 text-gray-300 hover:text-white transition-colors duration-200 hover:bg-dark-200/50 rounded-sm group"
+							aria-label="Shopping cart"
+						>
+							<ShoppingCart className="w-6 h-6" />
+
+							{/* Cart Badge */}
+							{cartItemCount > 0 && (
+								<div className="absolute -top-1 -right-1 w-5 h-5 bg-gradient-to-r from-neonGreen to-neonOrange rounded-full flex items-center justify-center">
+									<span className="text-xs font-bold text-black">
+										{cartItemCount > 99 ? '99+' : cartItemCount}
+									</span>
+								</div>
+							)}
+
+							{/* Glow effect */}
+							<div className="absolute inset-0 bg-gradient-to-r from-neonGreen/20 to-neonOrange/20 rounded-sm transform scale-0 group-hover:scale-100 transition-transform duration-200"></div>
+						</button>
+
+
+						<WalletConnectButton
+							variant="desktop"
+							showChainInfo={true}
+							showDisconnectButton={true}
+							showProfileLink={true}
+							onProfileClick={handleProfileClick}
+							onConnectClick={handleAuthModalOpen}
+							size="md"
+						/>
+					</div>
+
+					{/* Mobile menu button */}
+					<button
+						onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
+						className="md:hidden relative w-10 h-10 flex flex-col items-center justify-center space-y-1 group"
+						aria-label="Toggle mobile menu"
+					>
+						<span className={`w-6 h-0.5 bg-white transition-all duration-200 ${isMobileMenuOpen ? 'rotate-45 translate-y-1.5' : ''
+							}`}></span>
+						<span className={`w-6 h-0.5 bg-white transition-all duration-200 ${isMobileMenuOpen ? 'opacity-0' : ''
+							}`}></span>
+						<span className={`w-6 h-0.5 bg-white transition-all duration-200 ${isMobileMenuOpen ? '-rotate-45 -translate-y-1.5' : ''
+							}`}></span>
+					</button>
 				</div>
 
-				<nav className="relative px-4 sm:px-6 lg:px-8">
-					<div className="flex items-center justify-between h-16 max-w-7xl mx-auto">
-						{/* Logo/Brand */}
-						<Link href="/" className="flex items-center space-x-2 group">
-							<div className="relative">
-								<div className="w-8 h-8 bg-gradient-to-br from-neonGreen to-neonOrange rounded-sm animate-pulse-fast"></div>
-								<div className="absolute inset-0 w-8 h-8 bg-gradient-to-br from-neonGreen to-neonOrange rounded-sm blur-sm opacity-50"></div>
-							</div>
-							<span className="text-xl font-heading font-bold text-white group-hover:text-neonGreen transition-colors duration-200 md:animate-glitch-slow">
-								We are on-chain
-							</span>
-						</Link>
-
-						{/* Desktop Navigation */}
-						<div className="hidden md:flex items-center space-x-8">
-							{navLinks.map((link, index) => (
-								<Link
-									key={link.href}
-									href={link.href}
-									className={`relative px-4 py-2 text-sm font-medium transition-all duration-200 group ${link.isHome
-											? 'text-neonGreen'
-											: 'text-gray-300 hover:text-white'
-										}`}
-									style={{ animationDelay: `${index * 100}ms` }}
-								>
-									<span className="relative z-10">{link.label}</span>
-
-									{/* Hover effect */}
-									<div className="absolute inset-0 bg-gradient-to-r from-neonGreen/20 to-neonOrange/20 rounded-sm transform scale-0 group-hover:scale-100 transition-transform duration-200"></div>
-
-									{/* Border animation */}
-									<div className="absolute bottom-0 left-0 w-0 h-px bg-gradient-to-r from-neonGreen to-neonOrange group-hover:w-full transition-all duration-300"></div>
-
-									{/* Glitch effect for active link */}
-									{link.isHome && (
-										<div className="absolute inset-0 bg-neonGreen/10 rounded-sm animate-glitch opacity-30"></div>
-									)}
-								</Link>
-							))}
-
-							{/* Cart Icon - Desktop */}
-							<button
-								onClick={handleCartClick}
-								className="relative p-2 text-gray-300 hover:text-white transition-colors duration-200 hover:bg-dark-200/50 rounded-sm group"
-								aria-label="Shopping cart"
+				{/* Mobile Menu */}
+				<div className={`md:hidden transition-all duration-300 ease-out overflow-hidden ${isMobileMenuOpen ? 'max-h-96 opacity-100' : 'max-h-0 opacity-0'
+					}`}>
+					<div className="px-4 py-4 space-y-3 border-t border-dark-300 bg-black/50">
+						{/* Navigation Links - Mobile */}
+						{navLinks.map((link, index) => (
+							<Link
+								key={link.href}
+								href={link.href}
+								className={`block px-4 py-3 text-base font-medium transition-all duration-200 rounded-sm ${link.isHome
+										? 'text-neonGreen bg-neonGreen/10 border border-neonGreen/20'
+										: 'text-gray-300 hover:text-white hover:bg-dark-200'
+									}`}
+								onClick={() => setIsMobileMenuOpen(false)}
+								style={{ animationDelay: `${index * 50}ms` }}
 							>
-								<ShoppingCart className="w-6 h-6" />
-								
-								{/* Cart Badge */}
-								{cartItemCount > 0 && (
-									<div className="absolute -top-1 -right-1 w-5 h-5 bg-gradient-to-r from-neonGreen to-neonOrange rounded-full flex items-center justify-center">
-										<span className="text-xs font-bold text-black">
-											{cartItemCount > 99 ? '99+' : cartItemCount}
-										</span>
-									</div>
-								)}
+								{link.label}
+							</Link>
+						))}
 
-								{/* Glow effect */}
-								<div className="absolute inset-0 bg-gradient-to-r from-neonGreen/20 to-neonOrange/20 rounded-sm transform scale-0 group-hover:scale-100 transition-transform duration-200"></div>
-							</button>
-
-							{/* Authentication Section - Enhanced Wallet Display */}
-							{isLoading ? (
-								<div className="px-6 py-2">
-									<div className="w-6 h-6 border-2 border-neonGreen border-t-transparent rounded-full animate-spin"></div>
-								</div>
-							) : (isAuthenticated && isConnected && walletAddress && isClient) ? (
-								<div className="flex items-center space-x-3">
-									{/* Chain Info */}
-									<div className="flex items-center space-x-2 px-3 py-2 bg-black/50 border border-gray-700 rounded-sm">
-										<span className="text-lg" title={chainInfo.name}>
-											{chainInfo.icon}
-										</span>
-										<span className="text-sm text-gray-300 font-medium">
-											{chainInfo.name}
-										</span>
-									</div>
-
-									{/* Wallet Address Display */}
-									<button
-										onClick={() => window.location.href = '/profile'}
-										className="flex items-center space-x-2 px-3 py-2 bg-black/50 border border-gray-700 hover:border-neonGreen/50 rounded-sm transition-all duration-200 group"
-										title="View Profile"
-									>
-										<div className="w-6 h-6 bg-gradient-to-br from-neonGreen to-neonOrange rounded-full flex items-center justify-center">
-											<span className="text-black font-bold text-xs">
-												{getUserInitials()}
-											</span>
-										</div>
-										<span className="text-sm text-white font-mono group-hover:text-neonGreen transition-colors">
-											{getUserDisplayName()}
-										</span>
-									</button>
-
-									{/* Disconnect Button */}
-									<button
-										onClick={handleLogout}
-										className="relative px-4 py-2 bg-red-600/80 hover:bg-red-600 text-white text-sm font-medium rounded-sm transition-all duration-200 hover:shadow-lg hover:shadow-red-500/25 group"
-									>
-										<span className="relative z-10">Disconnect</span>
-										<div className="absolute inset-0 bg-red-500 transform scale-x-0 group-hover:scale-x-100 transition-transform duration-200 origin-left rounded-sm"></div>
-									</button>
-								</div>
-							) : (
-								<button
-									onClick={handleLoginClick}
-									className="relative px-6 py-2 bg-gradient-to-r from-neonGreen to-neonOrange text-black font-semibold rounded-sm overflow-hidden group transition-all duration-200 hover:shadow-lg hover:shadow-neonGreen/25"
-								>
-									<span className="relative z-10 text-sm">Connect Wallet</span>
-									<div className="absolute inset-0 bg-gradient-to-r from-neonOrange to-neonGreen transform scale-x-0 group-hover:scale-x-100 transition-transform duration-200 origin-left"></div>
-									<div className="absolute inset-0 animate-pulse bg-white/10 opacity-0 group-hover:opacity-100 transition-opacity duration-200"></div>
-								</button>
-							)}
-						</div>
-
-						{/* Mobile menu button */}
+						{/* Cart Icon - Mobile */}
 						<button
-							onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
-							className="md:hidden relative w-10 h-10 flex flex-col items-center justify-center space-y-1 group"
-							aria-label="Toggle mobile menu"
+							onClick={handleCartClick}
+							className="flex items-center justify-between w-full px-4 py-3 text-base font-medium text-gray-300 hover:text-white hover:bg-dark-200 transition-all duration-200 rounded-sm"
 						>
-							<span className={`w-6 h-0.5 bg-white transition-all duration-200 ${isMobileMenuOpen ? 'rotate-45 translate-y-1.5' : ''}`}></span>
-							<span className={`w-6 h-0.5 bg-white transition-all duration-200 ${isMobileMenuOpen ? 'opacity-0' : ''}`}></span>
-							<span className={`w-6 h-0.5 bg-white transition-all duration-200 ${isMobileMenuOpen ? '-rotate-45 -translate-y-1.5' : ''}`}></span>
-						</button>
-					</div>
-
-					{/* Mobile Menu */}
-					<div className={`md:hidden transition-all duration-300 ease-out overflow-hidden ${isMobileMenuOpen ? 'max-h-96 opacity-100' : 'max-h-0 opacity-0'
-						}`}>
-						<div className="px-4 py-4 space-y-3 border-t border-dark-300 bg-black/50">
-							{navLinks.map((link, index) => (
-								<Link
-									key={link.href}
-									href={link.href}
-									className={`block px-4 py-3 text-base font-medium transition-all duration-200 rounded-sm ${link.isHome
-											? 'text-neonGreen bg-neonGreen/10 border border-neonGreen/20'
-											: 'text-gray-300 hover:text-white hover:bg-dark-200'
-										}`}
-									onClick={() => setIsMobileMenuOpen(false)}
-									style={{ animationDelay: `${index * 50}ms` }}
-								>
-									{link.label}
-								</Link>
-							))}
-
-							{/* Cart Icon - Mobile */}
-							<button
-								onClick={handleCartClick}
-								className="flex items-center justify-between w-full px-4 py-3 text-base font-medium text-gray-300 hover:text-white hover:bg-dark-200 transition-all duration-200 rounded-sm"
-							>
-								<div className="flex items-center space-x-3">
-									<ShoppingCart className="w-5 h-5" />
-									<span>Shopping Cart</span>
+							<div className="flex items-center space-x-3">
+								<ShoppingCart className="w-5 h-5" />
+								<span>Shopping Cart</span>
+							</div>
+							{cartItemCount > 0 && (
+								<div className="w-6 h-6 bg-gradient-to-r from-neonGreen to-neonOrange rounded-full flex items-center justify-center">
+									<span className="text-xs font-bold text-black">
+										{cartItemCount > 99 ? '99+' : cartItemCount}
+									</span>
 								</div>
-								{cartItemCount > 0 && (
-									<div className="w-6 h-6 bg-gradient-to-r from-neonGreen to-neonOrange rounded-full flex items-center justify-center">
-										<span className="text-xs font-bold text-black">
-											{cartItemCount > 99 ? '99+' : cartItemCount}
-										</span>
-									</div>
-								)}
-							</button>
-
-							{/* Mobile Authentication Section - Enhanced Display */}
-							{isLoading ? (
-								<div className="flex justify-center py-4">
-									<div className="w-6 h-6 border-2 border-neonGreen border-t-transparent rounded-full animate-spin"></div>
-								</div>
-							) : (isAuthenticated && isConnected && walletAddress && isClient) ? (
-								<div className="space-y-3 pt-4 border-t border-dark-300">
-									{/* Enhanced Wallet Info Display */}
-									<div className="px-4 py-3 bg-black/70 rounded-sm border border-neonGreen/20">
-										<div className="text-xs text-gray-400 mb-2">Connected Wallet</div>
-										
-										{/* Chain Info */}
-										<div className="flex items-center space-x-2 mb-2">
-											<span className="text-lg">{chainInfo.icon}</span>
-											<span className="text-sm text-white font-medium">{chainInfo.name}</span>
-											<span className="text-xs text-gray-400">
-												Chain {chainId || 'Unknown'}
-											</span>
-										</div>
-										
-										{/* Wallet Address */}
-										<div className="flex items-center space-x-2">
-											<div className="w-6 h-6 bg-gradient-to-br from-neonGreen to-neonOrange rounded-full flex items-center justify-center">
-												<span className="text-black font-bold text-xs">
-													{getUserInitials()}
-												</span>
-											</div>
-											<div className="flex-1">
-												<div className="text-sm text-white font-mono">
-													{getUserDisplayName()}
-												</div>
-												{walletAddress && (
-													<div className="text-xs text-neonGreen font-mono">
-														{walletAddress.slice(0, 10)}...{walletAddress.slice(-8)}
-													</div>
-												)}
-											</div>
-										</div>
-									</div>
-
-									{/* Profile Link - Mobile */}
-									<button
-										onClick={() => {
-											window.location.href = '/profile';
-											setIsMobileMenuOpen(false);
-										}}
-										className="flex items-center justify-between w-full px-4 py-3 text-base font-medium text-gray-300 hover:text-white hover:bg-dark-200 transition-all duration-200 rounded-sm"
-									>
-										<span>View Profile</span>
-									</button>
-
-									{/* Disconnect Button */}
-									<button
-										onClick={handleLogout}
-										className="w-full px-6 py-3 bg-red-600/80 hover:bg-red-600 text-white font-semibold rounded-sm transition-all duration-200 hover:shadow-lg hover:shadow-red-500/25"
-									>
-										Disconnect Wallet
-									</button>
-								</div>
-							) : (
-								<button
-									onClick={handleLoginClick}
-									className="w-full mt-4 px-6 py-3 bg-gradient-to-r from-neonGreen to-neonOrange text-black font-semibold rounded-sm transition-all duration-200 hover:shadow-lg hover:shadow-neonGreen/25"
-								>
-									Connect Wallet
-								</button>
 							)}
+						</button>
+
+						{/* Wallet Connect Button - Mobile */}
+						<div className="pt-4 border-t border-dark-300">
+							<WalletConnectButton
+								variant="mobile"
+								showChainInfo={true}
+								showDisconnectButton={true}
+								showProfileLink={true}
+								onProfileClick={handleProfileClick}
+								onConnectClick={handleAuthModalOpen}
+								size="md"
+								className="w-full"
+							/>
 						</div>
 					</div>
-				</nav>
-			</header>
-
-			{/* Extended Auth Modal - Wallet Only */}
-			<ExtendedAuthModal
-				isOpen={isAuthModalOpen}
-				onClose={() => setIsAuthModalOpen(false)}
-				preferredChain="evm"
-			/>
-		</>
+				</div>
+			</nav>
+		</header>
 	);
 };
 
@@ -14702,6 +14912,234 @@ export const GlitchText: React.FC<GlitchTextProps> = ({
 };
 
 export default GlitchText;-e 
+### FILE: ./src/app/components/modals/AuthModalProvider.tsx
+
+// src/components/modals/AuthModalProvider.tsx
+'use client';
+
+import React from 'react';
+import { useAuthModal } from '@/contexts/AuthModalContext';
+import { ExtendedAuthModal } from '@/auth/components/AuthModal';
+import { useUnifiedAuth } from '@/auth/contexts/UnifiedAuthContext';
+import { handleAsyncOperation, parseGeneralError } from '@/utils/errorHandling';
+import { ExtendedFirestoreUser } from '@/types/user-extended';
+
+/**
+ * グローバル認証モーダルプロバイダー
+ * アプリケーション全体で単一のモーダルインスタンスを管理
+ */
+export const AuthModalProvider = () => {
+	const {
+		isOpen,
+		modalOptions,
+		closeAuthModal,
+		_debug
+	} = useAuthModal();
+
+	const {
+		isAuthenticated,
+		extendedUser,
+		error: authError
+	} = useUnifiedAuth();
+
+	// グローバルモーダルのコンテキストから内部ハンドラーを取得
+	const context = useAuthModal() as any;
+	const handleSuccess = context._internal?.handleSuccess;
+	const handleError = context._internal?.handleError;
+
+	// 認証成功の監視
+	React.useEffect(() => {
+		if (isAuthenticated && extendedUser && isOpen && handleSuccess) {
+			console.log('🎉 Global AuthModal: Authentication success detected');
+
+			// 成功ハンドラーを実行
+			handleSuccess(extendedUser);
+		}
+	}, [isAuthenticated, extendedUser, isOpen, handleSuccess]);
+
+	// 認証エラーの監視
+	React.useEffect(() => {
+		if (authError && isOpen && handleError) {
+			console.error('❌ Global AuthModal: Authentication error detected:', authError);
+
+			// エラーを統一フォーマットに変換
+			const appError = parseGeneralError(new Error(authError), 'wallet-authentication');
+			handleError(appError);
+		}
+	}, [authError, isOpen, handleError]);
+
+	// モーダルが開いているときのログ
+	React.useEffect(() => {
+		if (isOpen) {
+			console.log('🔓 Global AuthModal rendered:', {
+				preferredChain: modalOptions.preferredChain,
+				title: modalOptions.title,
+				autoClose: modalOptions.autoClose,
+				debugInfo: _debug
+			});
+		}
+	}, [isOpen, modalOptions, _debug]);
+
+	// モーダルが閉じられていれば何も表示しない
+	if (!isOpen) {
+		return null;
+	}
+
+	return (
+		<div className="fixed inset-0 z-[100]">
+			<ExtendedAuthModal
+				isOpen={isOpen}
+				onClose={closeAuthModal}
+				preferredChain={modalOptions.preferredChain || 'evm'}
+			/>
+		</div>
+	);
+};
+
+/**
+ * グローバル認証モーダルのルートコンポーネント
+ * layout.tsxで使用するためのラッパー
+ */
+export const GlobalAuthModal = () => {
+	return (
+		<>
+			<AuthModalProvider />
+		</>
+	);
+};
+
+/**
+ * デバッグ情報表示コンポーネント
+ */
+const AuthModalDebugInfo = () => {
+	const { isOpen, modalOptions, _debug } = useAuthModal();
+	const { isAuthenticated, isLoading, walletAddress } = useUnifiedAuth();
+
+	return (
+		<div className="fixed bottom-4 left-4 p-3 bg-black/90 border border-purple-500/30 rounded-sm text-xs text-white z-[100] max-w-sm">
+			<div className="font-bold text-purple-400 mb-2">🔐 Global AuthModal Debug</div>
+
+			{/* モーダル状態 */}
+			<div className="space-y-1 mb-3">
+				<div className="flex justify-between">
+					<span>Modal Status:</span>
+					<span className={isOpen ? 'text-green-400' : 'text-gray-400'}>
+						{isOpen ? 'Open' : 'Closed'}
+					</span>
+				</div>
+				<div className="flex justify-between">
+					<span>Auth Status:</span>
+					<span className={isAuthenticated ? 'text-green-400' : 'text-gray-400'}>
+						{isLoading ? 'Loading...' : isAuthenticated ? 'Authenticated' : 'Not Auth'}
+					</span>
+				</div>
+				<div className="flex justify-between">
+					<span>Total Opens:</span>
+					<span className="text-white">{_debug.openCount}</span>
+				</div>
+			</div>
+
+			{/* モーダルオプション */}
+			{isOpen && (
+				<div className="mb-3 p-2 bg-purple-900/30 rounded">
+					<div className="text-purple-300 mb-1">Current Options:</div>
+					<div className="text-xs space-y-1">
+						<div>Chain: {modalOptions.preferredChain}</div>
+						<div>Title: {modalOptions.title || 'Default'}</div>
+						<div>Auto Close: {modalOptions.autoClose ? 'Yes' : 'No'}</div>
+						<div>Chain Selector: {modalOptions.showChainSelector ? 'Yes' : 'No'}</div>
+					</div>
+				</div>
+			)}
+
+			{/* 認証情報 */}
+			{isAuthenticated && walletAddress && (
+				<div className="mb-3 p-2 bg-green-900/30 rounded">
+					<div className="text-green-300 mb-1">Authenticated:</div>
+					<div className="text-xs font-mono">
+						{walletAddress.slice(0, 6)}...{walletAddress.slice(-4)}
+					</div>
+				</div>
+			)}
+
+			{/* タイムスタンプ */}
+			<div className="text-xs text-gray-400 space-y-1">
+				{_debug.lastOpened && (
+					<div>Last Opened: {_debug.lastOpened.toLocaleTimeString()}</div>
+				)}
+				{_debug.lastClosed && (
+					<div>Last Closed: {_debug.lastClosed.toLocaleTimeString()}</div>
+				)}
+			</div>
+
+			{/* コールバック情報 */}
+			{isOpen && (
+				<div className="mt-2 text-xs text-gray-400">
+					<div>Callbacks:</div>
+					<div>Success: {modalOptions.onSuccess ? '✅' : '❌'}</div>
+					<div>Error: {modalOptions.onError ? '✅' : '❌'}</div>
+					{modalOptions.redirectAfterSuccess && (
+						<div>Redirect: {modalOptions.redirectAfterSuccess}</div>
+					)}
+				</div>
+			)}
+		</div>
+	);
+};
+
+/**
+ * モーダル統計情報を提供するhook（デバッグ用）
+ */
+export const useAuthModalStats = () => {
+	const { _debug } = useAuthModal();
+	const { isAuthenticated } = useUnifiedAuth();
+
+	return {
+		totalOpens: _debug.openCount,
+		lastOpened: _debug.lastOpened,
+		lastClosed: _debug.lastClosed,
+		isCurrentlyAuthenticated: isAuthenticated,
+		timeSinceLastOpen: _debug.lastOpened
+			? Date.now() - _debug.lastOpened.getTime()
+			: null,
+		timeSinceLastClose: _debug.lastClosed
+			? Date.now() - _debug.lastClosed.getTime()
+			: null,
+	};
+};
+
+/**
+ * モーダルの使用状況を監視するhook（分析用）
+ */
+export const useAuthModalAnalytics = () => {
+	const stats = useAuthModalStats();
+	const { isOpen } = useAuthModal();
+
+	// 使用パターンの分析
+	const getUsagePattern = () => {
+		if (stats.totalOpens === 0) return 'unused';
+		if (stats.totalOpens === 1) return 'first-time';
+		if (stats.totalOpens <= 5) return 'occasional';
+		if (stats.totalOpens <= 10) return 'regular';
+		return 'frequent';
+	};
+
+	// セッション時間の計算
+	const getCurrentSessionDuration = () => {
+		if (!isOpen || !stats.lastOpened) return 0;
+		return Date.now() - stats.lastOpened.getTime();
+	};
+
+	return {
+		...stats,
+		usagePattern: getUsagePattern(),
+		currentSessionDuration: getCurrentSessionDuration(),
+		averageSessionsPerHour: stats.totalOpens /
+			((Date.now() - (stats.lastOpened?.getTime() || Date.now())) / (1000 * 60 * 60)),
+	};
+};
+
+export default AuthModalProvider;-e 
 ### FILE: ./src/app/components/payment/LiveDemoSection.tsx
 
 // src/app/components/payment/LiveDemoSection.tsx
@@ -15517,6 +15955,446 @@ const GridPattern: React.FC<GridPatternProps> = ({
 };
 
 export default GridPattern;-e 
+### FILE: ./src/app/components/common/WalletConnectButton.tsx
+
+// src/app/components/common/WalletConnectButton.tsx
+'use client';
+
+import { useState, useEffect } from 'react';
+import { useChainId, useAccount } from 'wagmi';
+import { useUnifiedAuth } from '@/auth/contexts/UnifiedAuthContext';
+import { useAuthModal } from '@/contexts/AuthModalContext';
+import { Wallet, Loader2, AlertCircle, User, ExternalLink } from 'lucide-react';
+import { chainUtils } from '@/auth/config/chain-config';
+import CyberButton from './CyberButton';
+
+export interface WalletConnectButtonProps {
+	variant?: 'desktop' | 'mobile';
+	showChainInfo?: boolean;
+	showDisconnectButton?: boolean;
+	showProfileLink?: boolean;
+	onProfileClick?: () => void;
+	onConnectClick?: () => void; // 新規：カスタムコネクトハンドラー
+	className?: string;
+	size?: 'sm' | 'md' | 'lg';
+	compact?: boolean;
+}
+
+const WalletConnectButton = ({
+	variant = 'desktop',
+	showChainInfo = true,
+	showDisconnectButton = true,
+	showProfileLink = true,
+	onProfileClick,
+	onConnectClick,
+	className = '',
+	size = 'md',
+	compact = false
+}: WalletConnectButtonProps) => {
+	const {
+		isAuthenticated,
+		isLoading,
+		displayName,
+		walletAddress,
+		authFlowState,
+		logout,
+		error: authError
+	} = useUnifiedAuth();
+
+	// グローバルモーダル管理
+	const { openAuthModal } = useAuthModal();
+
+	// Wagmi hooks for real-time info
+	const chainId = useChainId();
+	const { address: currentAddress, isConnected } = useAccount();
+
+	// Local state
+	const [localError, setLocalError] = useState('');
+	const [isClient, setIsClient] = useState(false);
+
+	// Hydration handling
+	useEffect(() => {
+		setIsClient(true);
+	}, []);
+
+	// Error handling
+	useEffect(() => {
+		if (authError && !localError) {
+			setLocalError(authError);
+		}
+	}, [authError, localError]);
+
+	// Clear local error when auth error clears
+	useEffect(() => {
+		if (!authError && localError) {
+			setLocalError('');
+		}
+	}, [authError, localError]);
+
+	// Helper functions
+	const getUserDisplayName = () => {
+		if (displayName) return displayName;
+		if (walletAddress) return chainUtils.formatAddress(walletAddress);
+		if (currentAddress) return chainUtils.formatAddress(currentAddress);
+		return 'User';
+	};
+
+	const getUserInitials = () => {
+		if (displayName) return displayName[0].toUpperCase();
+		if (walletAddress) return walletAddress[2].toUpperCase();
+		if (currentAddress) return currentAddress[2].toUpperCase();
+		return 'U';
+	};
+
+	const getChainInfo = () => {
+		if (!isClient || !chainId) {
+			return {
+				name: 'Unknown',
+				icon: '⚪',
+				colors: { primary: '#6B7280', secondary: '#9CA3AF' }
+			};
+		}
+
+		return {
+			name: chainUtils.getDisplayName(chainId),
+			icon: chainUtils.getIcon(chainId),
+			colors: chainUtils.getColors(chainId)
+		};
+	};
+
+	const chainInfo = getChainInfo();
+
+	// Event handlers
+	const handleConnectClick = () => {
+		setLocalError('');
+
+		// カスタムハンドラーがあれば優先使用
+		if (onConnectClick) {
+			onConnectClick();
+			return;
+		}
+
+		// デフォルト：グローバルモーダルを開く
+		openAuthModal({
+			title: 'Connect Your Wallet',
+			preferredChain: 'evm',
+			onSuccess: (user) => {
+				console.log('✅ Wallet connected successfully:', user.walletAddress);
+				setLocalError('');
+			},
+			onError: (error) => {
+				console.error('❌ Wallet connection failed:', error);
+				setLocalError(error.userMessage || error.message);
+			},
+			autoClose: true,
+		});
+	};
+
+	const handleLogout = async () => {
+		try {
+			setLocalError('');
+			await logout();
+		} catch (error) {
+			console.error('Logout error:', error);
+			setLocalError(error instanceof Error ? error.message : 'Logout failed');
+		}
+	};
+
+	const handleProfileClick = () => {
+		if (onProfileClick) {
+			onProfileClick();
+		} else {
+			// Default behavior - navigate to profile page
+			window.location.href = '/profile';
+		}
+	};
+
+	// Get current status for display
+	const getStatus = () => {
+		if (authFlowState.currentStep === 'connecting') return 'connecting';
+		if (authFlowState.currentStep === 'signing') return 'signing';
+		if (authFlowState.currentStep === 'verifying') return 'verifying';
+		if (authFlowState.currentStep === 'error') return 'error';
+		if (isLoading) return 'loading';
+		if (isAuthenticated && isConnected && currentAddress) return 'authenticated';
+		if (isConnected && currentAddress) return 'connected';
+		return 'disconnected';
+	};
+
+	const status = getStatus();
+
+	// Size configurations
+	const sizeConfig = {
+		sm: {
+			button: 'px-4 py-2 text-sm',
+			avatar: 'w-5 h-5',
+			text: 'text-sm',
+			spacing: 'space-x-2'
+		},
+		md: {
+			button: 'px-6 py-3 text-base',
+			avatar: 'w-6 h-6',
+			text: 'text-sm',
+			spacing: 'space-x-3'
+		},
+		lg: {
+			button: 'px-8 py-4 text-lg',
+			avatar: 'w-8 h-8',
+			text: 'text-base',
+			spacing: 'space-x-4'
+		}
+	};
+
+	const config = sizeConfig[size];
+
+	// Desktop variant
+	if (variant === 'desktop') {
+		return (
+			<div className={`flex items-center ${config.spacing} ${className}`}>
+				{/* Chain Info */}
+				{showChainInfo && status !== 'disconnected' && isClient && (
+					<div className="flex items-center space-x-2 px-3 py-2 bg-black/50 border border-gray-700 rounded-sm">
+						<span className="text-lg" title={chainInfo.name}>
+							{chainInfo.icon}
+						</span>
+						{!compact && (
+							<span className={`text-gray-300 font-medium ${config.text}`}>
+								{chainInfo.name}
+							</span>
+						)}
+					</div>
+				)}
+
+				{/* Main Button/Status */}
+				{status === 'disconnected' ? (
+					<CyberButton
+						onClick={handleConnectClick}
+						disabled={isLoading}
+						size={size}
+						variant="primary"
+						/* もうこのあたりは気にせず… */
+						className="w-full"
+					>
+						{isLoading ? (
+							<span className="inline-flex items-center gap-2">
+								<Loader2 className="w-4 h-4 animate-spin" />
+								Connecting…
+							</span>
+						) : (
+							<span className="inline-flex items-center gap-2">
+								<Wallet className="w-4 h-4" />
+								Connect
+							</span>
+						)}
+					</CyberButton>
+
+				) : status === 'connecting' || status === 'signing' || status === 'verifying' ? (
+					<div className={`flex items-center ${config.button} bg-neonGreen/20 border border-neonGreen/50 rounded-sm text-neonGreen min-w-0`}>
+						<Loader2 className="w-4 h-4 animate-spin mr-2 flex-shrink-0" />
+						<span className={`${config.text} truncate`}>
+							{status === 'connecting' && 'Connecting...'}
+							{status === 'signing' && 'Sign...'}
+							{status === 'verifying' && 'Verifying...'}
+						</span>
+						{authFlowState.progress > 0 && (
+							<div className="ml-2 w-12 h-1 bg-dark-300 rounded-full overflow-hidden flex-shrink-0">
+								<div
+									className="h-full bg-gradient-to-r from-neonGreen to-neonOrange transition-all duration-300"
+									style={{ width: `${authFlowState.progress}%` }}
+								/>
+							</div>
+						)}
+					</div>
+				) : status === 'error' ? (
+					<div className="flex items-center space-x-2">
+						<div className={`flex items-center ${config.button} bg-red-900/30 border border-red-500/50 rounded-sm text-red-300 min-w-0`}>
+							<AlertCircle className="w-4 h-4 mr-2 flex-shrink-0" />
+							<span className={`${config.text} truncate`}>Failed</span>
+						</div>
+						<CyberButton
+							onClick={handleConnectClick}
+							size="sm"
+							variant="outline"
+							className="px-3 py-1 text-xs whitespace-nowrap"
+						>
+							Retry
+						</CyberButton>
+					</div>
+				) : (
+					<div className="flex items-center space-x-2">
+						{/* Wallet Info */}
+						<button
+							onClick={handleProfileClick}
+							className="flex items-center space-x-2 px-3 py-2 bg-black/50 border border-gray-700 hover:border-neonGreen/50 rounded-sm transition-all duration-200 group min-w-0 max-w-48"
+							title="View Profile"
+							disabled={!showProfileLink}
+						>
+							<div className={`${config.avatar} bg-gradient-to-br from-neonGreen to-neonOrange rounded-full flex items-center justify-center flex-shrink-0`}>
+								<span className="text-black font-bold text-xs">
+									{getUserInitials()}
+								</span>
+							</div>
+							{!compact && (
+								<span className={`text-white font-mono group-hover:text-neonGreen transition-colors ${config.text} truncate`}>
+									{getUserDisplayName()}
+								</span>
+							)}
+							{showProfileLink && (
+								<ExternalLink className="w-3 h-3 text-gray-400 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0" />
+							)}
+						</button>
+
+						{/* Disconnect Button */}
+						{showDisconnectButton && (
+							<CyberButton
+								onClick={handleLogout}
+								size="sm"
+								variant="outline"
+								className="bg-red-600/20 border-red-500/50 text-red-300 hover:bg-red-600/40 px-3 py-1 text-xs whitespace-nowrap"
+							>
+								Disconnect
+							</CyberButton>
+						)}
+					</div>
+				)}
+
+			</div>
+		);
+	}
+
+	// Mobile variant
+	return (
+		<div className={`w-full ${className}`}>
+			{status === 'disconnected' ? (
+				<CyberButton
+					onClick={handleConnectClick}
+					disabled={isLoading}
+					size={size}
+					variant="primary"
+					className="w-full"
+				>
+					{isLoading ? (
+						<>
+							<Loader2 className="w-5 h-5 animate-spin mr-2" />
+							Connecting...
+						</>
+					) : (
+						<>
+							<Wallet className="w-5 h-5 mr-2" />
+							Connect Wallet
+						</>
+					)}
+				</CyberButton>
+			) : status === 'connecting' || status === 'signing' || status === 'verifying' ? (
+				<div className="w-full bg-neonGreen/10 border border-neonGreen/30 rounded-sm p-4">
+					<div className="flex items-center justify-center mb-3">
+						<Loader2 className="w-6 h-6 animate-spin mr-3 text-neonGreen" />
+						<span className="text-neonGreen font-medium">
+							{status === 'connecting' && 'Connecting Wallet...'}
+							{status === 'signing' && 'Waiting for Signature...'}
+							{status === 'verifying' && 'Verifying Authentication...'}
+						</span>
+					</div>
+					{authFlowState.progress > 0 && (
+						<div className="w-full h-2 bg-dark-300 rounded-full overflow-hidden">
+							<div
+								className="h-full bg-gradient-to-r from-neonGreen to-neonOrange transition-all duration-300"
+								style={{ width: `${authFlowState.progress}%` }}
+							/>
+						</div>
+					)}
+				</div>
+			) : status === 'error' ? (
+				<div className="w-full space-y-3">
+					<div className="bg-red-900/30 border border-red-500/50 rounded-sm p-4">
+						<div className="flex items-center mb-2">
+							<AlertCircle className="w-5 h-5 text-red-400 mr-2" />
+							<span className="text-red-300 font-medium">Connection Failed</span>
+						</div>
+						{localError && (
+							<p className="text-red-300 text-sm">{localError}</p>
+						)}
+					</div>
+					<CyberButton
+						onClick={handleConnectClick}
+						size={size}
+						variant="primary"
+						className="w-full"
+					>
+						Try Again
+					</CyberButton>
+				</div>
+			) : (
+				<div className="w-full bg-black/70 border border-neonGreen/20 rounded-sm p-4 space-y-4">
+					{/* Header */}
+					<div className="text-xs text-gray-400 mb-2">Connected Wallet</div>
+
+					{/* Chain Info */}
+					{showChainInfo && isClient && (
+						<div className="flex items-center space-x-2 mb-3">
+							<span className="text-lg">{chainInfo.icon}</span>
+							<span className="text-sm text-white font-medium">{chainInfo.name}</span>
+							<span className="text-xs text-gray-400">
+								Chain {chainId || 'Unknown'}
+							</span>
+						</div>
+					)}
+
+					{/* Wallet Info */}
+					<div className="flex items-center space-x-3 mb-4">
+						<div className={`${config.avatar} bg-gradient-to-br from-neonGreen to-neonOrange rounded-full flex items-center justify-center`}>
+							<span className="text-black font-bold text-xs">
+								{getUserInitials()}
+							</span>
+						</div>
+						<div className="flex-1">
+							<div className="text-sm text-white font-mono">
+								{getUserDisplayName()}
+							</div>
+							{currentAddress && (
+								<div className="text-xs text-neonGreen font-mono">
+									{currentAddress.slice(0, 10)}...{currentAddress.slice(-8)}
+								</div>
+							)}
+						</div>
+					</div>
+
+					{/* Action Buttons */}
+					<div className="space-y-2">
+						{showProfileLink && (
+							<button
+								onClick={handleProfileClick}
+								className="w-full flex items-center justify-between px-4 py-3 text-gray-300 hover:text-white hover:bg-dark-200 transition-all duration-200 rounded-sm"
+							>
+								<div className="flex items-center">
+									<User className="w-4 h-4 mr-2" />
+									<span>View Profile</span>
+								</div>
+								<ExternalLink className="w-4 h-4" />
+							</button>
+						)}
+
+						{showDisconnectButton && (
+							<CyberButton
+								onClick={handleLogout}
+								size={size}
+								variant="outline"
+								className="w-full bg-red-600/20 border-red-500/50 text-red-300 hover:bg-red-600/40"
+							>
+								Disconnect Wallet
+							</CyberButton>
+						)}
+					</div>
+				</div>
+			)}
+
+			{/* Auth Modal */}
+			{/* モーダルはグローバルで管理されるため、ここでは不要 */}
+		</div>
+	);
+};
+
+export default WalletConnectButton;-e 
 ### FILE: ./src/app/components/common/CyberCard.tsx
 
 // src/app/components/common/CyberCard.tsx
@@ -16346,6 +17224,8 @@ import type { Metadata } from 'next';
 import { EVMWalletProvider } from '@/auth/providers/wagmi-provider';
 import { EVMWalletProvider as EVMWalletContextProvider } from '@/auth/providers/EVMWalletAdapterWrapper';
 import { UnifiedAuthProvider } from '@/auth/contexts/UnifiedAuthContext';
+import { AuthModalProvider } from '@/contexts/AuthModalContext';
+import { GlobalAuthModal } from './components/modals/AuthModalProvider';
 
 // フォント設定の最適化
 const montserrat = Montserrat({
@@ -16384,10 +17264,10 @@ export const metadata: Metadata = {
 	},
 };
 
-// 認証設定の定数化
+// 認証設定の定数化（Updated: Wallet専用）
 const AUTH_CONFIG: Partial<any> = {
-	preferredMethod: 'hybrid',
-	enableFirebase: true,
+	preferredMethod: 'wallet', // wallet専用に変更
+	enableFirebase: false,     // Firebase無効
 	enableWallet: true,
 	autoConnect: true,
 	sessionTimeout: 24 * 60, // 24時間
@@ -16395,6 +17275,14 @@ const AUTH_CONFIG: Partial<any> = {
 		enabledChains: ['evm'],
 		preferredChain: 'evm',
 	},
+};
+
+// グローバル認証モーダルのデフォルト設定
+const GLOBAL_MODAL_CONFIG = {
+	preferredChain: 'evm' as const,
+	autoClose: true,
+	showChainSelector: true,
+	title: 'Connect Your Wallet',
 };
 
 export default function RootLayout({
@@ -16409,17 +17297,57 @@ export default function RootLayout({
 			suppressHydrationWarning={true}
 		>
 			<body className="bg-black text-white min-h-screen font-sans antialiased">
-				{/* Wallet & Auth Provider Stack */}
+				{/* Provider Stack - 正しい階層順序 */}
 				<EVMWalletProvider
 					appName="We are on-chain"
 					projectId={process.env.NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID}
 				>
 					<EVMWalletContextProvider>
 						<UnifiedAuthProvider config={AUTH_CONFIG}>
-							{children}
+							<AuthModalProvider defaultOptions={GLOBAL_MODAL_CONFIG}>
+								{/* メインコンテンツ */}
+								{children}
+								
+								{/* グローバル認証モーダル - 最上位レイヤー */}
+								<GlobalAuthModal />
+							</AuthModalProvider>
 						</UnifiedAuthProvider>
 					</EVMWalletContextProvider>
 				</EVMWalletProvider>
+
+
+
+				{/* 開発環境用のデバッグスクリプト */}
+				{process.env.NODE_ENV === 'development' && (
+					<script
+						dangerouslySetInnerHTML={{
+							__html: `
+								// グローバル認証モーダルのデバッグヘルパー
+								window.debugAuthModal = {
+									open: (options = {}) => {
+										window.dispatchEvent(new CustomEvent('openAuthModal', { detail: options }));
+									},
+									close: () => {
+										window.dispatchEvent(new CustomEvent('closeAuthModal'));
+									},
+									test: () => {
+										console.log('🧪 Testing AuthModal...');
+										window.debugAuthModal.open({ 
+											title: 'Debug Test Modal',
+											preferredChain: 'evm'
+										});
+									}
+								};
+								
+								// コンソールにヘルプを表示
+								console.log('🔐 AuthModal Debug Commands:');
+								console.log('  window.debugAuthModal.open({ title: "Test" })');
+								console.log('  window.debugAuthModal.close()');
+								console.log('  window.debugAuthModal.test()');
+							`,
+						}}
+					/>
+				)}
 			</body>
 		</html>
 	);

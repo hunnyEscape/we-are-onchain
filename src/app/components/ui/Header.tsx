@@ -6,38 +6,7 @@ import { useRouter } from 'next/navigation';
 import { ShoppingCart } from 'lucide-react';
 import WalletConnectButton from '../common/WalletConnectButton';
 import { useAuthModal } from '@/contexts/AuthModalContext';
-
-// ダッシュボードページでのみカート機能を使用するためのhook
-const useCartInDashboard = () => {
-	const [cartItemCount, setCartItemCount] = useState(0);
-	const [onCartClick, setOnCartClick] = useState<(() => void) | null>(null);
-	const [isHydrated, setIsHydrated] = useState(false);
-
-	useEffect(() => {
-		// ハイドレーション完了を待つ
-		setIsHydrated(true);
-
-		// カスタムイベントリスナーを追加してダッシュボードからカート情報を受信
-		const handleCartUpdate = (event: CustomEvent) => {
-			console.log('📨 Header received cart update:', event.detail.itemCount);
-			setCartItemCount(event.detail.itemCount);
-		};
-
-		const handleCartClickHandler = (event: CustomEvent) => {
-			setOnCartClick(() => event.detail.clickHandler);
-		};
-
-		window.addEventListener('cartUpdated', handleCartUpdate as EventListener);
-		window.addEventListener('cartClickHandlerSet', handleCartClickHandler as EventListener);
-
-		return () => {
-			window.removeEventListener('cartUpdated', handleCartUpdate as EventListener);
-			window.removeEventListener('cartClickHandlerSet', handleCartClickHandler as EventListener);
-		};
-	}, []);
-
-	return { cartItemCount: isHydrated ? cartItemCount : 0, onCartClick };
-};
+import { useCart, usePanel } from '@/contexts/DashboardContext'; // DashboardContextを直接使用
 
 const Header = () => {
 	const router = useRouter();
@@ -45,7 +14,10 @@ const Header = () => {
 	const [lastScrollY, setLastScrollY] = useState(0);
 	const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
-	const { cartItemCount, onCartClick } = useCartInDashboard();
+	// DashboardContextから直接カート情報を取得
+	const { getCartItemCount } = useCart();
+	const { openPanel } = usePanel();
+	const cartItemCount = getCartItemCount();
 
 	// グローバル認証モーダル管理
 	const { openAuthModal } = useAuthModal();
@@ -71,9 +43,8 @@ const Header = () => {
 	}, [lastScrollY]);
 
 	const handleCartClick = () => {
-		if (onCartClick) {
-			onCartClick();
-		}
+		// DashboardContextのopenPanelを直接使用
+		openPanel('cart');
 		setIsMobileMenuOpen(false);
 	};
 
@@ -139,8 +110,8 @@ const Header = () => {
 								key={link.href}
 								href={link.href}
 								className={`relative px-4 py-2 text-sm font-medium transition-all duration-200 group ${link.isHome
-										? 'text-neonGreen'
-										: 'text-gray-300 hover:text-white'
+									? 'text-neonGreen'
+									: 'text-gray-300 hover:text-white'
 									}`}
 								style={{ animationDelay: `${index * 100}ms` }}
 							>
@@ -169,7 +140,7 @@ const Header = () => {
 
 							{/* Cart Badge */}
 							{cartItemCount > 0 && (
-								<div className="absolute -top-1 -right-1 w-5 h-5 bg-gradient-to-r from-neonGreen to-neonOrange rounded-full flex items-center justify-center">
+								<div className="absolute -top-1 -right-1 w-5 h-5 bg-gradient-to-r from-neonGreen to-neonOrange rounded-full flex items-center justify-center animate-pulse">
 									<span className="text-xs font-bold text-black">
 										{cartItemCount > 99 ? '99+' : cartItemCount}
 									</span>
@@ -179,7 +150,6 @@ const Header = () => {
 							{/* Glow effect */}
 							<div className="absolute inset-0 bg-gradient-to-r from-neonGreen/20 to-neonOrange/20 rounded-sm transform scale-0 group-hover:scale-100 transition-transform duration-200"></div>
 						</button>
-
 
 						<WalletConnectButton
 							variant="desktop"
@@ -217,8 +187,8 @@ const Header = () => {
 								key={link.href}
 								href={link.href}
 								className={`block px-4 py-3 text-base font-medium transition-all duration-200 rounded-sm ${link.isHome
-										? 'text-neonGreen bg-neonGreen/10 border border-neonGreen/20'
-										: 'text-gray-300 hover:text-white hover:bg-dark-200'
+									? 'text-neonGreen bg-neonGreen/10 border border-neonGreen/20'
+									: 'text-gray-300 hover:text-white hover:bg-dark-200'
 									}`}
 								onClick={() => setIsMobileMenuOpen(false)}
 								style={{ animationDelay: `${index * 50}ms` }}
@@ -237,7 +207,7 @@ const Header = () => {
 								<span>Shopping Cart</span>
 							</div>
 							{cartItemCount > 0 && (
-								<div className="w-6 h-6 bg-gradient-to-r from-neonGreen to-neonOrange rounded-full flex items-center justify-center">
+								<div className="w-6 h-6 bg-gradient-to-r from-neonGreen to-neonOrange rounded-full flex items-center justify-center animate-pulse">
 									<span className="text-xs font-bold text-black">
 										{cartItemCount > 99 ? '99+' : cartItemCount}
 									</span>

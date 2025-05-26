@@ -1,5 +1,4 @@
 // types/dashboard.ts
-export type SectionType = 'shop' | 'how-to-buy' | 'whitepaper' | 'profile' | 'cart';
 
 export interface DashboardState {
 	activeSection: SectionType | null;
@@ -25,19 +24,9 @@ export interface CartItem {
 	name: string;
 	price: number;
 	quantity: number;
-	currency: 'BTC' | 'ETH' | 'SOL' | 'AVAX' | 'SUI'; // 更新: 新しい暗号通貨に対応
 	image?: string;
 }
 
-export interface UserProfile {
-	walletAddress: string;
-	displayName?: string;
-	totalSpent: number;
-	totalOrders: number;
-	rank: number;
-	badges: string[];
-	joinDate: Date;
-}
 
 export interface SlideInPanelProps {
 	isOpen: boolean;
@@ -138,4 +127,61 @@ export interface HowToBuyConfig {
 	demoSettings: DemoPaymentSettings;
 	supportedChains: string[];
 	faucetLinks: Record<string, string>;
+}
+
+
+// types/dashboard.ts (修正版)
+export type SectionType = 'shop' | 'how-to-buy' | 'whitepaper' | 'profile' | 'cart';
+
+export interface CartItem {
+	id: string;
+	name: string;
+	price: number; // USD価格
+	quantity: number;
+	// currency フィールドを削除 - 支払い時に選択
+	image?: string;
+}
+
+export interface UserProfile {
+  id: string;
+  name: string;
+  email: string;
+  avatar?: string;
+  walletAddress?: string;
+  preferences?: {
+    theme: 'dark' | 'light';
+    notifications: boolean;
+    currency: 'USD' | 'EUR' | 'JPY';
+  };
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+export interface DashboardState {
+  // Panel Management
+  activeSection: SectionType | null;
+  isSlideOpen: boolean;
+  
+  // Cart Management
+  cartItems: CartItem[];
+  
+  // User Management
+  userProfile: UserProfile | null;
+  walletConnected: boolean;
+}
+
+// Payment types (将来の支払い時に使用)
+export interface PaymentCurrency {
+  symbol: 'ETH' | 'BTC' | 'SOL' | 'AVAX' | 'SUI' | 'USDC' | 'USDT';
+  name: string;
+  network?: string;
+  contractAddress?: string;
+}
+
+export interface CheckoutSession {
+  cartItems: CartItem[];
+  selectedCurrency: PaymentCurrency;
+  totalUSD: number;
+  totalCrypto: number;
+  exchangeRate: number;
 }

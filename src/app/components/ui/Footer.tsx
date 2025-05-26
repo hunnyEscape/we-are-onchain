@@ -1,10 +1,11 @@
 'use client';
 import WalletConnectButton from '../common/WalletConnectButton';
 import Link from 'next/link';
-import { useAuthModal } from '@/contexts/AuthModalContext';
+import CyberButton from '../common/CyberButton';
+import { useRouter } from 'next/navigation';
 const Footer = () => {
 	const currentYear = new Date().getFullYear();
-	const { openAuthModal } = useAuthModal();
+	const router = useRouter();
 	const productLinks = [
 		{ href: '/products/whey-protein', label: 'Whey Protein' },
 		{ href: '/products/bcaa', label: 'BCAA' },
@@ -32,20 +33,8 @@ const Footer = () => {
 		{ href: '/cookies', label: 'Cookie Policy' },
 	];
 
-	const handleAuthModalOpen = () => {
-		openAuthModal({
-			title: 'Connect Your Wallet',
-			preferredChain: 'evm',
-			onSuccess: (user) => {
-				console.log('🎉 Header: User authenticated successfully:', user.walletAddress);
-				// 必要に応じて追加の処理（例：リダイレクト）
-			},
-			onError: (error) => {
-				console.error('❌ Header: Authentication failed:', error);
-			},
-			autoClose: true,
-		});
-		//setIsMobileMenuOpen(false);
+	const handleNavigateToDashboard = () => {
+		router.push('/dashboard');
 	};
 
 	return (
@@ -87,15 +76,10 @@ const Footer = () => {
 								The first Web3-native protein brand. Premium supplements powered by blockchain technology and community governance.
 							</p>
 
-							<WalletConnectButton
-								variant="desktop"
-								showChainInfo={true}
-								showDisconnectButton={true}
-								showProfileLink={true}
-								onProfileClick={()=>{}}
-								onConnectClick={handleAuthModalOpen}
-								size="md"
-							/>
+
+							<CyberButton variant="primary" className="px-4 py-2 text-l" onClick={handleNavigateToDashboard}>
+								How to buy
+							</CyberButton>
 						</div>
 
 						{/* Products */}

@@ -1,4 +1,4 @@
-// src/app/dashboard/components/sections/ShopSection.tsx (簡易版)
+// src/app/dashboard/components/sections/ShopSection.tsx (修正版)
 'use client';
 
 import React, { useState, useEffect } from 'react';
@@ -12,13 +12,13 @@ import { getProductDetails, subscribeToProduct } from '@/lib/firestore/products'
 
 const ShopSection: React.FC = () => {
 	const [quantity, setQuantity] = useState(1);
-	const [selectedCurrency, setSelectedCurrency] = useState<'ETH' | 'USDC' | 'USDT'>('ETH');
 	const [showSuccessMessage, setShowSuccessMessage] = useState(false);
 	const [showStockWarning, setShowStockWarning] = useState(false);
 	const [stockWarningMessage, setStockWarningMessage] = useState('');
 	const [loading, setLoading] = useState(true);
 	const [product, setProduct] = useState<ProductDetails | null>(null);
 	const [isAddingToCart, setIsAddingToCart] = useState(false);
+	const [showCheckoutButton, setShowCheckoutButton] = useState(false); // 追加
 
 	const { addToCart, cartItems } = useCart();
 
@@ -32,13 +32,13 @@ const ShopSection: React.FC = () => {
 		const loadProduct = async () => {
 			try {
 				setLoading(true);
-				
+
 				// 初回データ取得
 				const productData = await getProductDetails(PRODUCT_ID);
 				if (productData) {
 					setProduct(productData);
 				}
-				
+
 				// リアルタイム監視を開始
 				unsubscribe = subscribeToProduct(PRODUCT_ID, (firestoreProduct) => {
 					if (firestoreProduct) {
@@ -71,13 +71,13 @@ const ShopSection: React.FC = () => {
 								updatedAt: firestoreProduct.timestamps.updatedAt.toDate()
 							}
 						};
-						
+
 						setProduct(productDetails);
 					} else {
 						setProduct(null);
 					}
 				});
-				
+
 			} catch (error) {
 				console.error('Error loading product:', error);
 				setProduct(null);
@@ -104,34 +104,34 @@ const ShopSection: React.FC = () => {
 	// 簡易在庫チェック（Firestoreトランザクションなし）
 	const checkSimpleStock = (requestedQuantity: number) => {
 		if (!product) return { canAdd: false, message: 'Product not found' };
-		
+
 		const currentCartQuantity = getCartQuantity();
 		const totalRequested = currentCartQuantity + requestedQuantity;
-		
+
 		// 在庫チェック
 		if (totalRequested > product.inventory.inStock) {
-			return { 
-				canAdd: false, 
-				message: `Only ${product.inventory.inStock - currentCartQuantity} items available` 
+			return {
+				canAdd: false,
+				message: `Only ${product.inventory.inStock - currentCartQuantity} items available`
 			};
 		}
-		
+
 		// 注文制限チェック
 		if (totalRequested > product.settings.maxOrderQuantity) {
-			return { 
-				canAdd: false, 
-				message: `Maximum ${product.settings.maxOrderQuantity} items per order` 
+			return {
+				canAdd: false,
+				message: `Maximum ${product.settings.maxOrderQuantity} items per order`
 			};
 		}
-		
+
 		// 商品アクティブチェック
 		if (!product.settings) {
-			return { 
-				canAdd: false, 
-				message: 'Product is currently unavailable' 
+			return {
+				canAdd: false,
+				message: 'Product is currently unavailable'
 			};
 		}
-		
+
 		return { canAdd: true, message: '' };
 	};
 
@@ -145,7 +145,7 @@ const ShopSection: React.FC = () => {
 		}
 
 		const stockCheck = checkSimpleStock(newQuantity - quantity);
-		
+
 		if (!stockCheck.canAdd && newQuantity > quantity) {
 			setStockWarningMessage(stockCheck.message);
 			setShowStockWarning(true);
@@ -170,7 +170,7 @@ const ShopSection: React.FC = () => {
 
 			// 簡易在庫チェック
 			const stockCheck = checkSimpleStock(quantity);
-			
+
 			if (!stockCheck.canAdd) {
 				setStockWarningMessage(stockCheck.message);
 				setShowStockWarning(true);
@@ -178,17 +178,17 @@ const ShopSection: React.FC = () => {
 				return;
 			}
 
-			// ローカルカートに追加（Firestore予約なし）
+			// ローカルカートに追加（通貨フィールドを削除）
 			const cartItem = {
 				id: product.id,
 				name: product.name,
 				price: product.price.usd,
 				quantity: quantity,
-				currency: selectedCurrency,
 			};
 
-			//addToCart(cartItem, product.inventory.inStock);
+			addToCart(cartItem, product.inventory.inStock);
 			setShowSuccessMessage(true);
+			setShowCheckoutButton(true); // チェックアウトボタンを表示
 
 			setTimeout(() => {
 				setShowSuccessMessage(false);
@@ -207,6 +207,12 @@ const ShopSection: React.FC = () => {
 		}
 	};
 
+	// チェックアウト処理（現在は空の関数）
+	const handleCheckout = () => {
+		console.log('🛒 Checkout initiated');
+		// TODO: 将来的にチェックアウト処理を実装
+	};
+
 	// ローディング状態
 	if (loading) {
 		return (
@@ -219,7 +225,7 @@ const ShopSection: React.FC = () => {
 						Loading product information...
 					</p>
 				</div>
-				
+
 				<div className="flex justify-center items-center h-64">
 					<Loader2 className="w-8 h-8 text-neonGreen animate-spin" />
 				</div>
@@ -239,7 +245,7 @@ const ShopSection: React.FC = () => {
 						Product not found or currently unavailable
 					</p>
 				</div>
-				
+
 				<CyberCard showEffects={false} className="text-center py-12">
 					<AlertTriangle className="w-16 h-16 text-yellow-400 mx-auto mb-4" />
 					<h3 className="text-xl font-semibold text-white mb-2">Product Unavailable</h3>
@@ -265,7 +271,7 @@ const ShopSection: React.FC = () => {
 					Premium Protein Store
 				</h2>
 				<p className="text-gray-400">
-					Pay with cryptocurrency - No wallet connection required
+					Pay with cryptocurrency - Currency selection at checkout
 				</p>
 			</div>
 
@@ -333,13 +339,12 @@ const ShopSection: React.FC = () => {
 									<span className="text-sm text-gray-400">• {product.metadata.reviewCount} reviews</span>
 								)}
 							</div>
-							<span className={`text-sm ${
-								product.inventory.stockLevel === 'high' ? 'text-neonGreen' : 
-								product.inventory.stockLevel === 'medium' ? 'text-yellow-400' : 
-								product.inventory.stockLevel === 'low' ? 'text-orange-400' : 'text-red-400'
-							}`}>
-								{product.inventory.isAvailable ? 
-									`${product.inventory.inStock} in stock` : 
+							<span className={`text-sm ${product.inventory.stockLevel === 'high' ? 'text-neonGreen' :
+									product.inventory.stockLevel === 'medium' ? 'text-yellow-400' :
+										product.inventory.stockLevel === 'low' ? 'text-orange-400' : 'text-red-400'
+								}`}>
+								{product.inventory.isAvailable ?
+									`${product.inventory.inStock} in stock` :
 									'Out of stock'
 								}
 							</span>
@@ -359,7 +364,7 @@ const ShopSection: React.FC = () => {
 							</div>
 							<div className="text-right">
 								<div className="text-xs text-gray-500">per 50g serving</div>
-								<div className="text-xs text-gray-500">Invoice-based payment</div>
+								<div className="text-xs text-gray-500">Currency selection at checkout</div>
 							</div>
 						</div>
 					</div>
@@ -376,24 +381,21 @@ const ShopSection: React.FC = () => {
 
 					{/* Stock Level Indicator */}
 					{product.inventory.isAvailable && (
-						<div className={`flex items-center space-x-2 p-2 rounded-sm ${
-							product.inventory.stockLevel === 'high' ? 'bg-neonGreen/5 border border-neonGreen/20' :
-							product.inventory.stockLevel === 'medium' ? 'bg-yellow-400/5 border border-yellow-400/20' :
-							'bg-orange-400/5 border border-orange-400/20'
-						}`}>
-							<div className={`w-2 h-2 rounded-full ${
-								product.inventory.stockLevel === 'high' ? 'bg-neonGreen' :
-								product.inventory.stockLevel === 'medium' ? 'bg-yellow-400' :
-								'bg-orange-400'
-							}`}></div>
-							<span className={`text-xs ${
-								product.inventory.stockLevel === 'high' ? 'text-neonGreen' :
-								product.inventory.stockLevel === 'medium' ? 'text-yellow-400' :
-								'text-orange-400'
+						<div className={`flex items-center space-x-2 p-2 rounded-sm ${product.inventory.stockLevel === 'high' ? 'bg-neonGreen/5 border border-neonGreen/20' :
+								product.inventory.stockLevel === 'medium' ? 'bg-yellow-400/5 border border-yellow-400/20' :
+									'bg-orange-400/5 border border-orange-400/20'
 							}`}>
+							<div className={`w-2 h-2 rounded-full ${product.inventory.stockLevel === 'high' ? 'bg-neonGreen' :
+									product.inventory.stockLevel === 'medium' ? 'bg-yellow-400' :
+										'bg-orange-400'
+								}`}></div>
+							<span className={`text-xs ${product.inventory.stockLevel === 'high' ? 'text-neonGreen' :
+									product.inventory.stockLevel === 'medium' ? 'text-yellow-400' :
+										'text-orange-400'
+								}`}>
 								{product.inventory.stockLevel === 'high' ? 'In Stock' :
-								 product.inventory.stockLevel === 'medium' ? 'Limited Stock' :
-								 'Low Stock'}
+									product.inventory.stockLevel === 'medium' ? 'Limited Stock' :
+										'Low Stock'}
 							</span>
 						</div>
 					)}
@@ -421,9 +423,9 @@ const ShopSection: React.FC = () => {
 							</button>
 						</div>
 						<div className="text-xs text-gray-400">
-							{isOutOfStock ? 'Out of stock' : 
-							 isAtOrderLimit ? 'Max limit reached' :
-							 `Max ${product.settings.maxOrderQuantity}`}
+							{isOutOfStock ? 'Out of stock' :
+								isAtOrderLimit ? 'Max limit reached' :
+									`Max ${product.settings.maxOrderQuantity}`}
 						</div>
 					</div>
 
@@ -433,12 +435,14 @@ const ShopSection: React.FC = () => {
 							<AlertTriangle className="w-4 h-4 text-yellow-400 flex-shrink-0 mt-0.5" />
 							<div className="text-xs text-gray-300">
 								{isOutOfStock ? 'This item is currently out of stock.' :
-								 `Maximum order limit (${product.settings.maxOrderQuantity} items) reached for this product.`}
+									`Maximum order limit (${product.settings.maxOrderQuantity} items) reached for this product.`}
 							</div>
 						</div>
 					)}
 
+					{/* Action Buttons */}
 					<div className="space-y-3">
+						{/* Add to Cart Button */}
 						<CyberButton
 							variant="outline"
 							className="w-full flex items-center justify-center space-x-2"
@@ -452,6 +456,19 @@ const ShopSection: React.FC = () => {
 							)}
 							<span>{isAddingToCart ? 'Adding...' : 'Add to Cart'}</span>
 						</CyberButton>
+
+						{/* Checkout Now Button - アニメーション付きで表示 */}
+						{showCheckoutButton && (
+							<div className="animate-fade-in">
+								<CyberButton
+									variant="primary"
+									className="w-full flex items-center justify-center space-x-2"
+									onClick={handleCheckout}
+								>
+									<span>Checkout Now</span>
+								</CyberButton>
+							</div>
+						)}
 					</div>
 
 					{/* Features */}
@@ -473,7 +490,7 @@ const ShopSection: React.FC = () => {
 							<h4 className="text-lg font-semibold text-white">Tags</h4>
 							<div className="flex flex-wrap gap-2">
 								{product.metadata.tags.map((tag, index) => (
-									<span 
+									<span
 										key={index}
 										className="px-2 py-1 text-xs bg-dark-200 text-neonGreen border border-neonGreen/30 rounded-sm"
 									>
@@ -555,6 +572,24 @@ const ShopSection: React.FC = () => {
 					</div>
 				</CyberCard>
 			</div>
+
+			{/* CSS for fade-in animation */}
+			<style jsx>{`
+				@keyframes fade-in {
+					from {
+						opacity: 0;
+						transform: translateY(10px);
+					}
+					to {
+						opacity: 1;
+						transform: translateY(0);
+					}
+				}
+				
+				.animate-fade-in {
+					animation: fade-in 0.3s ease-out;
+				}
+			`}</style>
 		</div>
 	);
 };

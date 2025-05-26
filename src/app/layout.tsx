@@ -6,6 +6,7 @@ import { EVMWalletProvider } from '@/auth/providers/wagmi-provider';
 import { EVMWalletProvider as EVMWalletContextProvider } from '@/auth/providers/EVMWalletAdapterWrapper';
 import { UnifiedAuthProvider } from '@/auth/contexts/UnifiedAuthContext';
 import { AuthModalProvider } from '@/contexts/AuthModalContext';
+import { DashboardProvider } from '@/contexts/DashboardContext'; // 追加
 import { GlobalAuthModal } from './components/modals/AuthModalProvider';
 
 // フォント設定の最適化
@@ -86,17 +87,18 @@ export default function RootLayout({
 					<EVMWalletContextProvider>
 						<UnifiedAuthProvider config={AUTH_CONFIG}>
 							<AuthModalProvider defaultOptions={GLOBAL_MODAL_CONFIG}>
-								{/* メインコンテンツ */}
-								{children}
-								
-								{/* グローバル認証モーダル - 最上位レイヤー */}
-								<GlobalAuthModal />
+								{/* DashboardProvider を追加 - 全ページでカート機能使用可能 */}
+								<DashboardProvider>
+									{/* メインコンテンツ */}
+									{children}
+
+									{/* グローバル認証モーダル - 最上位レイヤー */}
+									<GlobalAuthModal />
+								</DashboardProvider>
 							</AuthModalProvider>
 						</UnifiedAuthProvider>
 					</EVMWalletContextProvider>
 				</EVMWalletProvider>
-
-
 
 				{/* 開発環境用のデバッグスクリプト */}
 				{process.env.NODE_ENV === 'development' && (
@@ -120,11 +122,29 @@ export default function RootLayout({
 									}
 								};
 								
+								// カート機能のデバッグヘルパー
+								window.debugCart = {
+									test: () => {
+										console.log('🛒 Testing Cart Events...');
+										window.dispatchEvent(new CustomEvent('cartUpdated', { 
+											detail: { itemCount: 5 } 
+										}));
+									},
+									clear: () => {
+										window.dispatchEvent(new CustomEvent('cartUpdated', { 
+											detail: { itemCount: 0 } 
+										}));
+									}
+								};
+								
 								// コンソールにヘルプを表示
 								console.log('🔐 AuthModal Debug Commands:');
 								console.log('  window.debugAuthModal.open({ title: "Test" })');
 								console.log('  window.debugAuthModal.close()');
 								console.log('  window.debugAuthModal.test()');
+								console.log('🛒 Cart Debug Commands:');
+								console.log('  window.debugCart.test() - Test cart update');
+								console.log('  window.debugCart.clear() - Clear cart count');
 							`,
 						}}
 					/>

@@ -160,20 +160,6 @@ const HowToBuySection: React.FC = () => {
 							No wallet connection or login required at this step
 						</p>
 					</div>
-					<div className="space-y-6">
-						<div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-							<div className="p-4 border border-dark-300 rounded-lg">
-								<ShoppingCart className="w-6 h-6 text-neonGreen mb-2" />
-								<div className="text-white font-medium mb-1">Browse & Add</div>
-								<div className="text-sm text-gray-400">Select products and add to cart</div>
-							</div>
-							<div className="p-4 border border-dark-300 rounded-lg">
-								<Zap className="w-6 h-6 text-neonOrange mb-2" />
-								<div className="text-white font-medium mb-1">Quick Checkout</div>
-								<div className="text-sm text-gray-400">Proceed to payment when ready</div>
-							</div>
-						</div>
-					</div>
 					<div>
 						<h3 className="text-xl font-bold text-white mb-2">
 							Step 2 : Connect Wallet, Shipping Address & Pay

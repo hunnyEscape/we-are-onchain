@@ -7,7 +7,7 @@ import {
 	CreateDemoInvoiceResponse,
 	DemoInvoiceDocument,
 	DemoPaymentErrorCode
-} from '../../../../../../types/demo-payment';
+} from '@/types/demo-payment';
 import {
 	DEMO_PAYMENT_CONFIG,
 	AVALANCHE_FUJI_CONFIG,

@@ -10,8 +10,8 @@ import {
 	WalletAuthRequest,
 	WalletAuthResponse,
 	WalletApiErrorCode
-} from '../../../../../types/api-wallet';
-import { CreateExtendedUserData } from '../../../../../types/user-extended';
+} from '@/types/api-wallet';
+import { CreateExtendedUserData } from '@/types/user-extended';
 
 /**
  * Extended Wallet認証API

@@ -3,7 +3,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import {
 	DemoInvoiceStatusResponse,
 	DemoPaymentErrorCode
-} from '../../../../../../../types/demo-payment';
+} from '@/types/demo-payment';
 import {
 	LOGGING_CONFIG,
 	getExplorerURL

@@ -8,7 +8,7 @@ import {
 	avaxToWei,
 	weiToAVAX
 } from '@/lib/avalanche-config';
-import { DemoPaymentError } from '../../../../types/demo-payment';
+import { DemoPaymentError } from '@/types/demo-payment';
 
 /**
  * トランザクション情報

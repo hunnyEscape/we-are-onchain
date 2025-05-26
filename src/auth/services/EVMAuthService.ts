@@ -6,7 +6,7 @@ import {
 	WalletAuthResult,
 	WalletSignatureData
 } from '@/auth/types/wallet';
-import { WalletAdapter, WalletAuthService } from '../../core/WalletAdapterInterface';
+import { WalletAdapter, WalletAuthService } from './WalletAdapterInterface';
 
 /**
  * EVM系ウォレット認証サービス

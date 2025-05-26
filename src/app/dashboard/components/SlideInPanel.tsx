@@ -2,7 +2,7 @@
 'use client';
 
 import React, { useEffect } from 'react';
-import { SlideInPanelProps } from '../../../../types/dashboard';
+import { SlideInPanelProps } from '@/types/dashboard';
 import { X, ArrowLeft } from 'lucide-react';
 import CyberButton from '../../components/common/CyberButton';
 import GridPattern from '../../components/common/GridPattern';

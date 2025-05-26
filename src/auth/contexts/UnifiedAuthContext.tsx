@@ -7,7 +7,7 @@ import {
 	ExtendedFirestoreUser,
 	WalletOperationResult,
 	AuthFlowState
-} from '@/auth/types/user-extended';
+} from '../types/user-extended';
 import { UnifiedAuthState, AuthConfig, AuthActions, AuthEvent, AuthEventType, UseAuthReturn } from '@/auth/types/auth';
 import { WalletAuthRequest, WalletAuthResponse } from '@/auth/types/api-wallet';
 

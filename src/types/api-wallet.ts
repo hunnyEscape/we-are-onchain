@@ -1,6 +1,5 @@
 // types/api-wallet.ts
 import { ChainType } from './wallet';
-import { WalletFirestoreUser } from '../src/lib/firestore/users-wallet';
 import { ExtendedFirestoreUser } from './user-extended'; // 追加
 
 /**

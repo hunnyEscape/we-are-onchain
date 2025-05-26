@@ -7,7 +7,7 @@ import CyberButton from '../../../components/common/CyberButton';
 import ProteinModel from '../../../components/home/glowing-3d-text/ProteinModel';
 import { useCart } from '@/contexts/DashboardContext';
 import { ShoppingCart, Star, Shield, Zap, Check, AlertTriangle, Clock, Loader2 } from 'lucide-react';
-import { ProductDetails } from '../../../../../types/product';
+import { ProductDetails } from '@/types/product';
 import { getProductDetails, subscribeToProduct } from '@/lib/firestore/products';
 
 const ShopSection: React.FC = () => {

@@ -7,27 +7,19 @@ import CyberCard from '../components/common/CyberCard';
 import CyberButton from '../components/common/CyberButton';
 import { ProfileEditModal } from '../dashboard/components/sections/ProfileEditModal';
 import {
-	User,
 	Wallet,
 	Trophy,
-	Calendar,
-	ShoppingBag,
-	TrendingUp,
 	Award,
 	ExternalLink,
 	Copy,
 	Check,
 	Shield,
-	LogIn,
 	Edit,
 	AlertCircle,
 	CheckCircle,
 	ArrowLeft
 } from 'lucide-react';
 import {
-	getUserDisplayName,
-	getUserAvatarUrl,
-	getUserInitials,
 	formatUserStats,
 	formatDate,
 	formatAddress,
@@ -36,15 +28,15 @@ import {
 
 export default function ProfilePage() {
 	// Wallet認証のみ使用
-	const { 
-		isAuthenticated, 
-		isLoading, 
+	const {
+		isAuthenticated,
+		isLoading,
 		walletAddress,
 		displayName,
 		firestoreUser,
-		firestoreLoading 
+		firestoreLoading
 	} = useUnifiedAuth();
-	
+
 	const [copiedAddress, setCopiedAddress] = useState(false);
 	const [isEditModalOpen, setIsEditModalOpen] = useState(false);
 
@@ -205,7 +197,7 @@ export default function ProfilePage() {
 	// プロフィール完成度を計算
 	const profileCompleteness = calculateProfileCompleteness(firestoreUser);
 	const formattedStats = formatUserStats(firestoreUser.stats);
-	
+
 	// Wallet専用のユーザー情報
 	const userDisplayName = displayName || walletAddress?.slice(0, 6) + '...' + walletAddress?.slice(-4) || 'Anonymous';
 	const userInitials = displayName ? displayName[0].toUpperCase() : (walletAddress ? walletAddress[2].toUpperCase() : 'U');
@@ -387,7 +379,7 @@ export default function ProfilePage() {
 								<div className="flex items-center space-x-2 mb-4">
 									<Wallet className="w-4 h-4 text-gray-400" />
 									<span className="font-mono text-sm text-gray-300">
-										{walletAddress ? 
+										{walletAddress ?
 											`${walletAddress.slice(0, 10)}...${walletAddress.slice(-8)}` :
 											`User ID: ${firestoreUser.id.slice(0, 8)}...${firestoreUser.id.slice(-4)}`
 										}
@@ -454,9 +446,10 @@ export default function ProfilePage() {
 				</div>
 
 				{/* Badges */}
+				{/* Badges */}
 				<CyberCard title="Badges & Achievements" showEffects={false}>
 					<div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-						{firestoreUser.stats.badges.map((badge, index) => (
+						{firestoreUser.stats.badges.map((badge: string, index: number) => (
 							<div key={index} className="flex items-center space-x-3 p-3 border border-neonOrange/30 rounded-sm bg-neonOrange/5">
 								<Award className="w-5 h-5 text-neonOrange" />
 								<span className="text-white font-medium">{badge}</span>

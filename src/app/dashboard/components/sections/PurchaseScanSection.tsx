@@ -4,7 +4,7 @@
 import React, { useState } from 'react';
 import CyberCard from '../../../components/common/CyberCard';
 import CyberButton from '../../../components/common/CyberButton';
-import { PurchaseRecord, FilterOptions } from '../../../../../types/dashboard';
+import { PurchaseRecord, FilterOptions } from '@/types/dashboard';
 import { TrendingUp, Users, DollarSign, Activity, Trophy, ExternalLink } from 'lucide-react';
 
 const PurchaseScanSection: React.FC = () => {

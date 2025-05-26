@@ -126,6 +126,7 @@ export const checkWalletUserExists = async (walletAddress: string): Promise<bool
     return exists;
   } catch (error) {
     handleAdminError(error, 'checkWalletUserExists');
+    return false; // エラー時のデフォルト値
   }
 };
 
@@ -152,6 +153,7 @@ export const getWalletUserByAddress = async (
     return null;
   } catch (error) {
     handleAdminError(error, 'getWalletUserByAddress');
+    return null; // エラー時はnullを返す
   }
 };
 
@@ -200,6 +202,8 @@ export const createWalletUser = async (
     return firestoreUserData;
   } catch (error) {
     handleAdminError(error, 'createWalletUser');
+    // エラー時は例外を再スローするか、デフォルト値を返す
+    throw error;
   }
 };
 
@@ -257,6 +261,8 @@ export const updateWalletUserLastAuth = async (
     console.log(`🔄 Wallet user last auth updated: ${userId}`);
   } catch (error) {
     handleAdminError(error, 'updateWalletUserLastAuth');
+    // voidを返す関数なので、エラーを再スローするか何もしない
+    throw error;
   }
 };
 
@@ -295,6 +301,7 @@ export const updateWalletUserProfile = async (
     console.log(`📝 Wallet user profile updated: ${userId}`);
   } catch (error) {
     handleAdminError(error, 'updateWalletUserProfile');
+    throw error;
   }
 };
 
@@ -325,6 +332,7 @@ export const updateWalletUserStats = async (
     console.log(`📊 Wallet user stats updated: ${userId}`);
   } catch (error) {
     handleAdminError(error, 'updateWalletUserStats');
+    throw error;
   }
 };
 
@@ -357,10 +365,14 @@ export const syncWalletAuthWithFirestore = async (
       
       // 最新データを取得して返す
       const updatedUser = await getWalletUserByAddress(walletAddress);
-      return updatedUser!;
+      if (!updatedUser) {
+        throw new Error(`Failed to retrieve updated user data for: ${walletAddress}`);
+      }
+      return updatedUser;
     }
   } catch (error) {
     handleAdminError(error, 'syncWalletAuthWithFirestore');
+    throw error;
   }
 };
 
@@ -388,5 +400,6 @@ export const getWalletUsersByAddresses = async (
     return users;
   } catch (error) {
     handleAdminError(error, 'getWalletUsersByAddresses');
+    return []; // エラー時は空配列を返す
   }
 };

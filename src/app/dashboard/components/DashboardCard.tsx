@@ -2,7 +2,7 @@
 'use client';
 
 import React, { useState } from 'react';
-import { DashboardCardProps } from '../../../../types/dashboard';
+import { DashboardCardProps } from '@/types/dashboard';
 import GridPattern from '../../components/common/GridPattern';
 
 const DashboardCard: React.FC<DashboardCardProps> = ({

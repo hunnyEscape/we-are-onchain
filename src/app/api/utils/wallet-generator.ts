@@ -3,7 +3,7 @@ import { ethers } from 'ethers';
 import { generateMnemonic, mnemonicToSeedSync, validateMnemonic } from 'bip39';
 import HDKey from 'hdkey';
 import crypto from 'crypto';
-import { GeneratedWallet, DemoPaymentError } from '../../../../types/demo-payment';
+import { GeneratedWallet, DemoPaymentError } from '@/types/demo-payment';
 import { DEMO_PAYMENT_CONFIG, LOGGING_CONFIG } from '@/lib/avalanche-config';
 
 /**

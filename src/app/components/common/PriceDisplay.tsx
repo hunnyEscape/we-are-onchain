@@ -4,7 +4,7 @@
 import React from 'react';
 import { RefreshCw, AlertTriangle, TrendingUp, TrendingDown } from 'lucide-react';
 import { usePriceConverter } from '@/hooks/usePriceConverter';
-import { PriceDisplayProps } from '../../../../types/dashboard';
+import { PriceDisplayProps } from '@/types/dashboard';
 
 export const PriceDisplay: React.FC<PriceDisplayProps> = ({
 	usdAmount,

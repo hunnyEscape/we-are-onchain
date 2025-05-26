@@ -48,7 +48,6 @@
 │   │   │       ├── qr-generator.ts
 │   │   │       └── wallet-generator.ts
 │   │   ├── components
-│   │   │   ├── AuthModal.tsx
 │   │   │   ├── common
 │   │   │   │   ├── CyberButton.tsx
 │   │   │   │   ├── CyberCard.tsx
@@ -131,14 +130,23 @@
 │   │       └── page.tsx
 │   ├── auth
 │   │   ├── components
+│   │   │   └── AuthModal.tsx
 │   │   ├── config
+│   │   │   └── chain-config.ts
 │   │   ├── contexts
 │   │   │   └── UnifiedAuthContext.tsx
 │   │   ├── providers
+│   │   │   ├── EVMWalletAdapterWrapper.tsx
+│   │   │   └── wagmi-provider.tsx
 │   │   ├── services
+│   │   │   ├── EVMAuthService.ts
+│   │   │   ├── EVMWalletAdapter.ts
+│   │   │   └── WalletAdapterInterface.ts
 │   │   └── types
 │   │       ├── api-wallet.ts
 │   │       ├── auth.ts
+│   │       ├── user-extended.ts
+│   │       ├── user.ts
 │   │       └── wallet.ts
 │   ├── contexts
 │   │   └── DashboardContext.tsx
@@ -166,21 +174,11 @@
 │   │   ├── user-extended.ts
 │   │   ├── user.ts
 │   │   └── wallet.ts
-│   ├── utils
-│   │   ├── errorHandling.ts
-│   │   ├── userHelpers.ts
-│   │   └── validation.ts
-│   └── wallet-auth
-│       ├── adapters
-│       │   └── evm
-│       │       ├── EVMAuthService.ts
-│       │       ├── EVMWalletAdapter.ts
-│       │       ├── EVMWalletAdapterWrapper.tsx
-│       │       ├── chain-config.ts
-│       │       └── wagmi-provider.tsx
-│       └── core
-│           └── WalletAdapterInterface.ts
+│   └── utils
+│       ├── errorHandling.ts
+│       ├── userHelpers.ts
+│       └── validation.ts
 ├── tailwind.config.js
 └── tsconfig.json
 
-53 directories, 130 files
+49 directories, 132 files

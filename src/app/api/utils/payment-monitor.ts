@@ -5,7 +5,7 @@ import {
 	DemoInvoiceDocument,
 	DemoInvoiceStatus,
 	DemoPaymentError
-} from '../../../../types/demo-payment';
+} from '@/types/demo-payment';
 import {
 	FIRESTORE_COLLECTIONS,
 	PAYMENT_MONITOR_CONFIG,

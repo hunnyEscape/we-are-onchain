@@ -1,6 +1,6 @@
 // src/app/api/utils/qr-generator.ts
 import QRCode from 'qrcode';
-import { QRCodeConfig, DemoPaymentError } from '../../../../types/demo-payment';
+import { QRCodeConfig, DemoPaymentError } from '@/types/demo-payment';
 import { QR_CODE_CONFIG, generatePaymentURI, LOGGING_CONFIG } from '@/lib/avalanche-config';
 
 /**

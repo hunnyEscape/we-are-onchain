@@ -37,8 +37,8 @@ export const ExtendedAuthModal = ({
 		// Wallet Auth
 		connectWallet,
 		authenticateWallet,
-
 		// 状態
+		switchWalletChain,
 		isLoading,
 		authFlowState: unifiedAuthFlowState,
 		walletAddress,
@@ -58,6 +58,8 @@ export const ExtendedAuthModal = ({
 		updateProgress,
 		setStepStatus,
 	} = useAuthModal();
+
+	
 
 	// ローカル状態（最小限に削減）
 	const [localError, setLocalError] = useState('');
@@ -170,6 +172,17 @@ export const ExtendedAuthModal = ({
 			// ウォレット接続
 			const connection = await connectWallet(chainType);
 			console.log('✅ Wallet connection result:', connection);
+
+			console.log(`selectedChain.chainId,connection.chainId`, selectedChain?.chainId, connection.chainId);
+			if (selectedChain && connection.chainId !== selectedChain.chainId) {
+				try {
+					console.log(`switchChain`);
+					await switchWalletChain('evm', selectedChain.chainId);
+				} catch (switchError) {
+					console.warn('⚠️ Chain switch failed, continuing with current chain:', switchError);
+					// エラーを投げずに継続（ユーザーが拒否した場合など）
+				}
+			}
 
 			updateProgress?.(50);
 			setAuthStep?.('wallet-sign');

@@ -69,6 +69,7 @@ export class AuthActionsService {
 	 * チェーン選択→ウォレット接続のフロー
 	 */
 	async connectWallet(chainType: ChainType = 'evm', walletType?: string) {
+		console.log('connectWallet_connectWallet');
 		try {
 			this.authFlow.setStep('connecting');
 			this.authFlow.updateProgress(25);

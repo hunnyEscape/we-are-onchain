@@ -141,10 +141,14 @@
 │   │   │   └── testnet-chains.ts
 │   │   ├── contexts
 │   │   │   └── UnifiedAuthContext.tsx
+│   │   ├── hooks
+│   │   │   ├── useAuthFlowState.ts
+│   │   │   └── useChainSelectionState.ts
 │   │   ├── providers
 │   │   │   ├── EVMWalletAdapterWrapper.tsx
 │   │   │   └── wagmi-provider.tsx
 │   │   ├── services
+│   │   │   ├── AuthActionsService.ts
 │   │   │   ├── EVMAuthService.ts
 │   │   │   ├── EVMWalletAdapter.ts
 │   │   │   └── WalletAdapterInterface.ts
@@ -185,4 +189,4 @@
 ├── tailwind.config.js
 └── tsconfig.json
 
-50 directories, 135 files
+51 directories, 138 files

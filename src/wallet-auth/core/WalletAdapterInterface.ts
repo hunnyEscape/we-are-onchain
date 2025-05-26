@@ -108,7 +108,7 @@ export interface MultiChainWalletManager {
 	setPrimaryWallet(address: string, chainType: ChainType): Promise<void>;
 
 	// 認証
-	authenticateWallet(chainType: ChainType): Promise<WalletAuthResult>;
+	authenticateWallet(chainType: ChainType,address?: string): Promise<WalletAuthResult>;
 	isAuthenticated(chainType?: ChainType): boolean;
 
 	// イベント

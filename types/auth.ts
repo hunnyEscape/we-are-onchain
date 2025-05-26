@@ -63,7 +63,7 @@ export interface AuthActions {
 
 	// Wallet認証
 	connectWallet: (chainType?: ChainType, walletType?: string) => Promise<WalletConnection>;
-	authenticateWallet: (chainType?: ChainType) => Promise<WalletAuthResult>;
+	authenticateWallet: (chainType?: ChainType,address?: string) => Promise<WalletAuthResult>;
 	switchWalletChain: (chainType: ChainType, chainId: number | string) => Promise<void>;
 
 	// 統合ログアウト

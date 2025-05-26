@@ -273,8 +273,13 @@ export const UnifiedAuthProvider = ({ children, config: userConfig = {} }: Unifi
 			}
 		},
 
-		// ★ メイン機能: Extended Wallet認証
-		authenticateWallet: async (chainType: ChainType = 'evm') => {
+		// UnifiedAuthContext.tsx の authenticateWallet 関数の修正版
+
+		// ★ メイン機能: Extended Wallet認証（修正版）
+		authenticateWallet: async (
+			chainType: ChainType = 'evm',
+			address?: string
+		) => {
 			try {
 				setAuthFlowState(prev => ({
 					...prev,
@@ -288,41 +293,53 @@ export const UnifiedAuthProvider = ({ children, config: userConfig = {} }: Unifi
 					const authService = new (await import('@/wallet-auth/adapters/evm/EVMAuthService')).EVMAuthService();
 					const nonce = authService.generateNonce();
 
-					// 2. ウォレットアドレス確認
-					if (!evmWallet.address) {
-						throw new Error('Wallet not connected');
-					}
+					// 2. ウォレットアドレス確認（evmWallet.addressを使用）
+					const currentAddress = address || evmWallet.address;
+					console.log('currentAddress_authenticateWallet_nonce',currentAddress,nonce);
+					const isConnectedCheck = evmWallet.isConnected;
 
-					if (!evmWallet.isConnected) {
-						throw new Error('Wallet connection lost');
-					}
-
-					console.log('🔗 Wallet status confirmed:', {
-						address: evmWallet.address,
-						isConnected: evmWallet.isConnected,
+					console.log('🔍 Wallet status check:', {
+						evmWalletAddress: evmWallet.address,
+						currentAddress,
+						evmWalletConnected: evmWallet.isConnected,
+						evmWalletConnecting: evmWallet.isConnecting,
 						chainId: evmWallet.chainId,
 						chainName: evmWallet.chainName
 					});
 
-					// 3. Nonceを保存（フロントエンド側）
-					authService.storeNonce(evmWallet.address, nonce);
+					if (!currentAddress) {
+						throw new Error('Wallet address not available. Please ensure wallet is connected.');
+					}
 
-					console.log(`🔑 Generated and stored nonce: ${nonce} for address: ${evmWallet.address}`);
+					console.log('🔗 Using wallet address for authentication:', currentAddress);
+
+					// 4. Nonceを保存（フロントエンド側）
+					authService.storeNonce(currentAddress, nonce);
+					console.log(`🔑 Generated and stored nonce: ${nonce} for address: ${currentAddress}`);
 
 					// 署名要求の準備
 					setAuthFlowState(prev => ({ ...prev, progress: 50 }));
 
-					// 4. 認証メッセージ作成
-					const authMessage = authService.createAuthMessage(evmWallet.address, nonce, chainType);
+					// 5. 認証メッセージ作成
+					const authMessage = authService.createAuthMessage(currentAddress, nonce, chainType);
 
-					// 5. ウォレットから署名取得
-					const signature = await evmWallet.signMessage(authMessage);
+					// 6. ウォレットから署名取得（EVMWalletを直接使用）
+					console.log('📝 Requesting signature for message:', authMessage.substring(0, 100) + '...');
 
-					// 6. 署名データ構築
+					let signature: string;
+					try {
+						signature = await evmWallet.signMessage(authMessage);
+						console.log('✅ Signature obtained:', signature.substring(0, 20) + '...');
+					} catch (signError: any) {
+						console.error('❌ Signature failed:', signError);
+						throw new Error(`Signature failed: ${signError.message || 'User rejected or wallet error'}`);
+					}
+
+					// 7. 署名データ構築
 					const signatureData = {
 						message: authMessage,
 						signature,
-						address: evmWallet.address,
+						address: currentAddress,
 						chainType,
 						chainId: evmWallet.chainId,
 						nonce,
@@ -344,7 +361,7 @@ export const UnifiedAuthProvider = ({ children, config: userConfig = {} }: Unifi
 						messageLength: signatureData.message.length
 					});
 
-					// 7. Extended API Routes経由でFirestore認証
+					// 8. Extended API Routes経由でFirestore認証
 					const apiRequest: WalletAuthRequest = {
 						signature: signatureData.signature,
 						message: signatureData.message,
@@ -366,7 +383,7 @@ export const UnifiedAuthProvider = ({ children, config: userConfig = {} }: Unifi
 
 					console.log('✅ Extended API authentication successful:', result.data);
 
-					// 8. Extended Firestoreユーザーデータを保存
+					// 9. Extended Firestoreユーザーデータを保存
 					if (result.data?.user) {
 						setExtendedUser(result.data.user);
 
@@ -405,6 +422,7 @@ export const UnifiedAuthProvider = ({ children, config: userConfig = {} }: Unifi
 					throw new Error(`Chain type ${chainType} not supported yet`);
 				}
 			} catch (error) {
+				console.error('💥 Extended Wallet authenticate error:', error);
 				handleError(error, 'Extended Wallet authenticate');
 				setAuthFlowState(prev => ({
 					...prev,

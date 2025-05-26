@@ -93,52 +93,50 @@ export const ExtendedAuthModal = ({
 		}
 	}, [isOpen]);
 
-	// Wallet接続処理
-	const handleWalletConnect = async () => {
+	// 🔧 段階的な接続+認証処理（安全版）
+	const handleWalletConnectAndAuth = async () => {
 		setLocalError('');
 		setLoading(true);
 		setCurrentStep('wallet-connect');
 
 		try {
 			console.log('🔗 Starting wallet connection...');
-			await connectWallet(preferredChain);
+			const connection = await connectWallet(preferredChain);
+			console.log('✅ Wallet connection result:', connection);
 			
-			// 接続成功後、署名ステップに移動
-			console.log('✅ Wallet connected, moving to sign step');
+			// 接続成功後、wallet-signステップに移行
 			setCurrentStep('wallet-sign');
+			console.log('📱 Moving to sign step');
+
+			const result = await authenticateWallet(preferredChain,connection.address);
+			
 		} catch (error: any) {
 			console.error('❌ Wallet connection failed:', error);
 			setLocalError(error.message || 'Wallet connection failed');
 			setCurrentStep('error');
-		} finally {
 			setLoading(false);
 		}
 	};
 
-	// Wallet認証処理
 	const handleWalletAuth = async () => {
 		setLocalError('');
 		setLoading(true);
 
 		try {
-			console.log('🚀 ExtendedAuthModal: Starting wallet authentication...');
+			console.log('🚀 ExtendedAuthModal: Starting manual wallet authentication...');
 
-			// 1. まずWalletが接続されているか確認
 			if (!walletAddress) {
 				throw new Error('Wallet not connected. Please connect your wallet first.');
 			}
 
 			console.log('📱 ExtendedAuthModal: Wallet connected, address:', walletAddress);
-
-			// 2. UnifiedAuthContextのExtended認証を直接呼び出し
 			console.log('🔐 ExtendedAuthModal: Calling authenticateWallet...');
+			
 			const result = await authenticateWallet(preferredChain);
-
 			console.log('✅ ExtendedAuthModal: Authentication result:', result);
 
 			if (result.success) {
 				console.log('🎉 ExtendedAuthModal: Authentication successful');
-				// 成功時はauthFlowStateの変更によって自動的にステップが更新される
 			} else {
 				setLocalError(result.error || 'Extended wallet authentication failed');
 				setCurrentStep('error');
@@ -148,8 +146,6 @@ export const ExtendedAuthModal = ({
 			console.error('💥 ExtendedAuthModal: Authentication error:', error);
 			setLocalError(error.message || 'Extended wallet authentication failed');
 			setCurrentStep('error');
-		} finally {
-			// loadingはauthFlowStateの変更で制御されるため、ここでは設定しない
 		}
 	};
 
@@ -235,7 +231,16 @@ export const ExtendedAuthModal = ({
 						<div className="bg-red-900/30 border border-red-500/50 text-red-300 px-4 py-3 rounded-sm mb-4 text-sm">
 							<div className="flex items-center">
 								<AlertCircle className="w-4 h-4 mr-2 flex-shrink-0" />
-								<span>{localError || authError}</span>
+								<div>
+									<div>{localError || authError}</div>
+									{/* 🔧 デバッグ情報の表示 */}
+									{process.env.NODE_ENV === 'development' && (
+										<div className="text-xs text-gray-400 mt-2">
+											Debug: walletAddress = {walletAddress || 'null'} | 
+											isAuthenticated = {isAuthenticated ? 'true' : 'false'}
+										</div>
+									)}
+								</div>
 							</div>
 						</div>
 					)}
@@ -278,7 +283,7 @@ export const ExtendedAuthModal = ({
 
 							{/* Connect Button */}
 							<button
-								onClick={handleWalletConnect}
+								onClick={handleWalletConnectAndAuth}
 								disabled={loading}
 								className="w-full relative px-6 py-4 bg-gradient-to-r from-neonGreen to-neonOrange text-black font-semibold rounded-sm overflow-hidden group transition-all duration-200 hover:shadow-lg hover:shadow-neonGreen/25 disabled:opacity-50 disabled:cursor-not-allowed"
 							>
@@ -325,7 +330,10 @@ export const ExtendedAuthModal = ({
 							<div>
 								<h3 className="text-xl font-bold text-white mb-2">Sign Authentication Message</h3>
 								<p className="text-gray-400 mb-4">
-									Please sign the message in your wallet to verify your identity.
+									{loading && authFlowState.signatureRequired 
+										? 'Please check your wallet and sign the message to complete authentication.'
+										: 'Please sign the message in your wallet to verify your identity.'
+									}
 								</p>
 								{walletAddress && (
 									<div className="bg-neonGreen/10 border border-neonGreen/30 rounded-sm p-3 mb-4">

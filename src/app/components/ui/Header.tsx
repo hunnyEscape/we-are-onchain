@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useChainId, useAccount } from 'wagmi';
 import { useUnifiedAuth } from '@/auth/contexts/UnifiedAuthContext';
-import { ExtendedAuthModal } from '@/auth/components/AuthModal';
+import { ExtendedAuthModal } from '../../../auth/components/AuthModal';
 import { ShoppingCart } from 'lucide-react';
 import { chainUtils } from '@/auth/config/chain-config';
 

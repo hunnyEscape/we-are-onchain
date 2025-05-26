@@ -361,7 +361,7 @@ const ProfileSection: React.FC = () => {
 							<div className="grid grid-cols-2 gap-4">
 								<div>
 									<div className="text-sm text-gray-400">Member Since</div>
-									<div className="text-white font-semibold">{formatDate(firestoreUser.createdAt)}</div>
+						
 								</div>
 								<div>
 									<div className="text-sm text-gray-400">Community Rank</div>

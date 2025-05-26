@@ -15,7 +15,7 @@ import {
 import CyberButton from '../common/CyberButton';
 import CyberCard from '../common/CyberCard';
 import QRCodeDisplay from './QRCodeDisplay';
-import { CreateDemoInvoiceResponse, DemoInvoiceStatusResponse } from '../../../../types/demo-payment';
+import { CreateDemoInvoiceResponse, DemoInvoiceStatusResponse } from '@/types/demo-payment';
 
 /**
  * デモの状態管理（API型に合わせて拡張）

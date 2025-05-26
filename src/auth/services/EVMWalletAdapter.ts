@@ -17,7 +17,7 @@ import {
 	ChainConfig,
 	WalletError
 } from '@/auth/types/wallet';
-import { WalletAdapter } from '../../core/WalletAdapterInterface';
+import { WalletAdapter } from './WalletAdapterInterface';
 import { chainUtils, getEVMChains, CHAIN_DISPLAY_NAMES } from '../config/chain-config';
 
 // 既存のwindow.ethereum定義を使用（型競合回避）

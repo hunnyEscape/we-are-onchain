@@ -125,7 +125,7 @@ const ShopSection: React.FC = () => {
 		}
 		
 		// 商品アクティブチェック
-		if (!product.settings.isActive) {
+		if (!product.settings) {
 			return { 
 				canAdd: false, 
 				message: 'Product is currently unavailable' 
@@ -187,7 +187,7 @@ const ShopSection: React.FC = () => {
 				currency: selectedCurrency,
 			};
 
-			addToCart(cartItem, product.inventory.inStock);
+			//addToCart(cartItem, product.inventory.inStock);
 			setShowSuccessMessage(true);
 
 			setTimeout(() => {
@@ -515,7 +515,7 @@ const ShopSection: React.FC = () => {
 						</div>
 						<div className="flex justify-between">
 							<span className="text-gray-400">Category:</span>
-							<span className="text-white capitalize">{product.settings.category || 'Protein'}</span>
+							<span className="text-white capitalize">{'Protein'}</span>
 						</div>
 						<div className="flex justify-between">
 							<span className="text-gray-400">Min Order:</span>

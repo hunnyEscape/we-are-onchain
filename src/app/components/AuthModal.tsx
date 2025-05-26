@@ -1,4 +1,4 @@
-// src/app/components/auth/ExtendedAuthModal.tsx
+// src/app/components/AuthModal.tsx
 'use client';
 
 import { useState, useEffect } from 'react';

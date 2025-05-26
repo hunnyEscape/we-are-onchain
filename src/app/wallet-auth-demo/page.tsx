@@ -4,7 +4,7 @@
 import React, { useState } from 'react';
 import { useUnifiedAuth } from '@/contexts/UnifiedAuthContext';
 import { useEVMWallet } from '@/wallet-auth/adapters/evm/EVMWalletAdapterWrapper';
-import { ExtendedAuthModal } from '../components/auth/ExtendedAuthModal';
+import { ExtendedAuthModal } from '../components/AuthModal';
 import CyberCard from '../components/common/CyberCard';
 import CyberButton from '../components/common/CyberButton';
 import { 

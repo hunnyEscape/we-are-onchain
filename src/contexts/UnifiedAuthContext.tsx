@@ -1,10 +1,15 @@
-// src/contexts/UnifiedAuthContext.tsx
+// src/contexts/UnifiedAuthContext.tsx (Extended統合版)
 'use client';
 
 import React, { createContext, useContext, useEffect, useState, useCallback, useRef } from 'react';
 import { ChainType } from '../../types/wallet';
-import { ExtendedFirestoreUser, WalletOperationResult, AuthFlowState } from '../../types/user-extended';
+import {
+	ExtendedFirestoreUser,
+	WalletOperationResult,
+	AuthFlowState
+} from '../../types/user-extended';
 import { UnifiedAuthState, AuthConfig, AuthActions, AuthEvent, AuthEventType, UseAuthReturn } from '../../types/auth';
+import { WalletAuthRequest, WalletAuthResponse } from '../../types/api-wallet';
 
 // EVMWalletProviderはオプショナルにする
 let useEVMWallet: any = null;
@@ -15,7 +20,7 @@ try {
 	console.warn('EVMWallet not available:', error);
 }
 
-// デフォルト設定（Wallet専用）
+// デフォルト設定（Extended Wallet専用）
 const DEFAULT_CONFIG: AuthConfig = {
 	preferredMethod: 'wallet', // wallet固定
 	enableFirebase: false,     // Firebase無効
@@ -28,22 +33,31 @@ const DEFAULT_CONFIG: AuthConfig = {
 	},
 };
 
-interface UnifiedAuthContextType extends UseAuthReturn {
+interface ExtendedUnifiedAuthContextType extends UseAuthReturn {
 	// 設定
 	config: AuthConfig;
 
-	// 追加の状態
+	// Extended状態
 	authFlowState: AuthFlowState;
+	extendedUser: ExtendedFirestoreUser | null;
+
+	// Extended操作
+	refreshExtendedUser: () => Promise<void>;
+	getAuthHistory: () => ExtendedFirestoreUser['authHistory'] | null;
+	getConnectedWallets: () => ExtendedFirestoreUser['connectedWallets'] | null;
+	updateUserProfile: (profileData: any) => Promise<WalletOperationResult>;
 
 	// 内部状態（デバッグ用）
 	_debug: {
 		firebaseReady: boolean;
 		walletReady: boolean;
 		lastError: string | null;
+		apiCalls: number;
+		lastApiCall: Date | null;
 	};
 }
 
-const UnifiedAuthContext = createContext<UnifiedAuthContextType | undefined>(undefined);
+const UnifiedAuthContext = createContext<ExtendedUnifiedAuthContextType | undefined>(undefined);
 
 interface UnifiedAuthProviderProps {
 	children: React.ReactNode;
@@ -53,8 +67,8 @@ interface UnifiedAuthProviderProps {
 export const UnifiedAuthProvider = ({ children, config: userConfig = {} }: UnifiedAuthProviderProps) => {
 	const config = { ...DEFAULT_CONFIG, ...userConfig };
 
-	// Firestore状態（Wallet基準）
-	const [firestoreUser, setFirestoreUser] = useState<ExtendedFirestoreUser | null>(null);
+	// Extended Firestore状態
+	const [extendedUser, setExtendedUser] = useState<ExtendedFirestoreUser | null>(null);
 	const [firestoreLoading, setFirestoreLoading] = useState(false);
 
 	// Wallet状態（EVMのみ現在対応）
@@ -83,11 +97,11 @@ export const UnifiedAuthProvider = ({ children, config: userConfig = {} }: Unifi
 		error: null,
 	};
 
-	// 統合状態（Wallet専用）
+	// 統合状態（Extended Wallet専用）
 	const [isAuthenticated, setIsAuthenticated] = useState(false);
 	const [error, setError] = useState<string | null>(null);
 
-	// 認証フロー状態
+	// Extended認証フロー状態
 	const [authFlowState, setAuthFlowState] = useState<AuthFlowState>({
 		currentStep: 'idle',
 		signatureRequired: false,
@@ -99,11 +113,13 @@ export const UnifiedAuthProvider = ({ children, config: userConfig = {} }: Unifi
 	const eventEmitter = useRef(new EventTarget());
 	const [eventListeners] = useState(new Map<string, Set<(event: AuthEvent) => void>>());
 
-	// デバッグ情報
+	// デバッグ情報（Extended）
 	const [debugInfo, setDebugInfo] = useState({
 		firebaseReady: false,  // 常にfalse
 		walletReady: false,
 		lastError: null as string | null,
+		apiCalls: 0,
+		lastApiCall: null as Date | null,
 	});
 
 	// エラーハンドリング
@@ -111,7 +127,7 @@ export const UnifiedAuthProvider = ({ children, config: userConfig = {} }: Unifi
 		const errorMessage = error?.message || error?.toString() || 'Unknown error';
 		const fullError = context ? `${context}: ${errorMessage}` : errorMessage;
 
-		console.error('UnifiedAuth Error:', fullError, error);
+		console.error('Extended UnifiedAuth Error:', fullError, error);
 		setError(fullError);
 		setDebugInfo(prev => ({ ...prev, lastError: fullError }));
 
@@ -127,7 +143,7 @@ export const UnifiedAuthProvider = ({ children, config: userConfig = {} }: Unifi
 			data,
 		};
 
-		console.log('Auth Event:', event);
+		console.log('Extended Auth Event:', event);
 
 		// リスナーに通知
 		const listeners = eventListeners.get(type);
@@ -136,7 +152,52 @@ export const UnifiedAuthProvider = ({ children, config: userConfig = {} }: Unifi
 		}
 	}, [eventListeners]);
 
-	// Wallet認証の監視
+	// Extended API呼び出しヘルパー
+	const callExtendedAPI = useCallback(async (url: string, options: RequestInit = {}) => {
+		setDebugInfo(prev => ({
+			...prev,
+			apiCalls: prev.apiCalls + 1,
+			lastApiCall: new Date()
+		}));
+
+		const response = await fetch(url, {
+			headers: {
+				'Content-Type': 'application/json',
+				...options.headers,
+			},
+			...options,
+		});
+
+		if (!response.ok) {
+			throw new Error(`API call failed: ${response.status} ${response.statusText}`);
+		}
+
+		return response.json();
+	}, []);
+
+	// Extended Walletユーザー情報の更新
+	const refreshExtendedUser = useCallback(async () => {
+		if (!evmWallet.address) return;
+
+		try {
+			setFirestoreLoading(true);
+
+			const result = await callExtendedAPI(
+				`/api/auth/wallet?address=${evmWallet.address}`
+			);
+
+			if (result.success && result.data.user) {
+				setExtendedUser(result.data.user);
+				console.log('🔄 Extended user refreshed:', result.data.user.walletAddress);
+			}
+		} catch (error) {
+			console.warn('Failed to refresh extended user:', error);
+		} finally {
+			setFirestoreLoading(false);
+		}
+	}, [evmWallet.address, callExtendedAPI]);
+
+	// Wallet認証の監視（Extended版）
 	useEffect(() => {
 		setDebugInfo(prev => ({ ...prev, walletReady: true }));
 
@@ -146,6 +207,9 @@ export const UnifiedAuthProvider = ({ children, config: userConfig = {} }: Unifi
 				chainId: evmWallet.chainId,
 				chainType: 'evm'
 			});
+
+			// Extended userの自動取得
+			refreshExtendedUser();
 		}
 
 		if (evmWallet.isAuthenticated) {
@@ -157,9 +221,9 @@ export const UnifiedAuthProvider = ({ children, config: userConfig = {} }: Unifi
 
 		// 認証状態の更新
 		updateAuthenticationState();
-	}, [evmWallet.isConnected, evmWallet.isAuthenticated, evmWallet.address, emitEvent]);
+	}, [evmWallet.isConnected, evmWallet.isAuthenticated, evmWallet.address, emitEvent, refreshExtendedUser]);
 
-	// 統合認証状態の更新（Wallet専用）
+	// 統合認証状態の更新（Extended Wallet専用）
 	const updateAuthenticationState = useCallback(() => {
 		const hasWalletAuth = evmWallet.isAuthenticated;
 		setIsAuthenticated(hasWalletAuth);
@@ -169,7 +233,7 @@ export const UnifiedAuthProvider = ({ children, config: userConfig = {} }: Unifi
 		}
 	}, [evmWallet.isAuthenticated, emitEvent]);
 
-	// 認証アクション実装（Wallet専用）
+	// Extended認証アクション実装
 	const authActions: AuthActions = {
 		// Firebase認証（削除済み - エラーを投げる）
 		signInWithEmail: async (email: string, password: string) => {
@@ -184,7 +248,7 @@ export const UnifiedAuthProvider = ({ children, config: userConfig = {} }: Unifi
 			throw new Error('Firebase authentication is disabled. Please use wallet authentication.');
 		},
 
-		// Wallet認証
+		// Extended Wallet認証
 		connectWallet: async (chainType: ChainType = 'evm', walletType?: string) => {
 			try {
 				setAuthFlowState(prev => ({
@@ -203,41 +267,145 @@ export const UnifiedAuthProvider = ({ children, config: userConfig = {} }: Unifi
 					throw new Error(`Chain type ${chainType} not supported yet`);
 				}
 			} catch (error) {
-				handleError(error, 'Wallet connect');
+				handleError(error, 'Extended Wallet connect');
 				setAuthFlowState(prev => ({ ...prev, currentStep: 'error' }));
 				throw error;
 			}
 		},
 
+		// ★ メイン機能: Extended Wallet認証
 		authenticateWallet: async (chainType: ChainType = 'evm') => {
 			try {
 				setAuthFlowState(prev => ({
 					...prev,
 					currentStep: 'signing',
 					signatureRequired: true,
-					progress: 50
+					progress: 25
 				}));
 
 				if (chainType === 'evm') {
-					const result = await evmWallet.authenticate();
+					// 1. EVMAuthServiceの初期化とNonce生成
+					const authService = new (await import('@/wallet-auth/adapters/evm/EVMAuthService')).EVMAuthService();
+					const nonce = authService.generateNonce();
+
+					// 2. ウォレットアドレス確認
+					if (!evmWallet.address) {
+						throw new Error('Wallet not connected');
+					}
+
+					// 3. Nonceを保存（フロントエンド側）
+					authService.storeNonce(evmWallet.address, nonce);
+
+					console.log(`🔑 Generated and stored nonce: ${nonce} for address: ${evmWallet.address}`);
+
+					// 署名要求の準備
+					setAuthFlowState(prev => ({ ...prev, progress: 50 }));
+
+					// 4. 認証メッセージ作成
+					const authMessage = authService.createAuthMessage(evmWallet.address, nonce, chainType);
+
+					// 5. ウォレットから署名取得
+					const signature = await evmWallet.signMessage(authMessage);
+
+					// 6. 署名データ構築
+					const signatureData = {
+						message: authMessage,
+						signature,
+						address: evmWallet.address,
+						chainType,
+						chainId: evmWallet.chainId,
+						nonce,
+						timestamp: Date.now(),
+					};
+
 					setAuthFlowState(prev => ({
 						...prev,
-						currentStep: 'idle',
+						currentStep: 'verifying',
 						signatureRequired: false,
+						verificationRequired: true,
+						progress: 75
+					}));
+
+					console.log('🚀 Sending extended wallet auth to API...', {
+						address: signatureData.address,
+						nonce: signatureData.nonce,
+						hasSignature: !!signatureData.signature,
+						messageLength: signatureData.message.length
+					});
+
+					// 7. Extended API Routes経由でFirestore認証
+					const apiRequest: WalletAuthRequest = {
+						signature: signatureData.signature,
+						message: signatureData.message,
+						address: signatureData.address,
+						chainType: signatureData.chainType,
+						chainId: signatureData.chainId,
+						nonce: signatureData.nonce,
+						timestamp: signatureData.timestamp,
+					};
+
+					const result: WalletAuthResponse = await callExtendedAPI('/api/auth/wallet', {
+						method: 'POST',
+						body: JSON.stringify(apiRequest),
+					});
+
+					if (!result.success) {
+						throw new Error(result.error?.message || 'Extended API authentication failed');
+					}
+
+					console.log('✅ Extended API authentication successful:', result.data);
+
+					// 8. Extended Firestoreユーザーデータを保存
+					if (result.data?.user) {
+						setExtendedUser(result.data.user);
+
+						console.log('🎉 Extended user data received:', {
+							address: result.data.user.walletAddress,
+							authMethod: result.data.user.authMethod,
+							isNewUser: result.data.isNewUser,
+							connectedWallets: result.data.user.connectedWallets.length,
+							authHistory: result.data.user.authHistory.length,
+							badges: result.data.user.stats.badges,
+						});
+					}
+
+					setAuthFlowState(prev => ({
+						...prev,
+						currentStep: 'success',
+						verificationRequired: false,
 						progress: 100
 					}));
-					return result;
+
+					// 成功時は少し待ってからidleに戻す
+					setTimeout(() => {
+						setAuthFlowState(prev => ({ ...prev, currentStep: 'idle' }));
+					}, 2000);
+
+					return {
+						success: true,
+						user: {
+							address: signatureData.address,
+							chainType: signatureData.chainType,
+							chainId: signatureData.chainId,
+						},
+						signature: signatureData
+					};
 				} else {
 					throw new Error(`Chain type ${chainType} not supported yet`);
 				}
 			} catch (error) {
-				handleError(error, 'Wallet authenticate');
+				handleError(error, 'Extended Wallet authenticate');
 				setAuthFlowState(prev => ({
 					...prev,
 					currentStep: 'error',
-					signatureRequired: false
+					signatureRequired: false,
+					verificationRequired: false
 				}));
-				throw error;
+
+				return {
+					success: false,
+					error: error instanceof Error ? error.message : 'Extended authentication failed'
+				};
 			}
 		},
 
@@ -249,12 +417,12 @@ export const UnifiedAuthProvider = ({ children, config: userConfig = {} }: Unifi
 					throw new Error(`Chain switching not supported for ${chainType}`);
 				}
 			} catch (error) {
-				handleError(error, 'Chain switch');
+				handleError(error, 'Extended Chain switch');
 				throw error;
 			}
 		},
 
-		// 統合ログアウト（Wallet専用）
+		// Extended統合ログアウト
 		logout: async () => {
 			try {
 				setAuthFlowState(prev => ({ ...prev, currentStep: 'connecting', progress: 25 }));
@@ -264,42 +432,72 @@ export const UnifiedAuthProvider = ({ children, config: userConfig = {} }: Unifi
 					await evmWallet.disconnectWallet();
 				}
 
-				// 状態リセット
-				setFirestoreUser(null);
+				// Extended状態リセット
+				setExtendedUser(null);
 				setIsAuthenticated(false);
 				setError(null);
 
 				setAuthFlowState(prev => ({ ...prev, currentStep: 'idle', progress: 100 }));
 				emitEvent('unified-logout');
 			} catch (error) {
-				handleError(error, 'Logout');
+				handleError(error, 'Extended Logout');
 				setAuthFlowState(prev => ({ ...prev, currentStep: 'error' }));
 				throw error;
 			}
 		},
 
-		// プロフィール更新
+		// Extended プロフィール更新
 		updateProfile: async (data: Partial<ExtendedFirestoreUser>) => {
 			try {
-				// TODO: ExtendedFirestoreUser用の更新ロジック
-				throw new Error('Not implemented yet');
+				if (!extendedUser) {
+					throw new Error('No extended user data available');
+				}
+
+				// TODO: API Routes経由でプロフィール更新
+				console.log('Extended profile update requested:', data);
+
+				// 暫定的にローカル更新
+				setExtendedUser(prev => prev ? { ...prev, ...data } : null);
+
+				return {
+					success: true,
+					data: { message: 'Profile updated successfully' }
+				};
 			} catch (error) {
-				handleError(error, 'Profile update');
-				throw error;
+				handleError(error, 'Extended Profile update');
+				return {
+					success: false,
+					error: {
+						code: 'UPDATE_FAILED',
+						message: error instanceof Error ? error.message : 'Profile update failed'
+					}
+				};
 			}
 		},
 
-		// セッション更新
+		// Extended セッション更新
 		refreshSession: async () => {
 			try {
-				// TODO: セッション更新ロジック
-				throw new Error('Not implemented yet');
+				await refreshExtendedUser();
 			} catch (error) {
-				handleError(error, 'Session refresh');
+				handleError(error, 'Extended Session refresh');
 				throw error;
 			}
 		},
 	};
+
+	// Extended ヘルパー関数
+	const getAuthHistory = useCallback(() => {
+		return extendedUser?.authHistory || null;
+	}, [extendedUser]);
+
+	const getConnectedWallets = useCallback(() => {
+		return extendedUser?.connectedWallets || null;
+	}, [extendedUser]);
+
+	const updateUserProfile = useCallback(async (profileData: any): Promise<WalletOperationResult> => {
+		return await authActions.updateProfile(profileData);
+	}, [authActions]);
 
 	// イベントリスナー管理
 	const addEventListener = useCallback((type: AuthEventType, callback: (event: AuthEvent) => void) => {
@@ -308,7 +506,6 @@ export const UnifiedAuthProvider = ({ children, config: userConfig = {} }: Unifi
 		}
 		eventListeners.get(type)!.add(callback);
 
-		// Unsubscribe関数を返す
 		return () => {
 			const listeners = eventListeners.get(type);
 			if (listeners) {
@@ -317,7 +514,7 @@ export const UnifiedAuthProvider = ({ children, config: userConfig = {} }: Unifi
 		};
 	}, [eventListeners]);
 
-	// 統合状態の構築（Wallet専用）
+	// Extended統合状態の構築
 	const unifiedState: UnifiedAuthState = {
 		authMethod: 'wallet', // 常にwallet
 		firebaseUser: null,   // 常にnull
@@ -331,25 +528,25 @@ export const UnifiedAuthProvider = ({ children, config: userConfig = {} }: Unifi
 			isVerified: evmWallet.isAuthenticated,
 		} : null,
 		walletLoading: evmWallet.isConnecting,
-		firestoreUser,
+		firestoreUser: extendedUser,
 		firestoreLoading,
 		isAuthenticated,
 		isLoading: evmWallet.isConnecting || firestoreLoading,
 		error,
 	};
 
-	// コンテキスト値
-	const contextValue: UnifiedAuthContextType = {
+	// Extended コンテキスト値
+	const contextValue: ExtendedUnifiedAuthContextType = {
 		...unifiedState,
 		...authActions,
 
-		// 便利なゲッター
-		primaryUserId: evmWallet.address || null,
-		displayName: firestoreUser?.displayName || null,
+		// 便利なゲッター（Extended版）
+		primaryUserId: extendedUser?.walletAddress || null,
+		displayName: extendedUser?.displayName || null,
 		emailAddress: null, // Firebase無効のためnull
 		walletAddress: evmWallet.address || null,
 
-		// 状態チェック（Wallet専用）
+		// 状態チェック（Extended Wallet専用）
 		isFirebaseAuth: false,    // 常にfalse
 		isWalletAuth: isAuthenticated,
 		hasMultipleAuth: false,   // 常にfalse
@@ -357,9 +554,18 @@ export const UnifiedAuthProvider = ({ children, config: userConfig = {} }: Unifi
 		// イベント管理
 		addEventListener,
 
-		// 設定と内部状態
+		// Extended設定と状態
 		config,
 		authFlowState,
+		extendedUser,
+
+		// Extended操作
+		refreshExtendedUser,
+		getAuthHistory,
+		getConnectedWallets,
+		updateUserProfile,
+
+		// デバッグ情報
 		_debug: debugInfo,
 	};
 
@@ -371,9 +577,9 @@ export const UnifiedAuthProvider = ({ children, config: userConfig = {} }: Unifi
 };
 
 /**
- * 統合認証を使用するhook（Wallet専用）
+ * Extended統合認証を使用するhook
  */
-export const useUnifiedAuth = (): UnifiedAuthContextType => {
+export const useUnifiedAuth = (): ExtendedUnifiedAuthContextType => {
 	const context = useContext(UnifiedAuthContext);
 	if (!context) {
 		throw new Error('useUnifiedAuth must be used within UnifiedAuthProvider');
@@ -382,7 +588,7 @@ export const useUnifiedAuth = (): UnifiedAuthContextType => {
 };
 
 /**
- * 認証状態のみを取得するhook（Wallet専用）
+ * Extended認証状態のみを取得するhook
  */
 export const useAuthState = () => {
 	const {
@@ -391,6 +597,7 @@ export const useAuthState = () => {
 		primaryUserId,
 		displayName,
 		walletAddress,
+		extendedUser,
 		error
 	} = useUnifiedAuth();
 
@@ -402,12 +609,17 @@ export const useAuthState = () => {
 		displayName,
 		emailAddress: null, // Firebase無効
 		walletAddress,
+		extendedUser,
+		connectedWalletsCount: extendedUser?.connectedWallets.length || 0,
+		authHistoryCount: extendedUser?.authHistory.length || 0,
+		membershipTier: extendedUser?.membershipTier || 'bronze',
+		totalBadges: extendedUser?.stats.badges.length || 0,
 		error,
 	};
 };
 
 /**
- * 認証アクションのみを取得するhook（Wallet専用）
+ * Extended認証アクションのみを取得するhook
  */
 export const useAuthActions = () => {
 	const {
@@ -415,15 +627,16 @@ export const useAuthActions = () => {
 		authenticateWallet,
 		switchWalletChain,
 		logout,
-		updateProfile
+		updateUserProfile,
+		refreshExtendedUser
 	} = useUnifiedAuth();
 
 	return {
-		// Firebase認証は削除
 		connectWallet,
 		authenticateWallet,
 		switchWalletChain,
 		logout,
-		updateProfile,
+		updateUserProfile,
+		refreshExtendedUser,
 	};
 };

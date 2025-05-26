@@ -1,5 +1,5 @@
 // types/user.ts
-import { Timestamp } from 'firebase/firestore';
+import { Timestamp } from 'firebase-admin/firestore'; // Admin SDK版に変更
 import { UserProfile } from './dashboard';
 
 // Firestoreで管理するユーザーデータの型

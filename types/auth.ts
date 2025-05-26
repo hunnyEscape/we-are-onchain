@@ -1,12 +1,13 @@
-// types/auth.ts
+// types/auth.ts (Extended対応版)
 import { User as FirebaseUser } from 'firebase/auth';
 import { FirestoreUser } from './user';
+import { ExtendedFirestoreUser, WalletOperationResult } from './user-extended';
 import { WalletConnection, WalletAuthResult, ChainType } from './wallet';
 
 // 統合認証方式
 export type AuthMethod = 'firebase' | 'wallet' | 'hybrid';
 
-// 統合認証状態
+// 統合認証状態（Extended対応）
 export interface UnifiedAuthState {
 	// 認証方式
 	authMethod: AuthMethod;
@@ -19,8 +20,8 @@ export interface UnifiedAuthState {
 	walletConnection: WalletConnection | null;
 	walletLoading: boolean;
 
-	// Firestore統合
-	firestoreUser: FirestoreUser | null;
+	// Firestore統合（Extended対応）
+	firestoreUser: ExtendedFirestoreUser | null; // ExtendedFirestoreUserに変更
 	firestoreLoading: boolean;
 
 	// 全体の状態
@@ -53,7 +54,7 @@ export interface AuthConfig {
 	};
 }
 
-// 認証アクション
+// Extended認証アクション
 export interface AuthActions {
 	// Firebase認証
 	signInWithEmail: (email: string, password: string) => Promise<void>;
@@ -68,10 +69,10 @@ export interface AuthActions {
 	// 統合ログアウト
 	logout: () => Promise<void>;
 
-	// プロフィール更新
-	updateProfile: (data: Partial<FirestoreUser>) => Promise<void>;
+	// Extended プロフィール更新（戻り値型を変更）
+	updateProfile: (data: Partial<ExtendedFirestoreUser>) => Promise<WalletOperationResult>;
 
-	// セッション管理
+	// Extended セッション管理
 	refreshSession: () => Promise<void>;
 }
 
@@ -94,7 +95,7 @@ export interface AuthEvent {
 	error?: string;
 }
 
-// 認証フック用の戻り値
+// Extended認証フック用の戻り値
 export interface UseAuthReturn extends UnifiedAuthState, AuthActions {
 	// 便利なゲッター
 	primaryUserId: string | null;
@@ -118,57 +119,117 @@ export interface WalletConnectionResult {
 	error?: string;
 }
 
-// 認証統合結果
+// 認証統合結果（Extended対応）
 export interface AuthIntegrationResult {
 	success: boolean;
 	authMethod: AuthMethod;
 	firebaseUser?: FirebaseUser;
 	walletConnection?: WalletConnection;
-	firestoreUser?: FirestoreUser;
+	firestoreUser?: ExtendedFirestoreUser; // ExtendedFirestoreUserに変更
 	error?: string;
 }
 
-// Firebase + Wallet統合データ
+// Firebase + Wallet統合データ（Extended対応）
 export interface IntegratedUserData {
 	// Firebase認証データ
 	firebaseUid?: string;
 	email?: string;
 	emailVerified?: boolean;
 
-	// Wallet認証データ
+	// Extended Wallet認証データ
 	connectedWallets: WalletConnection[];
 	primaryWallet?: WalletConnection;
 
-	// 認証履歴
+	// Extended認証履歴
 	authHistory: Array<{
 		method: AuthMethod;
 		timestamp: Date;
 		chainType?: ChainType;
 		success: boolean;
+		ipAddress?: string;
+		userAgent?: string;
 	}>;
 
-	// 設定
+	// Extended設定
 	preferences: {
 		preferredAuthMethod: AuthMethod;
 		autoConnect: boolean;
 		preferredChain?: ChainType;
 	};
+
+	// Extended セキュリティ設定
+	securitySettings: {
+		requireSignatureForUpdates: boolean;
+		allowedChains: ChainType[];
+		maxSessionDuration: number;
+	};
+
+	// Extended 通知設定
+	notificationSettings: {
+		email: boolean;
+		push: boolean;
+		sms: boolean;
+		newOrders: boolean;
+		priceAlerts: boolean;
+		securityAlerts: boolean;
+	};
 }
 
-// 認証プロバイダーのProps
+// Extended認証プロバイダーのProps
 export interface UnifiedAuthProviderProps {
 	children: React.ReactNode;
 	config?: Partial<AuthConfig>;
 }
 
-// 認証コンテキストの型
+// Extended認証コンテキストの型
 export interface UnifiedAuthContextType extends UseAuthReturn {
 	// 設定
 	config: AuthConfig;
 
+	// Extended状態
+	extendedUser: ExtendedFirestoreUser | null;
+	authFlowState: any; // AuthFlowState
+
+	// Extended操作
+	refreshExtendedUser: () => Promise<void>;
+	getAuthHistory: () => any[] | null;
+	getConnectedWallets: () => WalletConnection[] | null;
+	updateUserProfile: (profileData: any) => Promise<WalletOperationResult>;
+
 	// 内部状態
-	_internal: {
+	_internal?: {
 		eventEmitter: EventTarget;
 		sessionStorage: Map<string, any>;
 	};
+
+	// デバッグ情報
+	_debug: {
+		firebaseReady: boolean;
+		walletReady: boolean;
+		lastError: string | null;
+		apiCalls: number;
+		lastApiCall: Date | null;
+	};
+}
+
+// 後方互換性のための従来の型（非推奨）
+export interface LegacyAuthActions {
+	updateProfile: (data: Partial<FirestoreUser>) => Promise<void>;
+}
+
+// Extended専用のヘルパー型
+export interface ExtendedAuthHelpers {
+	// Extended ユーザー操作
+	getExtendedUserStats: () => ExtendedFirestoreUser['stats'] | null;
+	getExtendedUserSecurity: () => ExtendedFirestoreUser['securitySettings'] | null;
+	getExtendedUserNotifications: () => ExtendedFirestoreUser['notificationSettings'] | null;
+	
+	// Extended Wallet操作
+	addWalletConnection: (connection: WalletConnection) => Promise<WalletOperationResult>;
+	removeWalletConnection: (address: string) => Promise<WalletOperationResult>;
+	setPrimaryWallet: (address: string) => Promise<WalletOperationResult>;
+	
+	// Extended 設定操作
+	updateSecuritySettings: (settings: Partial<ExtendedFirestoreUser['securitySettings']>) => Promise<WalletOperationResult>;
+	updateNotificationSettings: (settings: Partial<ExtendedFirestoreUser['notificationSettings']>) => Promise<WalletOperationResult>;
 }

@@ -132,7 +132,6 @@
 │   │   └── wallet-auth-demo
 │   │       └── page.tsx
 │   ├── contexts
-│   │   ├── AuthContext.tsx
 │   │   └── UnifiedAuthContext.tsx
 │   ├── hooks
 │   │   ├── useCryptoPrices.ts
@@ -171,4 +170,4 @@
     ├── user.ts
     └── wallet.ts
 
-44 directories, 127 files
+44 directories, 126 files

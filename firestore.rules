@@ -1,17 +1,25 @@
+// firestore.rules
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
     
-    // 既存のルール（ユーザー関連）
+    // ★ 重要: ユーザーデータはAPI Routes経由でのみ書き込み可能
     match /users/{userId} {
-      allow read, write: if request.auth != null && request.auth.uid == userId;
+      // 読み取りは誰でも可能（プロフィール表示用）
+      allow read: if true;
+      
+      // 書き込みは禁止（API Routesのみ許可）
+      // Firebase Admin SDKは自動的にこの制限を回避できる
+      allow write: if false;
     }
     
+    // 既存のルール（商品関連）
     match /products/{productId} {
       allow read: if true;
       allow write: if request.auth != null;
     }
     
+    // カート予約（一時的なデータ）
     match /cart_reservations/{reservationId} {
       allow read, write: if request.auth != null;
     }
@@ -28,22 +36,40 @@ service cloud.firestore {
       allow write: if false; // Cloud Functions のみ書き込み可能
     }
     
-    // ★ 新規追加: Demo invoices
+    // Demo invoices（既存）
     match /demo_invoices/{invoiceId} {
       allow read: if true;   // パブリック読み取り（ステータス確認用）
       allow write: if true;  // パブリック書き込み（API経由での作成用）
     }
     
-    // ★ 新規追加: Demo transactions
+    // Demo transactions（既存）
     match /demo_transactions/{transactionId} {
       allow read: if true;   // パブリック読み取り
       allow write: if true;  // パブリック書き込み（決済完了時の記録用）
     }
     
-    // ★ 新規追加: Demo analytics
+    // Demo analytics（既存）
     match /demo_analytics/{date} {
       allow read: if true;   // パブリック読み取り（統計表示用）
       allow write: if true;  // パブリック書き込み（分析データ記録用）
+    }
+    
+    // ★ 新規追加: Wallet認証用のセッション情報（オプション）
+    match /wallet_sessions/{sessionId} {
+      allow read: if request.auth != null && request.auth.uid == sessionId;
+      allow write: if false; // API Routes経由のみ
+    }
+    
+    // ★ 新規追加: API Metrics（統計情報）
+    match /api_metrics/{metricId} {
+      allow read: if true;   // 統計表示用
+      allow write: if false; // API Routes経由のみ
+    }
+    
+    // ★ 新規追加: 認証ログ（セキュリティ用）
+    match /auth_logs/{logId} {
+      allow read: if false;  // プライベート
+      allow write: if false; // API Routes経由のみ
     }
     
     // その他のドキュメントはデフォルトで拒否

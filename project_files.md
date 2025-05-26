@@ -5,10 +5,8 @@
 'use client';
 
 import React, { createContext, useContext, useEffect, useState, useCallback, useRef } from 'react';
-import { User as FirebaseUser, onAuthStateChanged, signOut } from 'firebase/auth';
-import { auth } from '@/lib/firebase';
-import { AuthMethod, ChainType } from '../../types/wallet';
-import { ExtendedFirestoreUser, AuthIntegrationResult, WalletOperationResult, AuthFlowState } from '../../types/user-extended';
+import { ChainType } from '../../types/wallet';
+import { ExtendedFirestoreUser, WalletOperationResult, AuthFlowState } from '../../types/user-extended';
 import { UnifiedAuthState, AuthConfig, AuthActions, AuthEvent, AuthEventType, UseAuthReturn } from '../../types/auth';
 
 // EVMWalletProviderはオプショナルにする
@@ -20,10 +18,10 @@ try {
 	console.warn('EVMWallet not available:', error);
 }
 
-// デフォルト設定
+// デフォルト設定（Wallet専用）
 const DEFAULT_CONFIG: AuthConfig = {
-	preferredMethod: 'hybrid',
-	enableFirebase: true,
+	preferredMethod: 'wallet', // wallet固定
+	enableFirebase: false,     // Firebase無効
 	enableWallet: true,
 	autoConnect: true,
 	sessionTimeout: 24 * 60, // 24時間
@@ -36,10 +34,10 @@ const DEFAULT_CONFIG: AuthConfig = {
 interface UnifiedAuthContextType extends UseAuthReturn {
 	// 設定
 	config: AuthConfig;
-	
+
 	// 追加の状態
 	authFlowState: AuthFlowState;
-	
+
 	// 内部状態（デバッグ用）
 	_debug: {
 		firebaseReady: boolean;
@@ -57,35 +55,41 @@ interface UnifiedAuthProviderProps {
 
 export const UnifiedAuthProvider = ({ children, config: userConfig = {} }: UnifiedAuthProviderProps) => {
 	const config = { ...DEFAULT_CONFIG, ...userConfig };
-	
-	// Firebase状態
-	const [firebaseUser, setFirebaseUser] = useState<FirebaseUser | null>(null);
-	const [firebaseLoading, setFirebaseLoading] = useState(true);
-	
-	// Firestore状態
+
+	// Firestore状態（Wallet基準）
 	const [firestoreUser, setFirestoreUser] = useState<ExtendedFirestoreUser | null>(null);
 	const [firestoreLoading, setFirestoreLoading] = useState(false);
-	
+
 	// Wallet状態（EVMのみ現在対応）
 	const evmWallet = useEVMWallet ? useEVMWallet() : {
-		isConnected: false,
+		// フォールバックオブジェクト
+		walletState: {
+			isConnecting: false,
+			isConnected: false,
+			isAuthenticated: false,
+			chainType: 'evm' as ChainType,
+		},
+		connectWallet: async () => { throw new Error('EVM Wallet not available'); },
+		disconnectWallet: async () => { throw new Error('EVM Wallet not available'); },
 		isConnecting: false,
-		isAuthenticated: false,
+		isConnected: false,
 		address: null,
 		chainId: null,
 		chainName: null,
-		error: null,
-		connect: async () => { throw new Error('EVM Wallet not available'); },
-		disconnect: async () => { throw new Error('EVM Wallet not available'); },
 		authenticate: async () => ({ success: false, error: 'EVM Wallet not available' }),
+		isAuthenticated: false,
+		signMessage: async () => { throw new Error('EVM Wallet not available'); },
+		signAuthMessage: async () => { throw new Error('EVM Wallet not available'); },
 		switchChain: async () => { throw new Error('EVM Wallet not available'); },
+		openConnectModal: undefined,
+		openAccountModal: undefined,
+		error: null,
 	};
-	
-	// 統合状態
-	const [authMethod, setAuthMethod] = useState<AuthMethod>('firebase');
+
+	// 統合状態（Wallet専用）
 	const [isAuthenticated, setIsAuthenticated] = useState(false);
 	const [error, setError] = useState<string | null>(null);
-	
+
 	// 認証フロー状態
 	const [authFlowState, setAuthFlowState] = useState<AuthFlowState>({
 		currentStep: 'idle',
@@ -93,14 +97,14 @@ export const UnifiedAuthProvider = ({ children, config: userConfig = {} }: Unifi
 		verificationRequired: false,
 		progress: 0,
 	});
-	
+
 	// イベントエミッター
 	const eventEmitter = useRef(new EventTarget());
 	const [eventListeners] = useState(new Map<string, Set<(event: AuthEvent) => void>>());
-	
+
 	// デバッグ情報
 	const [debugInfo, setDebugInfo] = useState({
-		firebaseReady: false,
+		firebaseReady: false,  // 常にfalse
 		walletReady: false,
 		lastError: null as string | null,
 	});
@@ -109,11 +113,11 @@ export const UnifiedAuthProvider = ({ children, config: userConfig = {} }: Unifi
 	const handleError = useCallback((error: any, context?: string) => {
 		const errorMessage = error?.message || error?.toString() || 'Unknown error';
 		const fullError = context ? `${context}: ${errorMessage}` : errorMessage;
-		
+
 		console.error('UnifiedAuth Error:', fullError, error);
 		setError(fullError);
 		setDebugInfo(prev => ({ ...prev, lastError: fullError }));
-		
+
 		// エラーイベントを発火
 		emitEvent('error', { error: fullError, context });
 	}, []);
@@ -125,9 +129,9 @@ export const UnifiedAuthProvider = ({ children, config: userConfig = {} }: Unifi
 			timestamp: new Date(),
 			data,
 		};
-		
+
 		console.log('Auth Event:', event);
-		
+
 		// リスナーに通知
 		const listeners = eventListeners.get(type);
 		if (listeners) {
@@ -135,143 +139,67 @@ export const UnifiedAuthProvider = ({ children, config: userConfig = {} }: Unifi
 		}
 	}, [eventListeners]);
 
-	// Firebase認証の監視
-	useEffect(() => {
-		const unsubscribe = onAuthStateChanged(auth, async (user) => {
-			console.log('🔄 Firebase auth state changed:', user?.uid || 'null');
-			
-			setFirebaseUser(user);
-			setFirebaseLoading(false);
-			setDebugInfo(prev => ({ ...prev, firebaseReady: true }));
-			
-			if (user) {
-				emitEvent('firebase-login', { uid: user.uid, email: user.email });
-				
-				// Firestoreとの同期（既存の実装を利用）
-				try {
-					setFirestoreLoading(true);
-					// TODO: ExtendedFirestoreUserとの同期ロジック
-					// 既存のsyncAuthWithFirestoreを拡張使用
-					
-					setFirestoreLoading(false);
-				} catch (error) {
-					handleError(error, 'Firebase sync');
-					setFirestoreLoading(false);
-				}
-			} else {
-				emitEvent('firebase-logout');
-				setFirestoreUser(null);
-			}
-			
-			// 認証状態の更新
-			updateAuthenticationState();
-		});
-		
-		return unsubscribe;
-	}, [handleError, emitEvent]);
-
 	// Wallet認証の監視
 	useEffect(() => {
 		setDebugInfo(prev => ({ ...prev, walletReady: true }));
-		
+
 		if (evmWallet.isConnected && evmWallet.address) {
-			emitEvent('wallet-connect', { 
-				address: evmWallet.address, 
+			emitEvent('wallet-connect', {
+				address: evmWallet.address,
 				chainId: evmWallet.chainId,
-				chainType: 'evm' 
+				chainType: 'evm'
 			});
 		}
-		
+
 		if (evmWallet.isAuthenticated) {
-			emitEvent('wallet-authenticate', { 
-				address: evmWallet.address, 
-				chainType: 'evm' 
+			emitEvent('wallet-authenticate', {
+				address: evmWallet.address,
+				chainType: 'evm'
 			});
 		}
-		
+
 		// 認証状態の更新
 		updateAuthenticationState();
 	}, [evmWallet.isConnected, evmWallet.isAuthenticated, evmWallet.address, emitEvent]);
 
-	// 統合認証状態の更新
+	// 統合認証状態の更新（Wallet専用）
 	const updateAuthenticationState = useCallback(() => {
-		const hasFirebaseAuth = !!firebaseUser;
 		const hasWalletAuth = evmWallet.isAuthenticated;
-		
-		let newAuthMethod: AuthMethod = 'firebase';
-		let newIsAuthenticated = false;
-		
-		if (hasFirebaseAuth && hasWalletAuth) {
-			newAuthMethod = 'hybrid';
-			newIsAuthenticated = true;
-		} else if (hasFirebaseAuth) {
-			newAuthMethod = 'firebase';
-			newIsAuthenticated = true;
-		} else if (hasWalletAuth) {
-			newAuthMethod = 'wallet';
-			newIsAuthenticated = true;
-		}
-		
-		setAuthMethod(newAuthMethod);
-		setIsAuthenticated(newIsAuthenticated);
-		
-		if (newIsAuthenticated) {
-			emitEvent('unified-login', { authMethod: newAuthMethod });
-		}
-	}, [firebaseUser, evmWallet.isAuthenticated, emitEvent]);
+		setIsAuthenticated(hasWalletAuth);
 
-	// 認証アクション実装
+		if (hasWalletAuth) {
+			emitEvent('unified-login', { authMethod: 'wallet' });
+		}
+	}, [evmWallet.isAuthenticated, emitEvent]);
+
+	// 認証アクション実装（Wallet専用）
 	const authActions: AuthActions = {
-		// Firebase認証（既存実装を利用）
+		// Firebase認証（削除済み - エラーを投げる）
 		signInWithEmail: async (email: string, password: string) => {
-			try {
-				setAuthFlowState(prev => ({ ...prev, currentStep: 'connecting', progress: 25 }));
-				// TODO: 既存のsignIn実装を呼び出し
-				setAuthFlowState(prev => ({ ...prev, currentStep: 'idle', progress: 100 }));
-			} catch (error) {
-				handleError(error, 'Email sign in');
-				setAuthFlowState(prev => ({ ...prev, currentStep: 'error' }));
-				throw error;
-			}
+			throw new Error('Firebase authentication is disabled. Please use wallet authentication.');
 		},
 
 		signUpWithEmail: async (email: string, password: string) => {
-			try {
-				setAuthFlowState(prev => ({ ...prev, currentStep: 'connecting', progress: 25 }));
-				// TODO: 既存のsignUp実装を呼び出し
-				setAuthFlowState(prev => ({ ...prev, currentStep: 'idle', progress: 100 }));
-			} catch (error) {
-				handleError(error, 'Email sign up');
-				setAuthFlowState(prev => ({ ...prev, currentStep: 'error' }));
-				throw error;
-			}
+			throw new Error('Firebase authentication is disabled. Please use wallet authentication.');
 		},
 
 		signInWithGoogle: async () => {
-			try {
-				setAuthFlowState(prev => ({ ...prev, currentStep: 'connecting', progress: 25 }));
-				// TODO: 既存のsignInWithGoogle実装を呼び出し
-				setAuthFlowState(prev => ({ ...prev, currentStep: 'idle', progress: 100 }));
-			} catch (error) {
-				handleError(error, 'Google sign in');
-				setAuthFlowState(prev => ({ ...prev, currentStep: 'error' }));
-				throw error;
-			}
+			throw new Error('Firebase authentication is disabled. Please use wallet authentication.');
 		},
 
 		// Wallet認証
 		connectWallet: async (chainType: ChainType = 'evm', walletType?: string) => {
 			try {
-				setAuthFlowState(prev => ({ 
-					...prev, 
-					currentStep: 'connecting', 
+				setAuthFlowState(prev => ({
+					...prev,
+					currentStep: 'connecting',
 					selectedChain: chainType,
 					selectedWallet: walletType,
-					progress: 25 
+					progress: 25
 				}));
-				
+
 				if (chainType === 'evm') {
-					const connection = await evmWallet.connect(walletType);
+					const connection = await evmWallet.connectWallet(walletType);
 					setAuthFlowState(prev => ({ ...prev, currentStep: 'idle', progress: 100 }));
 					return connection;
 				} else {
@@ -286,20 +214,20 @@ export const UnifiedAuthProvider = ({ children, config: userConfig = {} }: Unifi
 
 		authenticateWallet: async (chainType: ChainType = 'evm') => {
 			try {
-				setAuthFlowState(prev => ({ 
-					...prev, 
+				setAuthFlowState(prev => ({
+					...prev,
 					currentStep: 'signing',
 					signatureRequired: true,
-					progress: 50 
+					progress: 50
 				}));
-				
+
 				if (chainType === 'evm') {
 					const result = await evmWallet.authenticate();
-					setAuthFlowState(prev => ({ 
-						...prev, 
-						currentStep: 'idle', 
+					setAuthFlowState(prev => ({
+						...prev,
+						currentStep: 'idle',
 						signatureRequired: false,
-						progress: 100 
+						progress: 100
 					}));
 					return result;
 				} else {
@@ -307,10 +235,10 @@ export const UnifiedAuthProvider = ({ children, config: userConfig = {} }: Unifi
 				}
 			} catch (error) {
 				handleError(error, 'Wallet authenticate');
-				setAuthFlowState(prev => ({ 
-					...prev, 
+				setAuthFlowState(prev => ({
+					...prev,
 					currentStep: 'error',
-					signatureRequired: false 
+					signatureRequired: false
 				}));
 				throw error;
 			}
@@ -329,27 +257,21 @@ export const UnifiedAuthProvider = ({ children, config: userConfig = {} }: Unifi
 			}
 		},
 
-		// 統合ログアウト
+		// 統合ログアウト（Wallet専用）
 		logout: async () => {
 			try {
 				setAuthFlowState(prev => ({ ...prev, currentStep: 'connecting', progress: 25 }));
-				
-				// Firebase ログアウト
-				if (firebaseUser) {
-					await signOut(auth);
-				}
-				
+
 				// Wallet ログアウト
 				if (evmWallet.isConnected) {
-					await evmWallet.disconnect();
+					await evmWallet.disconnectWallet();
 				}
-				
+
 				// 状態リセット
 				setFirestoreUser(null);
 				setIsAuthenticated(false);
-				setAuthMethod('firebase');
 				setError(null);
-				
+
 				setAuthFlowState(prev => ({ ...prev, currentStep: 'idle', progress: 100 }));
 				emitEvent('unified-logout');
 			} catch (error) {
@@ -388,7 +310,7 @@ export const UnifiedAuthProvider = ({ children, config: userConfig = {} }: Unifi
 			eventListeners.set(type, new Set());
 		}
 		eventListeners.get(type)!.add(callback);
-		
+
 		// Unsubscribe関数を返す
 		return () => {
 			const listeners = eventListeners.get(type);
@@ -398,11 +320,11 @@ export const UnifiedAuthProvider = ({ children, config: userConfig = {} }: Unifi
 		};
 	}, [eventListeners]);
 
-	// 統合状態の構築
+	// 統合状態の構築（Wallet専用）
 	const unifiedState: UnifiedAuthState = {
-		authMethod,
-		firebaseUser,
-		firebaseLoading,
+		authMethod: 'wallet', // 常にwallet
+		firebaseUser: null,   // 常にnull
+		firebaseLoading: false, // 常にfalse
 		walletConnection: evmWallet.isConnected ? {
 			address: evmWallet.address!,
 			chainType: 'evm',
@@ -415,29 +337,29 @@ export const UnifiedAuthProvider = ({ children, config: userConfig = {} }: Unifi
 		firestoreUser,
 		firestoreLoading,
 		isAuthenticated,
-		isLoading: firebaseLoading || evmWallet.isConnecting || firestoreLoading,
+		isLoading: evmWallet.isConnecting || firestoreLoading,
 		error,
 	};
 
-	// 便利なゲッター
+	// コンテキスト値
 	const contextValue: UnifiedAuthContextType = {
 		...unifiedState,
 		...authActions,
-		
+
 		// 便利なゲッター
-		primaryUserId: firebaseUser?.uid || evmWallet.address || null,
-		displayName: firestoreUser?.displayName || firebaseUser?.displayName || null,
-		emailAddress: firestoreUser?.email || firebaseUser?.email || null,
+		primaryUserId: evmWallet.address || null,
+		displayName: firestoreUser?.displayName || null,
+		emailAddress: null, // Firebase無効のためnull
 		walletAddress: evmWallet.address || null,
-		
-		// 状態チェック
-		isFirebaseAuth: authMethod === 'firebase' || authMethod === 'hybrid',
-		isWalletAuth: authMethod === 'wallet' || authMethod === 'hybrid',
-		hasMultipleAuth: authMethod === 'hybrid',
-		
+
+		// 状態チェック（Wallet専用）
+		isFirebaseAuth: false,    // 常にfalse
+		isWalletAuth: isAuthenticated,
+		hasMultipleAuth: false,   // 常にfalse
+
 		// イベント管理
 		addEventListener,
-		
+
 		// 設定と内部状態
 		config,
 		authFlowState,
@@ -452,7 +374,7 @@ export const UnifiedAuthProvider = ({ children, config: userConfig = {} }: Unifi
 };
 
 /**
- * 統合認証を使用するhook
+ * 統合認証を使用するhook（Wallet専用）
  */
 export const useUnifiedAuth = (): UnifiedAuthContextType => {
 	const context = useContext(UnifiedAuthContext);
@@ -463,314 +385,50 @@ export const useUnifiedAuth = (): UnifiedAuthContextType => {
 };
 
 /**
- * 認証状態のみを取得するhook
+ * 認証状態のみを取得するhook（Wallet専用）
  */
 export const useAuthState = () => {
-	const { 
-		isAuthenticated, 
-		isLoading, 
-		authMethod, 
-		primaryUserId, 
-		displayName, 
-		emailAddress, 
+	const {
+		isAuthenticated,
+		isLoading,
+		primaryUserId,
+		displayName,
 		walletAddress,
-		error 
+		error
 	} = useUnifiedAuth();
-	
+
 	return {
 		isAuthenticated,
 		isLoading,
-		authMethod,
+		authMethod: 'wallet' as const,
 		primaryUserId,
 		displayName,
-		emailAddress,
+		emailAddress: null, // Firebase無効
 		walletAddress,
 		error,
 	};
 };
 
 /**
- * 認証アクションのみを取得するhook
+ * 認証アクションのみを取得するhook（Wallet専用）
  */
 export const useAuthActions = () => {
-	const { 
-		signInWithEmail,
-		signUpWithEmail,
-		signInWithGoogle,
+	const {
 		connectWallet,
 		authenticateWallet,
 		switchWalletChain,
 		logout,
-		updateProfile 
+		updateProfile
 	} = useUnifiedAuth();
-	
+
 	return {
-		signInWithEmail,
-		signUpWithEmail,
-		signInWithGoogle,
+		// Firebase認証は削除
 		connectWallet,
 		authenticateWallet,
 		switchWalletChain,
 		logout,
 		updateProfile,
 	};
-};-e 
-### FILE: ./src/contexts/AuthContext.tsx
-
-// src/contexts/AuthContext.tsx
-'use client';
-
-import { createContext, useContext, useEffect, useState, ReactNode, useRef } from 'react';
-import {
-	User as FirebaseUser,
-	onAuthStateChanged,
-	signInWithEmailAndPassword,
-	createUserWithEmailAndPassword,
-	signOut,
-	GoogleAuthProvider,
-	signInWithPopup
-} from 'firebase/auth';
-import { auth } from '@/lib/firebase';
-import { 
-	FirestoreUser, 
-	UpdateUserProfile 
-} from '../../types/user';
-import {
-	syncAuthWithFirestore,
-	updateUserProfile,
-	subscribeToUser,
-	getUserById
-} from '@/lib/firestore/users';
-
-interface AuthContextType {
-	// Firebase Auth関連
-	user: FirebaseUser | null;
-	loading: boolean;
-	signIn: (email: string, password: string) => Promise<void>;
-	signUp: (email: string, password: string) => Promise<void>;
-	signInWithGoogle: () => Promise<void>;
-	logout: () => Promise<void>;
-	
-	// Firestore関連
-	firestoreUser: FirestoreUser | null;
-	firestoreLoading: boolean;
-	updateProfile: (data: UpdateUserProfile) => Promise<void>;
-	refreshUserData: () => Promise<void>;
-}
-
-const AuthContext = createContext<AuthContextType | undefined>(undefined);
-
-export const useAuth = () => {
-	const context = useContext(AuthContext);
-	if (context === undefined) {
-		throw new Error('useAuth must be used within an AuthProvider');
-	}
-	return context;
-};
-
-interface AuthProviderProps {
-	children: ReactNode;
-}
-
-export const AuthProvider = ({ children }: AuthProviderProps) => {
-	// Firebase Auth状態
-	const [user, setUser] = useState<FirebaseUser | null>(null);
-	const [loading, setLoading] = useState(true);
-	
-	// Firestore状態
-	const [firestoreUser, setFirestoreUser] = useState<FirestoreUser | null>(null);
-	const [firestoreLoading, setFirestoreLoading] = useState(false);
-	
-	// 無限ループ防止用のref
-	const lastSyncedUserId = useRef<string | null>(null);
-	const firestoreUnsubscribe = useRef<(() => void) | null>(null);
-	const isSyncing = useRef<boolean>(false);
-
-	// Firebase Auth状態変化を監視
-	useEffect(() => {
-		const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
-			console.log('🔄 Auth state changed:', firebaseUser?.uid || 'null');
-			
-			// 既存のFirestore監視を停止
-			if (firestoreUnsubscribe.current) {
-				firestoreUnsubscribe.current();
-				firestoreUnsubscribe.current = null;
-			}
-
-			if (firebaseUser) {
-				setUser(firebaseUser);
-				
-				// 同じユーザーで既に同期済みの場合はスキップ
-				if (lastSyncedUserId.current === firebaseUser.uid && !isSyncing.current) {
-					console.log('👤 User already synced, skipping sync:', firebaseUser.uid);
-					setLoading(false);
-					return;
-				}
-				
-				// 同期中フラグを設定
-				if (isSyncing.current) {
-					console.log('⏳ Sync already in progress, skipping...');
-					return;
-				}
-				
-				setFirestoreLoading(true);
-				isSyncing.current = true;
-				
-				try {
-					// Firebase AuthとFirestoreを同期（初回のみlastLoginAtを更新）
-					const shouldUpdateLastLogin = lastSyncedUserId.current !== firebaseUser.uid;
-					
-					if (shouldUpdateLastLogin) {
-						await syncAuthWithFirestore(firebaseUser);
-						lastSyncedUserId.current = firebaseUser.uid;
-						console.log('✅ Initial sync completed for user:', firebaseUser.uid);
-					}
-					
-					// Firestoreユーザーデータをリアルタイム監視開始
-					const unsubscribeFirestore = subscribeToUser(firebaseUser.uid, (userData) => {
-						console.log('📊 Firestore user data updated:', userData?.id || 'null');
-						setFirestoreUser(userData);
-						setFirestoreLoading(false);
-					});
-					
-					firestoreUnsubscribe.current = unsubscribeFirestore;
-					
-				} catch (error) {
-					console.error('❌ Error syncing with Firestore:', error);
-					setFirestoreUser(null);
-					setFirestoreLoading(false);
-				} finally {
-					isSyncing.current = false;
-				}
-			} else {
-				// ログアウト時の状態リセット
-				setUser(null);
-				setFirestoreUser(null);
-				setFirestoreLoading(false);
-				lastSyncedUserId.current = null;
-				isSyncing.current = false;
-			}
-			
-			setLoading(false);
-		});
-
-		return () => {
-			unsubscribe();
-			if (firestoreUnsubscribe.current) {
-				firestoreUnsubscribe.current();
-			}
-		};
-	}, []); // 空の依存配列で一度だけ実行
-
-	// 認証関数
-	const signIn = async (email: string, password: string) => {
-		try {
-			setLoading(true);
-			await signInWithEmailAndPassword(auth, email, password);
-			// onAuthStateChangedで自動的にFirestore同期が実行される
-		} catch (error) {
-			console.error('❌ サインインエラー:', error);
-			setLoading(false);
-			throw error;
-		}
-	};
-
-	const signUp = async (email: string, password: string) => {
-		try {
-			setLoading(true);
-			await createUserWithEmailAndPassword(auth, email, password);
-			// onAuthStateChangedで自動的にFirestore同期が実行される
-		} catch (error) {
-			console.error('❌ サインアップエラー:', error);
-			setLoading(false);
-			throw error;
-		}
-	};
-
-	const signInWithGoogle = async () => {
-		try {
-			setLoading(true);
-			const provider = new GoogleAuthProvider();
-			await signInWithPopup(auth, provider);
-			// onAuthStateChangedで自動的にFirestore同期が実行される
-		} catch (error) {
-			console.error('❌ Googleサインインエラー:', error);
-			setLoading(false);
-			throw error;
-		}
-	};
-
-	const logout = async () => {
-		try {
-			setLoading(true);
-			lastSyncedUserId.current = null; // リセット
-			await signOut(auth);
-			// onAuthStateChangedで自動的に状態がリセットされる
-		} catch (error) {
-			console.error('❌ ログアウトエラー:', error);
-			setLoading(false);
-			throw error;
-		}
-	};
-
-	// Firestoreプロフィール更新
-	const updateProfile = async (data: UpdateUserProfile) => {
-		if (!user) {
-			throw new Error('User not authenticated');
-		}
-		
-		try {
-			setFirestoreLoading(true);
-			await updateUserProfile(user.uid, data);
-			// subscribeToUserで自動的に最新データが反映される
-			console.log('✅ Profile updated successfully');
-		} catch (error) {
-			console.error('❌ Error updating profile:', error);
-			setFirestoreLoading(false);
-			throw error;
-		}
-	};
-
-	// Firestoreユーザーデータを手動で再取得
-	const refreshUserData = async () => {
-		if (!user) {
-			throw new Error('User not authenticated');
-		}
-		
-		try {
-			setFirestoreLoading(true);
-			const userData = await getUserById(user.uid);
-			setFirestoreUser(userData);
-			setFirestoreLoading(false);
-			console.log('🔄 User data refreshed');
-		} catch (error) {
-			console.error('❌ Error refreshing user data:', error);
-			setFirestoreLoading(false);
-			throw error;
-		}
-	};
-
-	const value = {
-		// Firebase Auth
-		user,
-		loading,
-		signIn,
-		signUp,
-		signInWithGoogle,
-		logout,
-		
-		// Firestore
-		firestoreUser,
-		firestoreLoading,
-		updateProfile,
-		refreshUserData,
-	};
-
-	return (
-		<AuthContext.Provider value={value}>
-			{children}
-		</AuthContext.Provider>
-	);
 };-e 
 ### FILE: ./src/lib/firebase.ts
 
@@ -2263,7 +1921,6 @@ export const PRODUCT_CONSTANTS = {
 import { Montserrat, Space_Grotesk } from 'next/font/google';
 import './globals.css';
 import type { Metadata } from 'next';
-import { AuthProvider } from '@/contexts/AuthContext';
 import { EVMWalletProvider } from '@/wallet-auth/adapters/evm/wagmi-provider';
 import { EVMWalletProvider as EVMWalletContextProvider } from '@/wallet-auth/adapters/evm/EVMWalletAdapterWrapper';
 import { UnifiedAuthProvider } from '@/contexts/UnifiedAuthContext';
@@ -2304,7 +1961,7 @@ export default function RootLayout({
 					{/* EVM Wallet Context Provider */}
 					<EVMWalletContextProvider>
 						{/* Firebase Auth Provider (既存) */}
-						<AuthProvider>
+
 							{/* 統合認証プロバイダー */}
 							<UnifiedAuthProvider
 								config={{
@@ -2321,7 +1978,7 @@ export default function RootLayout({
 							>
 								{children}
 							</UnifiedAuthProvider>
-						</AuthProvider>
+
 					</EVMWalletContextProvider>
 				</EVMWalletProvider>
 			</body>
@@ -2334,7 +1991,7 @@ export default function RootLayout({
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { useAuth } from '@/contexts/AuthContext';
+import { useUnifiedAuth } from '@/contexts/UnifiedAuthContext';
 import CyberCard from '../../../components/common/CyberCard';
 import CyberButton from '../../../components/common/CyberButton';
 import { ProfileEditModal } from './ProfileEditModal';
@@ -2366,12 +2023,21 @@ import {
 } from '@/utils/userHelpers';
 
 const ProfileSection: React.FC = () => {
-	const { user, loading, firestoreUser, firestoreLoading } = useAuth();
+	// Wallet認証のみ使用
+	const { 
+		isAuthenticated, 
+		isLoading, 
+		walletAddress,
+		displayName,
+		firestoreUser,
+		firestoreLoading 
+	} = useUnifiedAuth();
+	
 	const [copiedAddress, setCopiedAddress] = useState(false);
 	const [isEditModalOpen, setIsEditModalOpen] = useState(false);
 
 	// ローディング状態
-	if (loading || firestoreLoading) {
+	if (isLoading || firestoreLoading) {
 		return (
 			<div className="space-y-8">
 				<div className="text-center">
@@ -2396,7 +2062,7 @@ const ProfileSection: React.FC = () => {
 	}
 
 	// 未認証の場合のプロンプト
-	if (!user) {
+	if (!isAuthenticated) {
 		return (
 			<div className="space-y-8">
 				<div className="text-center">
@@ -2415,11 +2081,11 @@ const ProfileSection: React.FC = () => {
 						</div>
 
 						<h3 className="text-2xl font-bold text-white mb-4">
-							Authentication Required
+							Wallet Connection Required
 						</h3>
 
 						<p className="text-gray-400 mb-8 max-w-md mx-auto">
-							Please log in to access your profile, view your order history, and track your achievements in the on-chain protein revolution.
+							Please connect your wallet to access your profile, view your order history, and track your achievements in the on-chain protein revolution.
 						</p>
 
 						<div className="flex flex-col sm:flex-row gap-4 justify-center">
@@ -2431,8 +2097,8 @@ const ProfileSection: React.FC = () => {
 									window.dispatchEvent(loginEvent);
 								}}
 							>
-								<LogIn className="w-4 h-4" />
-								<span>Sign In</span>
+								<Wallet className="w-4 h-4" />
+								<span>Connect Wallet</span>
 							</CyberButton>
 
 							<CyberButton
@@ -2444,7 +2110,7 @@ const ProfileSection: React.FC = () => {
 						</div>
 
 						<div className="mt-8 p-4 border border-neonGreen/30 rounded-sm bg-neonGreen/5">
-							<h4 className="text-neonGreen font-semibold mb-2">Why Sign In?</h4>
+							<h4 className="text-neonGreen font-semibold mb-2">Why Connect?</h4>
 							<ul className="text-sm text-gray-300 space-y-1 text-left max-w-xs mx-auto">
 								<li>• Track your order history</li>
 								<li>• Earn badges and achievements</li>
@@ -2482,7 +2148,7 @@ const ProfileSection: React.FC = () => {
 						</h3>
 
 						<p className="text-gray-400 mb-8 max-w-md mx-auto">
-							We're setting up your profile. This usually takes just a moment.
+							We're setting up your profile based on your wallet. This usually takes just a moment.
 						</p>
 
 						<CyberButton
@@ -2500,12 +2166,13 @@ const ProfileSection: React.FC = () => {
 	// プロフィール完成度を計算
 	const profileCompleteness = calculateProfileCompleteness(firestoreUser);
 	const formattedStats = formatUserStats(firestoreUser.stats);
-	const displayName = getUserDisplayName(firestoreUser, user);
-	const avatarUrl = getUserAvatarUrl(firestoreUser, user);
-	const initials = getUserInitials(firestoreUser, user);
+	
+	// Wallet専用のユーザー情報
+	const userDisplayName = displayName || walletAddress?.slice(0, 6) + '...' + walletAddress?.slice(-4) || 'Anonymous';
+	const userInitials = displayName ? displayName[0].toUpperCase() : (walletAddress ? walletAddress[2].toUpperCase() : 'U');
 
 	const handleCopyAddress = () => {
-		navigator.clipboard.writeText(firestoreUser.walletAddress || firestoreUser.id);
+		navigator.clipboard.writeText(walletAddress || firestoreUser.id);
 		setCopiedAddress(true);
 		setTimeout(() => setCopiedAddress(false), 2000);
 	};
@@ -2610,7 +2277,7 @@ const ProfileSection: React.FC = () => {
 				</div>
 			)}
 
-			{/* Welcome Message */}
+			{/* Welcome Message - Wallet Version */}
 			<div className="bg-gradient-to-r from-neonGreen/10 to-neonOrange/10 border border-neonGreen/30 rounded-sm p-4">
 				<div className="flex items-center justify-between">
 					<div className="flex items-center space-x-3">
@@ -2618,14 +2285,13 @@ const ProfileSection: React.FC = () => {
 							{profileCompleteness.isComplete ? (
 								<CheckCircle className="w-5 h-5 text-black" />
 							) : (
-								<User className="w-5 h-5 text-black" />
+								<Wallet className="w-5 h-5 text-black" />
 							)}
 						</div>
 						<div>
-							<h3 className="text-white font-semibold">Welcome back, {displayName}!</h3>
+							<h3 className="text-white font-semibold">Welcome back, {userDisplayName}!</h3>
 							<p className="text-sm text-gray-400">
-								Connected via {user.providerData[0]?.providerId === 'google.com' ? 'Google' : 'Email'}
-								{user.emailVerified && <span className="text-neonGreen ml-2">✓ Verified</span>}
+								Connected via Wallet
 								{profileCompleteness.isComplete && <span className="text-neonGreen ml-2">✓ Complete</span>}
 							</p>
 						</div>
@@ -2649,42 +2315,29 @@ const ProfileSection: React.FC = () => {
 					<div className="flex items-start space-x-6">
 						{/* Avatar */}
 						<div className="flex-shrink-0">
-							{avatarUrl ? (
-								<img
-									src={avatarUrl}
-									alt="Profile"
-									className="w-20 h-20 rounded-full border-2 border-neonGreen"
-								/>
-							) : (
-								<div className="w-20 h-20 bg-gradient-to-br from-neonGreen to-neonOrange rounded-full flex items-center justify-center">
-									<span className="text-2xl font-bold text-black">
-										{initials}
-									</span>
-								</div>
-							)}
+							<div className="w-20 h-20 bg-gradient-to-br from-neonGreen to-neonOrange rounded-full flex items-center justify-center">
+								<span className="text-2xl font-bold text-black">
+									{userInitials}
+								</span>
+							</div>
 						</div>
 
 						{/* Profile Info */}
 						<div className="flex-1">
 							<div className="flex items-center space-x-3 mb-2">
-								<h3 className="text-xl font-bold text-white">{displayName}</h3>
-								{firestoreUser.nickname && firestoreUser.nickname !== displayName && (
+								<h3 className="text-xl font-bold text-white">{userDisplayName}</h3>
+								{firestoreUser.nickname && firestoreUser.nickname !== userDisplayName && (
 									<span className="text-sm text-gray-400">({firestoreUser.nickname})</span>
-								)}
-							</div>
-
-							<div className="flex items-center space-x-2 mb-2">
-								<span className="text-sm text-gray-400">Email:</span>
-								<span className="text-sm text-gray-300">{firestoreUser.email}</span>
-								{user.emailVerified && (
-									<span className="text-xs bg-neonGreen/20 text-neonGreen px-2 py-1 rounded">Verified</span>
 								)}
 							</div>
 
 							<div className="flex items-center space-x-2 mb-4">
 								<Wallet className="w-4 h-4 text-gray-400" />
 								<span className="font-mono text-sm text-gray-300">
-									User ID: {firestoreUser.id.slice(0, 8)}...{firestoreUser.id.slice(-4)}
+									{walletAddress ? 
+										`${walletAddress.slice(0, 10)}...${walletAddress.slice(-8)}` :
+										`User ID: ${firestoreUser.id.slice(0, 8)}...${firestoreUser.id.slice(-4)}`
+									}
 								</span>
 								<button
 									onClick={handleCopyAddress}
@@ -2706,10 +2359,12 @@ const ProfileSection: React.FC = () => {
 							</div>
 
 							{/* Address Display */}
-							<div className="mt-4 p-3 bg-dark-200/30 rounded-sm">
-								<div className="text-sm text-gray-400 mb-1">Address</div>
-								<div className="text-sm text-gray-300">{formatAddress(firestoreUser.address)}</div>
-							</div>
+							{firestoreUser.address && (
+								<div className="mt-4 p-3 bg-dark-200/30 rounded-sm">
+									<div className="text-sm text-gray-400 mb-1">Shipping Address</div>
+									<div className="text-sm text-gray-300">{formatAddress(firestoreUser.address)}</div>
+								</div>
+							)}
 						</div>
 					</div>
 				</CyberCard>
@@ -3208,7 +2863,7 @@ import React from 'react';
 import CyberCard from '../../../components/common/CyberCard';
 import CyberButton from '../../../components/common/CyberButton';
 import { useCart, usePanel } from '../../context/DashboardContext';
-import { useAuth } from '@/contexts/AuthContext';
+import { useUnifiedAuth } from '@/contexts/UnifiedAuthContext';
 import {
 	ShoppingCart,
 	Trash2,
@@ -3228,7 +2883,7 @@ const CartSection: React.FC = () => {
 	} = useCart();
 
 	const { openPanel } = usePanel();
-	const { user } = useAuth();
+	const { isAuthenticated, isLoading, walletAddress, displayName } = useUnifiedAuth();
 
 	// カートアイテムの詳細情報を取得
 	const cartItemsWithDetails = getCartItemsWithDetails();
@@ -3250,7 +2905,7 @@ const CartSection: React.FC = () => {
 
 	const handleCheckout = () => {
 		try {
-			if (!user) {
+			if (!walletAddress) {
 				// ログインが必要
 				window.dispatchEvent(new CustomEvent('openAuthModal'));
 				return;
@@ -3259,7 +2914,7 @@ const CartSection: React.FC = () => {
 			// TODO: チェックアウト処理を実装
 			console.log('Checkout initiated', {
 				cartItems,
-				user: user.uid
+				user: walletAddress
 			});
 
 			alert('Checkout initiated!');
@@ -3394,7 +3049,7 @@ export default CartSection;-e
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { useAuth } from '@/contexts/AuthContext';
+import { useUnifiedAuth } from '@/contexts/UnifiedAuthContext';
 import CyberButton from '../../../components/common/CyberButton';
 import { FirestoreUser, UpdateUserProfile } from '../../../../../types/user';
 import {
@@ -3422,7 +3077,7 @@ export const ProfileEditModal: React.FC<ProfileEditModalProps> = ({
 	onClose,
 	firestoreUser
 }) => {
-	const { updateProfile } = useAuth();
+	const { updateProfile } = useUnifiedAuth();
 	const [loading, setLoading] = useState(false);
 	const [error, setError] = useState<string | null>(null);
 	const [success, setSuccess] = useState(false);
@@ -5329,7 +4984,7 @@ import WhitepaperSection from './components/sections/WhitepaperSection';
 import ProfileSection from './components/sections/ProfileSection';
 import CartSection from './components/sections/CartSection';
 import { SectionType } from '../../../types/dashboard';
-
+import { useUnifiedAuth } from '@/contexts/UnifiedAuthContext';
 interface DashboardLayoutProps {
 	children: React.ReactNode;
 }
@@ -5417,7 +5072,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
 
 import React, { createContext, useContext, useReducer, useEffect } from 'react';
 import { DashboardState, CartItem, UserProfile, SectionType } from '../../../../types/dashboard';
-import { useAuth } from '@/contexts/AuthContext';
+import { useUnifiedAuth } from '@/contexts/UnifiedAuthContext';
 
 // カート有効期限（30日）
 const CART_EXPIRY_DAYS = 30;
@@ -5584,7 +5239,7 @@ const DashboardContext = createContext<{
 // Provider
 export function DashboardProvider({ children }: { children: React.ReactNode }) {
 	const [state, dispatch] = useReducer(dashboardReducer, initialState);
-	const { user } = useAuth();
+	const { isAuthenticated, walletAddress } = useUnifiedAuth()
 
 	// Load from localStorage on mount (クライアントサイドのみ)
 	useEffect(() => {
@@ -5908,7 +5563,7 @@ export default function ProfileLayout({ children }: ProfileLayoutProps) {
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { useAuth } from '@/contexts/AuthContext';
+import { useUnifiedAuth } from '@/contexts/UnifiedAuthContext';
 import CyberCard from '../components/common/CyberCard';
 import CyberButton from '../components/common/CyberButton';
 import { ProfileEditModal } from '../dashboard/components/sections/ProfileEditModal';
@@ -5941,7 +5596,16 @@ import {
 } from '@/utils/userHelpers';
 
 export default function ProfilePage() {
-	const { user, loading, firestoreUser, firestoreLoading } = useAuth();
+	// Wallet認証のみ使用
+	const { 
+		isAuthenticated, 
+		isLoading, 
+		walletAddress,
+		displayName,
+		firestoreUser,
+		firestoreLoading 
+	} = useUnifiedAuth();
+	
 	const [copiedAddress, setCopiedAddress] = useState(false);
 	const [isEditModalOpen, setIsEditModalOpen] = useState(false);
 
@@ -5954,7 +5618,7 @@ export default function ProfilePage() {
 	}, []);
 
 	// ローディング状態
-	if (loading || firestoreLoading) {
+	if (isLoading || firestoreLoading) {
 		return (
 			<div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
 				<div className="space-y-8">
@@ -5981,7 +5645,7 @@ export default function ProfilePage() {
 	}
 
 	// 未認証の場合のプロンプト
-	if (!user) {
+	if (!isAuthenticated) {
 		return (
 			<div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
 				<div className="space-y-8">
@@ -6001,11 +5665,11 @@ export default function ProfilePage() {
 							</div>
 
 							<h3 className="text-2xl font-bold text-white mb-4">
-								Authentication Required
+								Wallet Connection Required
 							</h3>
 
 							<p className="text-gray-400 mb-8 max-w-md mx-auto">
-								Please log in to access your profile, view your order history, and track your achievements in the on-chain protein revolution.
+								Please connect your wallet to access your profile, view your order history, and track your achievements in the on-chain protein revolution.
 							</p>
 
 							<div className="flex flex-col sm:flex-row gap-4 justify-center">
@@ -6017,8 +5681,8 @@ export default function ProfilePage() {
 										window.dispatchEvent(loginEvent);
 									}}
 								>
-									<LogIn className="w-4 h-4" />
-									<span>Sign In</span>
+									<Wallet className="w-4 h-4" />
+									<span>Connect Wallet</span>
 								</CyberButton>
 
 								<CyberButton
@@ -6032,7 +5696,7 @@ export default function ProfilePage() {
 							</div>
 
 							<div className="mt-8 p-4 border border-neonGreen/30 rounded-sm bg-neonGreen/5">
-								<h4 className="text-neonGreen font-semibold mb-2">Why Sign In?</h4>
+								<h4 className="text-neonGreen font-semibold mb-2">Why Connect?</h4>
 								<ul className="text-sm text-gray-300 space-y-1 text-left max-w-xs mx-auto">
 									<li>• Track your order history</li>
 									<li>• Earn badges and achievements</li>
@@ -6072,7 +5736,7 @@ export default function ProfilePage() {
 							</h3>
 
 							<p className="text-gray-400 mb-8 max-w-md mx-auto">
-								We're setting up your profile. This usually takes just a moment.
+								We're setting up your profile based on your wallet. This usually takes just a moment.
 							</p>
 
 							<div className="flex flex-col sm:flex-row gap-4 justify-center">
@@ -6102,12 +5766,13 @@ export default function ProfilePage() {
 	// プロフィール完成度を計算
 	const profileCompleteness = calculateProfileCompleteness(firestoreUser);
 	const formattedStats = formatUserStats(firestoreUser.stats);
-	const displayName = getUserDisplayName(firestoreUser, user);
-	const avatarUrl = getUserAvatarUrl(firestoreUser, user);
-	const initials = getUserInitials(firestoreUser, user);
+	
+	// Wallet専用のユーザー情報
+	const userDisplayName = displayName || walletAddress?.slice(0, 6) + '...' + walletAddress?.slice(-4) || 'Anonymous';
+	const userInitials = displayName ? displayName[0].toUpperCase() : (walletAddress ? walletAddress[2].toUpperCase() : 'U');
 
 	const handleCopyAddress = () => {
-		navigator.clipboard.writeText(firestoreUser.walletAddress || firestoreUser.id);
+		navigator.clipboard.writeText(walletAddress || firestoreUser.id);
 		setCopiedAddress(true);
 		setTimeout(() => setCopiedAddress(false), 2000);
 	};
@@ -6226,7 +5891,7 @@ export default function ProfilePage() {
 					</div>
 				)}
 
-				{/* Welcome Message */}
+				{/* Welcome Message - Wallet Version */}
 				<div className="bg-gradient-to-r from-neonGreen/10 to-neonOrange/10 border border-neonGreen/30 rounded-sm p-4">
 					<div className="flex items-center justify-between">
 						<div className="flex items-center space-x-3">
@@ -6234,14 +5899,13 @@ export default function ProfilePage() {
 								{profileCompleteness.isComplete ? (
 									<CheckCircle className="w-5 h-5 text-black" />
 								) : (
-									<User className="w-5 h-5 text-black" />
+									<Wallet className="w-5 h-5 text-black" />
 								)}
 							</div>
 							<div>
-								<h3 className="text-white font-semibold">Welcome back, {displayName}!</h3>
+								<h3 className="text-white font-semibold">Welcome back, {userDisplayName}!</h3>
 								<p className="text-sm text-gray-400">
-									Connected via {user.providerData[0]?.providerId === 'google.com' ? 'Google' : 'Email'}
-									{user.emailVerified && <span className="text-neonGreen ml-2">✓ Verified</span>}
+									Connected via Wallet
 									{profileCompleteness.isComplete && <span className="text-neonGreen ml-2">✓ Complete</span>}
 								</p>
 							</div>
@@ -6265,42 +5929,29 @@ export default function ProfilePage() {
 						<div className="flex items-start space-x-6">
 							{/* Avatar */}
 							<div className="flex-shrink-0">
-								{avatarUrl ? (
-									<img
-										src={avatarUrl}
-										alt="Profile"
-										className="w-20 h-20 rounded-full border-2 border-neonGreen"
-									/>
-								) : (
-									<div className="w-20 h-20 bg-gradient-to-br from-neonGreen to-neonOrange rounded-full flex items-center justify-center">
-										<span className="text-2xl font-bold text-black">
-											{initials}
-										</span>
-									</div>
-								)}
+								<div className="w-20 h-20 bg-gradient-to-br from-neonGreen to-neonOrange rounded-full flex items-center justify-center">
+									<span className="text-2xl font-bold text-black">
+										{userInitials}
+									</span>
+								</div>
 							</div>
 
 							{/* Profile Info */}
 							<div className="flex-1">
 								<div className="flex items-center space-x-3 mb-2">
-									<h3 className="text-xl font-bold text-white">{displayName}</h3>
-									{firestoreUser.nickname && firestoreUser.nickname !== displayName && (
+									<h3 className="text-xl font-bold text-white">{userDisplayName}</h3>
+									{firestoreUser.nickname && firestoreUser.nickname !== userDisplayName && (
 										<span className="text-sm text-gray-400">({firestoreUser.nickname})</span>
-									)}
-								</div>
-
-								<div className="flex items-center space-x-2 mb-2">
-									<span className="text-sm text-gray-400">Email:</span>
-									<span className="text-sm text-gray-300">{firestoreUser.email}</span>
-									{user.emailVerified && (
-										<span className="text-xs bg-neonGreen/20 text-neonGreen px-2 py-1 rounded">Verified</span>
 									)}
 								</div>
 
 								<div className="flex items-center space-x-2 mb-4">
 									<Wallet className="w-4 h-4 text-gray-400" />
 									<span className="font-mono text-sm text-gray-300">
-										User ID: {firestoreUser.id.slice(0, 8)}...{firestoreUser.id.slice(-4)}
+										{walletAddress ? 
+											`${walletAddress.slice(0, 10)}...${walletAddress.slice(-8)}` :
+											`User ID: ${firestoreUser.id.slice(0, 8)}...${firestoreUser.id.slice(-4)}`
+										}
 									</span>
 									<button
 										onClick={handleCopyAddress}
@@ -6322,10 +5973,12 @@ export default function ProfilePage() {
 								</div>
 
 								{/* Address Display */}
-								<div className="mt-4 p-3 bg-dark-200/30 rounded-sm">
-									<div className="text-sm text-gray-400 mb-1">Address</div>
-									<div className="text-sm text-gray-300">{formatAddress(firestoreUser.address)}</div>
-								</div>
+								{firestoreUser.address && (
+									<div className="mt-4 p-3 bg-dark-200/30 rounded-sm">
+										<div className="text-sm text-gray-400 mb-1">Shipping Address</div>
+										<div className="text-sm text-gray-300">{formatAddress(firestoreUser.address)}</div>
+									</div>
+								)}
 							</div>
 						</div>
 					</CyberCard>
@@ -9099,34 +8752,26 @@ export const AuthModal = ({ isOpen, onClose }: AuthModalProps) => {
 import { useState, useEffect } from 'react';
 import { useUnifiedAuth } from '@/contexts/UnifiedAuthContext';
 import { ChainType } from '../../../../types/wallet';
-import { Wallet, Mail, Shield, Zap, ChevronRight, AlertCircle, CheckCircle, Loader2 } from 'lucide-react';
+import { Wallet, Shield, ChevronRight, AlertCircle, CheckCircle, Loader2, Settings } from 'lucide-react';
 
 interface ExtendedAuthModalProps {
 	isOpen: boolean;
 	onClose: () => void;
-	defaultTab?: 'email' | 'wallet';
 	preferredChain?: ChainType;
 }
 
-type AuthTab = 'email' | 'wallet';
-type AuthStep = 'method-select' | 'email-form' | 'wallet-connect' | 'wallet-sign' | 'success' | 'error';
+type AuthStep = 'wallet-connect' | 'wallet-sign' | 'success' | 'error';
 
-export const ExtendedAuthModal = ({ 
-	isOpen, 
-	onClose, 
-	defaultTab = 'wallet',
-	preferredChain = 'evm' 
+export const ExtendedAuthModal = ({
+	isOpen,
+	onClose,
+	preferredChain = 'evm'
 }: ExtendedAuthModalProps) => {
 	const {
-		// Firebase Auth
-		signInWithEmail,
-		signUpWithEmail,
-		signInWithGoogle,
-		
 		// Wallet Auth
 		connectWallet,
 		authenticateWallet,
-		
+
 		// 状態
 		isLoading,
 		authFlowState,
@@ -9136,11 +8781,7 @@ export const ExtendedAuthModal = ({
 	} = useUnifiedAuth();
 
 	// ローカル状態
-	const [activeTab, setActiveTab] = useState<AuthTab>(defaultTab);
-	const [currentStep, setCurrentStep] = useState<AuthStep>('method-select');
-	const [isSignUp, setIsSignUp] = useState(false);
-	const [email, setEmail] = useState('');
-	const [password, setPassword] = useState('');
+	const [currentStep, setCurrentStep] = useState<AuthStep>('wallet-connect');
 	const [localError, setLocalError] = useState('');
 	const [loading, setLoading] = useState(false);
 
@@ -9165,11 +8806,7 @@ export const ExtendedAuthModal = ({
 
 	// 状態リセット
 	const resetState = () => {
-		setCurrentStep('method-select');
-		setActiveTab(defaultTab);
-		setIsSignUp(false);
-		setEmail('');
-		setPassword('');
+		setCurrentStep('wallet-connect');
 		setLocalError('');
 		setLoading(false);
 	};
@@ -9179,44 +8816,7 @@ export const ExtendedAuthModal = ({
 		if (!isOpen) {
 			resetState();
 		}
-	}, [isOpen, defaultTab]);
-
-	// Email認証処理
-	const handleEmailAuth = async (e: React.FormEvent) => {
-		e.preventDefault();
-		setLocalError('');
-		setLoading(true);
-
-		try {
-			if (isSignUp) {
-				await signUpWithEmail(email, password);
-			} else {
-				await signInWithEmail(email, password);
-			}
-			setCurrentStep('success');
-		} catch (error: any) {
-			setLocalError(error.message || 'Email authentication failed');
-			setCurrentStep('error');
-		} finally {
-			setLoading(false);
-		}
-	};
-
-	// Google認証処理
-	const handleGoogleAuth = async () => {
-		setLocalError('');
-		setLoading(true);
-
-		try {
-			await signInWithGoogle();
-			setCurrentStep('success');
-		} catch (error: any) {
-			setLocalError(error.message || 'Google authentication failed');
-			setCurrentStep('error');
-		} finally {
-			setLoading(false);
-		}
-	};
+	}, [isOpen]);
 
 	// Wallet接続処理
 	const handleWalletConnect = async () => {
@@ -9257,12 +8857,10 @@ export const ExtendedAuthModal = ({
 
 	// 戻るボタン処理
 	const handleBack = () => {
-		if (currentStep === 'email-form' || currentStep === 'wallet-connect') {
-			setCurrentStep('method-select');
-		} else if (currentStep === 'wallet-sign') {
+		if (currentStep === 'wallet-sign') {
 			setCurrentStep('wallet-connect');
 		} else if (currentStep === 'error') {
-			setCurrentStep('method-select');
+			setCurrentStep('wallet-connect');
 		}
 		setLocalError('');
 		setLoading(false);
@@ -9281,7 +8879,7 @@ export const ExtendedAuthModal = ({
 				{/* Progress indicator */}
 				{authFlowState.progress > 0 && authFlowState.progress < 100 && (
 					<div className="absolute top-0 left-0 right-0 h-1 bg-dark-300">
-						<div 
+						<div
 							className="h-full bg-gradient-to-r from-neonGreen to-neonOrange transition-all duration-300"
 							style={{ width: `${authFlowState.progress}%` }}
 						/>
@@ -9293,16 +8891,16 @@ export const ExtendedAuthModal = ({
 					<div className="flex justify-between items-center mb-6">
 						<div>
 							<h2 className="text-2xl font-heading font-bold text-white mb-1">
-								{currentStep === 'success' ? 'Welcome!' : 
-								 currentStep === 'error' ? 'Connection Failed' :
-								 currentStep === 'wallet-sign' ? 'Sign Message' :
-								 'Access Terminal'}
+								{currentStep === 'success' ? 'Welcome!' :
+									currentStep === 'error' ? 'Connection Failed' :
+										currentStep === 'wallet-sign' ? 'Sign Message' :
+											'Connect Wallet'}
 							</h2>
 							<p className="text-sm text-gray-400">
 								{currentStep === 'success' ? 'Authentication successful' :
-								 currentStep === 'error' ? 'Please try again' :
-								 currentStep === 'wallet-sign' ? 'Confirm your identity by signing' :
-								 'Choose your preferred authentication method'}
+									currentStep === 'error' ? 'Please try again' :
+										currentStep === 'wallet-sign' ? 'Confirm your identity by signing' :
+											'Connect your Web3 wallet to access the platform'}
 							</p>
 						</div>
 						<button
@@ -9340,198 +8938,60 @@ export const ExtendedAuthModal = ({
 						</div>
 					)}
 
-					{/* Method Selection */}
-					{currentStep === 'method-select' && (
+					{/* Wallet Connect Step */}
+					{currentStep === 'wallet-connect' && (
 						<div className="space-y-4">
-							{/* Tab Selector */}
-							<div className="flex bg-dark-200/50 rounded-sm p-1">
-								<button
-									onClick={() => setActiveTab('wallet')}
-									className={`flex-1 flex items-center justify-center py-3 px-4 rounded-sm transition-all duration-200 ${
-										activeTab === 'wallet'
-											? 'bg-neonGreen/20 text-neonGreen border border-neonGreen/30'
-											: 'text-gray-400 hover:text-white'
-									}`}
-								>
-									<Wallet className="w-4 h-4 mr-2" />
-									<span className="font-medium">Wallet</span>
-									<Zap className="w-3 h-3 ml-1 text-neonOrange" />
-								</button>
-								<button
-									onClick={() => setActiveTab('email')}
-									className={`flex-1 flex items-center justify-center py-3 px-4 rounded-sm transition-all duration-200 ${
-										activeTab === 'email'
-											? 'bg-neonGreen/20 text-neonGreen border border-neonGreen/30'
-											: 'text-gray-400 hover:text-white'
-									}`}
-								>
-									<Mail className="w-4 h-4 mr-2" />
-									<span className="font-medium">Email</span>
-								</button>
+							{/* Web3 Authentication Info */}
+							<div className="bg-gradient-to-r from-neonGreen/10 to-neonOrange/10 border border-neonGreen/30 rounded-sm p-4">
+								<div className="flex items-center mb-2">
+									<Shield className="w-5 h-5 text-neonGreen mr-2" />
+									<span className="text-white font-semibold">Web3 Authentication</span>
+								</div>
+								<p className="text-sm text-gray-300 mb-3">
+									Connect your crypto wallet for secure, decentralized authentication.
+								</p>
+								<ul className="text-xs text-gray-400 space-y-1">
+									<li>• No passwords required</li>
+									<li>• Cryptographic signature verification</li>
+									<li>• Supports MetaMask, WalletConnect, and more</li>
+								</ul>
 							</div>
 
-							{/* Wallet Tab */}
-							{activeTab === 'wallet' && (
-								<div className="space-y-4">
-									<div className="bg-gradient-to-r from-neonGreen/10 to-neonOrange/10 border border-neonGreen/30 rounded-sm p-4">
-										<div className="flex items-center mb-2">
-											<Shield className="w-5 h-5 text-neonGreen mr-2" />
-											<span className="text-white font-semibold">Web3 Authentication</span>
-										</div>
-										<p className="text-sm text-gray-300 mb-3">
-											Connect your crypto wallet for secure, decentralized authentication.
-										</p>
-										<ul className="text-xs text-gray-400 space-y-1">
-											<li>• No passwords required</li>
-											<li>• Cryptographic signature verification</li>
-											<li>• Supports MetaMask, WalletConnect, and more</li>
-										</ul>
-									</div>
-
-									<button
-										onClick={handleWalletConnect}
-										disabled={loading}
-										className="w-full relative px-6 py-4 bg-gradient-to-r from-neonGreen to-neonOrange text-black font-semibold rounded-sm overflow-hidden group transition-all duration-200 hover:shadow-lg hover:shadow-neonGreen/25 disabled:opacity-50 disabled:cursor-not-allowed"
-									>
-										<div className="flex items-center justify-center">
-											{loading ? (
-												<>
-													<Loader2 className="w-5 h-5 animate-spin mr-2" />
-													Connecting...
-												</>
-											) : (
-												<>
-													<Wallet className="w-5 h-5 mr-2" />
-													Connect Wallet
-													<ChevronRight className="w-4 h-4 ml-2" />
-												</>
-											)}
-										</div>
-									</button>
-								</div>
-							)}
-
-							{/* Email Tab */}
-							{activeTab === 'email' && (
-								<div className="space-y-4">
-									<div className="bg-dark-200/30 border border-gray-600 rounded-sm p-4">
-										<div className="flex items-center mb-2">
-											<Mail className="w-5 h-5 text-gray-400 mr-2" />
-											<span className="text-white font-semibold">Traditional Authentication</span>
-										</div>
-										<p className="text-sm text-gray-300 mb-3">
-											Use email and password or social login for quick access.
-										</p>
-									</div>
-
-									<button
-										onClick={() => setCurrentStep('email-form')}
-										className="w-full px-6 py-4 bg-dark-200 hover:bg-dark-300 border border-gray-600 hover:border-gray-500 text-white font-medium rounded-sm transition-all duration-200 group"
-									>
-										<div className="flex items-center justify-center">
-											<Mail className="w-5 h-5 mr-2" />
-											Continue with Email
-											<ChevronRight className="w-4 h-4 ml-2" />
-										</div>
-									</button>
-
-									<button
-										onClick={handleGoogleAuth}
-										disabled={loading}
-										className="w-full px-6 py-3 bg-white/10 hover:bg-white/20 border border-gray-600 hover:border-gray-500 text-white font-medium rounded-sm transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed group"
-									>
-										<div className="flex items-center justify-center">
-											{loading ? (
-												<Loader2 className="w-5 h-5 animate-spin mr-2" />
-											) : (
-												<svg className="w-5 h-5 mr-3" viewBox="0 0 24 24">
-													<path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" />
-													<path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" />
-													<path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" />
-													<path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" />
-												</svg>
-											)}
-											Continue with Google
-										</div>
-									</button>
-								</div>
-							)}
-						</div>
-					)}
-
-					{/* Email Form */}
-					{currentStep === 'email-form' && (
-						<div className="space-y-4">
+							{/* Connect Button */}
 							<button
-								onClick={handleBack}
-								className="text-gray-400 hover:text-neonGreen transition-colors text-sm flex items-center"
+								onClick={handleWalletConnect}
+								disabled={loading}
+								className="w-full relative px-6 py-4 bg-gradient-to-r from-neonGreen to-neonOrange text-black font-semibold rounded-sm overflow-hidden group transition-all duration-200 hover:shadow-lg hover:shadow-neonGreen/25 disabled:opacity-50 disabled:cursor-not-allowed"
 							>
-								← Back to methods
+								<div className="flex items-center justify-center">
+									{loading ? (
+										<>
+											<Loader2 className="w-5 h-5 animate-spin mr-2" />
+											Connecting...
+										</>
+									) : (
+										<>
+											<Wallet className="w-5 h-5 mr-2" />
+											Connect Wallet
+											<ChevronRight className="w-4 h-4 ml-2" />
+										</>
+									)}
+								</div>
 							</button>
 
-							<form onSubmit={handleEmailAuth} className="space-y-4">
-								<div>
-									<label htmlFor="email" className="block text-sm font-medium text-gray-300 mb-2">
-										Email Address
-									</label>
-									<input
-										type="email"
-										id="email"
-										value={email}
-										onChange={(e) => setEmail(e.target.value)}
-										required
-										className="w-full px-4 py-3 bg-black/50 border border-gray-600 rounded-sm focus:outline-none focus:border-neonGreen focus:ring-1 focus:ring-neonGreen text-white placeholder-gray-500 transition-all duration-200"
-										placeholder="user@example.com"
-									/>
-								</div>
-
-								<div>
-									<label htmlFor="password" className="block text-sm font-medium text-gray-300 mb-2">
-										Password
-									</label>
-									<input
-										type="password"
-										id="password"
-										value={password}
-										onChange={(e) => setPassword(e.target.value)}
-										required
-										minLength={6}
-										className="w-full px-4 py-3 bg-black/50 border border-gray-600 rounded-sm focus:outline-none focus:border-neonGreen focus:ring-1 focus:ring-neonGreen text-white placeholder-gray-500 transition-all duration-200"
-										placeholder="••••••••"
-									/>
-									{isSignUp && (
-										<p className="text-xs text-gray-500 mt-1">
-											Minimum 6 characters required
-										</p>
-									)}
-								</div>
-
-								<button
-									type="submit"
-									disabled={loading}
-									className="w-full relative px-6 py-3 bg-gradient-to-r from-neonGreen to-neonOrange text-black font-semibold rounded-sm overflow-hidden group transition-all duration-200 hover:shadow-lg hover:shadow-neonGreen/25 disabled:opacity-50 disabled:cursor-not-allowed"
-								>
-									{loading ? (
-										<div className="flex items-center justify-center">
-											<Loader2 className="w-5 h-5 animate-spin mr-2" />
-											Processing...
-										</div>
-									) : (
-										isSignUp ? 'Create Account' : 'Sign In'
-									)}
-								</button>
-							</form>
-
-							{/* Toggle Sign Up / Sign In */}
+							{/* Additional Info */}
 							<div className="text-center">
-								<button
-									onClick={() => setIsSignUp(!isSignUp)}
-									className="text-neonGreen hover:text-neonOrange transition-colors text-sm"
-								>
-									{isSignUp
-										? 'Already have an account? Sign In'
-										: 'Need an account? Create One'}
-								</button>
+								<p className="text-xs text-gray-500">
+									New to Web3 wallets?{' '}
+									<a
+										href="https://ethereum.org/en/wallets/"
+										target="_blank"
+										rel="noopener noreferrer"
+										className="text-neonGreen hover:text-neonOrange transition-colors"
+									>
+										Learn More
+									</a>
+								</p>
 							</div>
 						</div>
 					)}
@@ -9555,6 +9015,16 @@ export const ExtendedAuthModal = ({
 									</div>
 								)}
 							</div>
+
+							{/* Signature Required Indicator */}
+							{authFlowState.signatureRequired && (
+								<div className="bg-neonOrange/10 border border-neonOrange/30 rounded-sm p-3 mb-4">
+									<div className="flex items-center justify-center text-neonOrange">
+										<Settings className="w-4 h-4 mr-2" />
+										<span className="text-sm">Signature required in wallet</span>
+									</div>
+								</div>
+							)}
 
 							<div className="space-y-3">
 								<button
@@ -10327,8 +9797,8 @@ export default Footer;-e
 
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { useAuth } from '@/contexts/AuthContext';
-import { AuthModal } from '../auth/AuthModal';
+import { useUnifiedAuth } from '@/contexts/UnifiedAuthContext';
+import { ExtendedAuthModal } from '../auth/ExtendedAuthModal';
 import { ShoppingCart } from 'lucide-react';
 
 // ダッシュボードページでのみカート機能を使用するためのhook
@@ -10369,7 +9839,15 @@ const Header = () => {
 	const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 	const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
 
-	const { user, logout, loading } = useAuth();
+	// Wallet認証のみ使用
+	const { 
+		isAuthenticated, 
+		isLoading, 
+		walletAddress, 
+		displayName,
+		logout 
+	} = useUnifiedAuth();
+	
 	const { cartItemCount, onCartClick } = useCartInDashboard();
 
 	useEffect(() => {
@@ -10419,6 +9897,20 @@ const Header = () => {
 			onCartClick();
 		}
 		setIsMobileMenuOpen(false);
+	};
+
+	// ユーザー表示名の取得（Wallet専用）
+	const getUserDisplayName = () => {
+		if (displayName) return displayName;
+		if (walletAddress) return walletAddress.slice(0, 6) + '...' + walletAddress.slice(-4);
+		return 'User';
+	};
+
+	// ユーザーイニシャルの取得（Wallet専用）
+	const getUserInitials = () => {
+		if (displayName) return displayName[0].toUpperCase();
+		if (walletAddress) return walletAddress[2].toUpperCase(); // 0x の次の文字
+		return 'U';
 	};
 
 	const navLinks = [
@@ -10502,21 +9994,21 @@ const Header = () => {
 								<div className="absolute inset-0 bg-gradient-to-r from-neonGreen/20 to-neonOrange/20 rounded-sm transform scale-0 group-hover:scale-100 transition-transform duration-200"></div>
 							</button>
 
-							{/* Authentication Section */}
-							{loading ? (
+							{/* Authentication Section - Wallet Only */}
+							{isLoading ? (
 								<div className="px-6 py-2">
 									<div className="w-6 h-6 border-2 border-neonGreen border-t-transparent rounded-full animate-spin"></div>
 								</div>
-							) : user ? (
+							) : isAuthenticated ? (
 								<div className="flex items-center space-x-4">
 									{/* User Info - クリック可能にしてプロフィールページへ */}
 									<button
 										onClick={() => window.location.href = '/profile'}
 										className="hidden lg:flex flex-col text-right hover:bg-dark-200/50 px-2 py-1 rounded-sm transition-colors group"
 									>
-										<span className="text-xs text-gray-400 group-hover:text-gray-300">Welcome back</span>
+										<span className="text-xs text-gray-400 group-hover:text-gray-300">Connected</span>
 										<span className="text-sm text-white font-medium truncate max-w-32 group-hover:text-neonGreen">
-											{user.displayName || user.email?.split('@')[0]}
+											{getUserDisplayName()}
 										</span>
 									</button>
 
@@ -10528,7 +10020,7 @@ const Header = () => {
 									>
 										<div className="w-8 h-8 bg-gradient-to-br from-neonGreen to-neonOrange rounded-full flex items-center justify-center group-hover:scale-110 transition-transform duration-200">
 											<span className="text-black font-bold text-sm">
-												{(user.displayName || user.email || 'U')[0].toUpperCase()}
+												{getUserInitials()}
 											</span>
 										</div>
 										<div className="absolute inset-0 w-8 h-8 bg-gradient-to-br from-neonGreen to-neonOrange rounded-full blur-sm opacity-50 group-hover:opacity-75 transition-opacity duration-200"></div>
@@ -10539,7 +10031,7 @@ const Header = () => {
 										onClick={handleLogout}
 										className="relative px-4 py-2 bg-red-600/80 hover:bg-red-600 text-white text-sm font-medium rounded-sm transition-all duration-200 hover:shadow-lg hover:shadow-red-500/25 group"
 									>
-										<span className="relative z-10">Logout</span>
+										<span className="relative z-10">Disconnect</span>
 										<div className="absolute inset-0 bg-red-500 transform scale-x-0 group-hover:scale-x-100 transition-transform duration-200 origin-left rounded-sm"></div>
 									</button>
 								</div>
@@ -10548,7 +10040,7 @@ const Header = () => {
 									onClick={handleLoginClick}
 									className="relative px-6 py-2 bg-gradient-to-r from-neonGreen to-neonOrange text-black font-semibold rounded-sm overflow-hidden group transition-all duration-200 hover:shadow-lg hover:shadow-neonGreen/25"
 								>
-									<span className="relative z-10 text-sm">Login</span>
+									<span className="relative z-10 text-sm">Connect Wallet</span>
 									<div className="absolute inset-0 bg-gradient-to-r from-neonOrange to-neonGreen transform scale-x-0 group-hover:scale-x-100 transition-transform duration-200 origin-left"></div>
 									<div className="absolute inset-0 animate-pulse bg-white/10 opacity-0 group-hover:opacity-100 transition-opacity duration-200"></div>
 								</button>
@@ -10604,12 +10096,12 @@ const Header = () => {
 								)}
 							</button>
 
-							{/* Mobile Authentication Section */}
-							{loading ? (
+							{/* Mobile Authentication Section - Wallet Only */}
+							{isLoading ? (
 								<div className="flex justify-center py-4">
 									<div className="w-6 h-6 border-2 border-neonGreen border-t-transparent rounded-full animate-spin"></div>
 								</div>
-							) : user ? (
+							) : isAuthenticated ? (
 								<div className="space-y-3 pt-4 border-t border-dark-300">
 									{/* Profile Link - Mobile */}
 									<button
@@ -10622,7 +10114,7 @@ const Header = () => {
 										<div className="flex items-center space-x-3">
 											<div className="w-8 h-8 bg-gradient-to-br from-neonGreen to-neonOrange rounded-full flex items-center justify-center">
 												<span className="text-black font-bold text-sm">
-													{(user.displayName || user.email || 'U')[0].toUpperCase()}
+													{getUserInitials()}
 												</span>
 											</div>
 											<span>Profile</span>
@@ -10631,18 +10123,23 @@ const Header = () => {
 
 									{/* User Info */}
 									<div className="px-4 py-2 bg-neonGreen/5 rounded-sm border border-neonGreen/20">
-										<div className="text-xs text-gray-400">Logged in as</div>
+										<div className="text-xs text-gray-400">Connected as</div>
 										<div className="text-sm text-white font-medium">
-											{user.displayName || user.email}
+											{getUserDisplayName()}
 										</div>
+										{walletAddress && (
+											<div className="text-xs text-neonGreen font-mono mt-1">
+												{walletAddress.slice(0, 10)}...{walletAddress.slice(-8)}
+											</div>
+										)}
 									</div>
 
-									{/* Logout Button */}
+									{/* Disconnect Button */}
 									<button
 										onClick={handleLogout}
 										className="w-full px-6 py-3 bg-red-600/80 hover:bg-red-600 text-white font-semibold rounded-sm transition-all duration-200 hover:shadow-lg hover:shadow-red-500/25"
 									>
-										Logout
+										Disconnect Wallet
 									</button>
 								</div>
 							) : (
@@ -10650,7 +10147,7 @@ const Header = () => {
 									onClick={handleLoginClick}
 									className="w-full mt-4 px-6 py-3 bg-gradient-to-r from-neonGreen to-neonOrange text-black font-semibold rounded-sm transition-all duration-200 hover:shadow-lg hover:shadow-neonGreen/25"
 								>
-									Login
+									Connect Wallet
 								</button>
 							)}
 						</div>
@@ -10658,10 +10155,11 @@ const Header = () => {
 				</nav>
 			</header>
 
-			{/* Auth Modal */}
-			<AuthModal
+			{/* Extended Auth Modal - Wallet Only */}
+			<ExtendedAuthModal
 				isOpen={isAuthModalOpen}
 				onClose={() => setIsAuthModalOpen(false)}
+				preferredChain="evm"
 			/>
 		</>
 	);
@@ -12430,10 +11928,14 @@ export default function WalletAuthDemo() {
 }-e 
 ### FILE: ./src/app/layout.tsx
 
+// src/app/layout-updated.tsx
 import { Montserrat, Space_Grotesk } from 'next/font/google';
 import './globals.css';
 import type { Metadata } from 'next';
-import { AuthProvider } from '@/contexts/AuthContext';
+import { EVMWalletProvider } from '@/wallet-auth/adapters/evm/wagmi-provider';
+import { EVMWalletProvider as EVMWalletContextProvider } from '@/wallet-auth/adapters/evm/EVMWalletAdapterWrapper';
+import { UnifiedAuthProvider } from '@/contexts/UnifiedAuthContext';
+
 // フォントの設定
 const montserrat = Montserrat({
 	subsets: ['latin'],
@@ -12446,6 +11948,7 @@ const spaceGrotesk = Space_Grotesk({
 	variable: '--font-space-grotesk',
 	display: 'swap',
 });
+
 // メタデータ設定
 export const metadata: Metadata = {
 	title: 'We Are On-Chain | Pepe Protein',
@@ -12461,9 +11964,32 @@ export default function RootLayout({
 	return (
 		<html lang="en" className={`${montserrat.variable} ${spaceGrotesk.variable}`}>
 			<body className="bg-black text-white min-h-screen font-sans antialiased">
-				<AuthProvider>
-					{children}
-				</AuthProvider>
+				{/* Wagmi + RainbowKit Provider (最下層) */}
+				<EVMWalletProvider
+					appName="We are on-chain"
+					projectId={process.env.NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID}
+				>
+					{/* EVM Wallet Context Provider */}
+					<EVMWalletContextProvider>
+						{/* Firebase Auth Provider (既存) */}
+							{/* 統合認証プロバイダー */}
+							<UnifiedAuthProvider
+								config={{
+									preferredMethod: 'hybrid',
+									enableFirebase: true,
+									enableWallet: true,
+									autoConnect: true,
+									sessionTimeout: 24 * 60, // 24時間
+									walletConfig: {
+										enabledChains: ['evm'],
+										preferredChain: 'evm',
+									},
+								}}
+							>
+								{children}
+							</UnifiedAuthProvider>
+					</EVMWalletContextProvider>
+				</EVMWalletProvider>
 			</body>
 		</html>
 	);
@@ -16263,7 +15789,7 @@ Issued At: ${timestamp}`;
 ### FILE: ./src/wallet-auth/adapters/evm/chain-config.ts
 
 // src/wallet-auth/adapters/evm/chain-config.ts
-import { Chain } from 'wagmi';
+import { type Chain } from 'viem'; // wagmiではなくviemからインポート
 import { mainnet, sepolia, polygon, bsc, avalanche, avalancheFuji } from 'wagmi/chains';
 import { EVMChainConfig } from '../../../../types/wallet';
 
@@ -16322,7 +15848,6 @@ export const evmConfigToWagmiChain = (config: EVMChainConfig): Chain => {
 	return {
 		id: config.chainId,
 		name: config.name,
-		network: config.name.toLowerCase().replace(/\s+/g, '-'), // networkプロパティを追加
 		nativeCurrency: config.nativeCurrency,
 		rpcUrls: {
 			default: {
@@ -16560,7 +16085,7 @@ export const chainUtils = {
 // src/wallet-auth/adapters/evm/EVMWalletAdapterWrapper.tsx
 'use client';
 
-import React, { createContext, useContext, useEffect, useState, useCallback } from 'react';
+import React, { createContext, useContext, useEffect, useState, useCallback, useRef } from 'react';
 import { 
 	useAccount, 
 	useConnect, 
@@ -16637,6 +16162,13 @@ export const EVMWalletProvider = ({ children }: EVMWalletProviderProps) => {
 	const [isAuthenticated, setIsAuthenticated] = useState(false);
 	const [error, setError] = useState<string | undefined>();
 	const [authService] = useState(() => new EVMAuthService());
+	
+	// 接続待機用のPromise解決関数を保持
+	const connectionResolverRef = useRef<{
+		resolve: (value: WalletConnection) => void;
+		reject: (error: Error) => void;
+		timeout: NodeJS.Timeout;
+	} | null>(null);
 
 	// ウォレット状態の構築
 	const walletState: WalletState = {
@@ -16662,48 +16194,58 @@ export const EVMWalletProvider = ({ children }: EVMWalletProviderProps) => {
 		setError(undefined);
 	}, []);
 
+	// 接続状態の変更を監視
+	useEffect(() => {
+		if (address && isConnected && connectionResolverRef.current) {
+			// 接続が完了したらPromiseを解決
+			const { resolve, timeout } = connectionResolverRef.current;
+			clearTimeout(timeout);
+			
+			resolve({
+				address,
+				chainType: 'evm',
+				chainId,
+				walletType: connector?.name || 'unknown',
+				isConnected: true,
+				connectedAt: new Date(),
+				lastUsedAt: new Date(),
+			});
+			
+			connectionResolverRef.current = null;
+		}
+	}, [address, isConnected, chainId, connector]);
+
 	// ウォレット接続
 	const connectWallet = useCallback(async (walletType?: string): Promise<WalletConnection> => {
 		try {
 			clearError();
 			
+			// 既に接続済みの場合はそのまま返す
+			if (address && isConnected) {
+				return {
+					address,
+					chainType: 'evm',
+					chainId,
+					walletType: connector?.name || 'unknown',
+					isConnected: true,
+					connectedAt: new Date(),
+					lastUsedAt: new Date(),
+				};
+			}
+			
 			// RainbowKitモーダルを開く方法を優先
 			if (openConnectModal) {
-				openConnectModal();
-				
-				// 接続完了を待機
 				return new Promise((resolve, reject) => {
 					const timeout = setTimeout(() => {
+						connectionResolverRef.current = null;
 						reject(new Error('Connection timeout'));
 					}, 30000);
-
-					const checkConnection = () => {
-						if (address && isConnected) {
-							clearTimeout(timeout);
-							resolve({
-								address,
-								chainType: 'evm',
-								chainId,
-								walletType: connector?.name || 'unknown',
-								isConnected: true,
-								connectedAt: new Date(),
-								lastUsedAt: new Date(),
-							});
-						}
-					};
-
-					// 既に接続済みの場合
-					if (address && isConnected) {
-						checkConnection();
-						return;
-					}
-
-					// 定期的にチェック
-					const interval = setInterval(checkConnection, 500);
-					setTimeout(() => {
-						clearInterval(interval);
-						clearTimeout(timeout);
-					}, 30000);
+					
+					// Promiseの解決関数を保持
+					connectionResolverRef.current = { resolve, reject, timeout };
+					
+					// モーダルを開く
+					openConnectModal();
 				});
 			}
 
@@ -16886,6 +16428,18 @@ export const EVMWalletProvider = ({ children }: EVMWalletProviderProps) => {
 		const interval = setInterval(cleanup, 60 * 60 * 1000);
 		return () => clearInterval(interval);
 	}, [authService]);
+
+	// クリーンアップ：コンポーネントアンマウント時
+	useEffect(() => {
+		return () => {
+			// 未解決の接続待機がある場合はキャンセル
+			if (connectionResolverRef.current) {
+				clearTimeout(connectionResolverRef.current.timeout);
+				connectionResolverRef.current.reject(new Error('Component unmounted'));
+				connectionResolverRef.current = null;
+			}
+		};
+	}, []);
 
 	// コンテキスト値
 	const contextValue: EVMWalletContextType = {

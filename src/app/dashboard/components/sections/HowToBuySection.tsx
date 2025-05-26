@@ -116,21 +116,6 @@ const HowToBuySection: React.FC = () => {
 		}
 	];
 
-	const steps = [
-		{
-			id: 1,
-			title: 'Add to Cart & Checkout',
-			description: 'Select products and proceed to checkout',
-			details: 'No wallet connection or login required at this step'
-		},
-		{
-			id: 2,
-			title: 'Connect Wallet, Shipping Address & Pay',
-			description: 'Connect wallet, enter address, and complete payment',
-			details: 'Connect your crypto wallet, enter your shipping address, and complete the payment in one seamless process.'
-		}
-	];
-
 	const getFilteredWallets = () => {
 		if (selectedChainType === 'all') return walletOptions;
 		if (selectedChainType === 'evm') {
@@ -148,7 +133,7 @@ const HowToBuySection: React.FC = () => {
 	const comingSoonChains = paymentChains.filter(chain => chain.status === 'coming-soon');
 
 	return (
-		<div className="space-y-8">
+		<div className="space-y-8 w-full">
 			{/* Header */}
 			<div className="text-center space-y-4">
 				<h2 className="text-3xl font-heading font-bold text-white mb-2">
@@ -165,178 +150,142 @@ const HowToBuySection: React.FC = () => {
 
 			{/* Step-by-Step Guide */}
 			<CyberCard title="Purchase Process" showEffects={false}>
-				<div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-					{/* Step Navigation */}
-					<div className="lg:col-span-1">
-						<div className="space-y-2">
-							{steps.map((step) => (
-								<button
-									key={step.id}
-									onClick={() => setActiveStep(step.id)}
-									className={`
-										w-full text-left p-4 rounded-lg border transition-all duration-200
-										${activeStep === step.id
-											? 'bg-neonGreen/10 border-neonGreen text-neonGreen'
-											: 'border-dark-300 text-gray-300 hover:border-gray-500 hover:text-white'
-										}
-									`}
-								>
-									<div className="flex items-center space-x-3">
-										<div className={`
-											w-8 h-8 rounded-full flex items-center justify-center font-bold text-sm
-											${activeStep === step.id ? 'bg-neonGreen text-black' : 'bg-dark-300 text-gray-400'}
-										`}>
-											{step.id}
-										</div>
-										<div>
-											<div className="font-medium">{step.title}</div>
+
+				<div className="space-y-6">
+					<div>
+						<h3 className="text-xl font-bold text-white mb-2">
+							Step 1 : Add to Cart & Checkout
+						</h3>
+						<p className="text-gray-300 leading-relaxed">
+							No wallet connection or login required at this step
+						</p>
+					</div>
+					<div className="space-y-6">
+						<div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+							<div className="p-4 border border-dark-300 rounded-lg">
+								<ShoppingCart className="w-6 h-6 text-neonGreen mb-2" />
+								<div className="text-white font-medium mb-1">Browse & Add</div>
+								<div className="text-sm text-gray-400">Select products and add to cart</div>
+							</div>
+							<div className="p-4 border border-dark-300 rounded-lg">
+								<Zap className="w-6 h-6 text-neonOrange mb-2" />
+								<div className="text-white font-medium mb-1">Quick Checkout</div>
+								<div className="text-sm text-gray-400">Proceed to payment when ready</div>
+							</div>
+						</div>
+					</div>
+					<div>
+						<h3 className="text-xl font-bold text-white mb-2">
+							Step 2 : Connect Wallet, Shipping Address & Pay
+						</h3>
+						<p className="text-gray-300 leading-relaxed">
+							Connect your crypto wallet, enter your shipping address, and complete the payment in one seamless process.
+						</p>
+					</div>
+					<div className="space-y-6">
+						<div>
+							<h4 className="text-lg font-semibold text-white mb-4">Choose Payment Method</h4>
+							<div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+								{activeChains.map((chain) => (
+									<div key={chain.id} className={`
+															p-4 border rounded-lg transition-all duration-200 hover:border-neonGreen/50
+														`}>
+										<div className="flex items-center space-x-3 mb-3">
+											<Wallet className="w-5 h-5 text-gray-400" />
+											<div>
+												<div className="text-white font-medium">{chain.name}</div>
+												<div className="text-sm text-gray-400">{chain.symbol}</div>
+											</div>
 										</div>
 									</div>
-								</button>
-							))}
+								))}
+							</div>
+						</div>
+
+						{/* Supported Wallets */}
+						<div>
+							<div className="flex items-center justify-between mb-4">
+								<h4 className="text-lg font-semibold text-white">Supported Wallets</h4>
+								<div className="flex space-x-2">
+									<button
+										onClick={() => setSelectedChainType('all')}
+										className={`px-3 py-1 rounded text-xs transition-colors ${selectedChainType === 'all'
+											? 'bg-neonGreen/20 text-neonGreen border border-neonGreen/50'
+											: 'bg-dark-300 text-gray-400 hover:text-white'
+											}`}
+									>
+										All
+									</button>
+									<button
+										onClick={() => setSelectedChainType('evm')}
+										className={`px-3 py-1 rounded text-xs transition-colors ${selectedChainType === 'evm'
+											? 'bg-neonGreen/20 text-neonGreen border border-neonGreen/50'
+											: 'bg-dark-300 text-gray-400 hover:text-white'
+											}`}
+									>
+										EVM
+									</button>
+									<button
+										onClick={() => setSelectedChainType('solana')}
+										className={`px-3 py-1 rounded text-xs transition-colors ${selectedChainType === 'solana'
+											? 'bg-neonGreen/20 text-neonGreen border border-neonGreen/50'
+											: 'bg-dark-300 text-gray-400 hover:text-white'
+											}`}
+									>
+										Solana
+									</button>
+								</div>
+							</div>
+
+							<div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+								{getFilteredWallets().map((wallet, index) => (
+									<div key={index} className="p-3 border border-dark-300 rounded-lg hover:border-gray-500 transition-colors">
+										<div className="flex items-center space-x-3 mb-2">
+											{wallet.icon}
+											<div className="flex-1 min-w-0">
+												<div className="text-white font-medium text-sm flex items-center">
+													{wallet.name}
+													{wallet.popular && <Star className="w-3 h-3 text-yellow-400 ml-1" />}
+												</div>
+											</div>
+										</div>
+										<div className="text-xs text-gray-400 mb-2">{wallet.description}</div>
+										<div className="flex items-center space-x-2">
+											{wallet.type === 'both' ? (
+												<>
+													<Monitor className="w-3 h-3 text-gray-500" />
+													<Smartphone className="w-3 h-3 text-gray-500" />
+												</>
+											) : wallet.type === 'mobile' ? (
+												<Smartphone className="w-3 h-3 text-gray-500" />
+											) : (
+												<Monitor className="w-3 h-3 text-gray-500" />
+											)}
+										</div>
+									</div>
+								))}
+							</div>
+						</div>
+
+						{/* Shipping Address Info */}
+						<div className="p-4 border border-blue-600/30 rounded-lg bg-blue-600/5">
+							<div className="flex items-start space-x-3">
+								<MapPin className="w-5 h-5 text-blue-400 flex-shrink-0 mt-0.5" />
+								<div>
+									<div className="text-blue-400 font-medium mb-1">Shipping Address</div>
+									<div className="text-sm text-gray-300">
+										Your wallet address and shipping information will be saved for future purchases. Worldwide delivery available.
+									</div>
+								</div>
+							</div>
 						</div>
 					</div>
 
-					{/* Step Content */}
-					<div className="lg:col-span-2">
-						{steps.map((step) => (
-							activeStep === step.id && (
-								<div key={step.id} className="space-y-6">
-									<div>
-										<h3 className="text-xl font-bold text-white mb-2">
-											Step {step.id}: {step.title}
-										</h3>
-										<p className="text-gray-300 leading-relaxed">
-											{step.details}
-										</p>
-									</div>
-
-									{/* Step 1: Add to Cart */}
-									{step.id === 1 && (
-										<div className="space-y-6">
-											<div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-												<div className="p-4 border border-dark-300 rounded-lg">
-													<ShoppingCart className="w-6 h-6 text-neonGreen mb-2" />
-													<div className="text-white font-medium mb-1">Browse & Add</div>
-													<div className="text-sm text-gray-400">Select products and add to cart</div>
-												</div>
-												<div className="p-4 border border-dark-300 rounded-lg">
-													<Zap className="w-6 h-6 text-neonOrange mb-2" />
-													<div className="text-white font-medium mb-1">Quick Checkout</div>
-													<div className="text-sm text-gray-400">Proceed to payment when ready</div>
-												</div>
-											</div>
-										</div>
-									)}
-
-									{/* Step 2: Connect, Pay & Address */}
-									{step.id === 2 && (
-										<div className="space-y-6">
-											<div>
-												<h4 className="text-lg font-semibold text-white mb-4">Choose Payment Method</h4>
-												<div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-													{activeChains.map((chain) => (
-														<div key={chain.id} className={`
-															p-4 border rounded-lg transition-all duration-200 hover:border-neonGreen/50
-														`}>
-															<div className="flex items-center space-x-3 mb-3">
-																<Wallet className="w-5 h-5 text-gray-400" />
-																<div>
-																	<div className="text-white font-medium">{chain.name}</div>
-																	<div className="text-sm text-gray-400">{chain.symbol}</div>
-																</div>
-															</div>
-														</div>
-													))}
-												</div>
-											</div>
-
-											{/* Supported Wallets */}
-											<div>
-												<div className="flex items-center justify-between mb-4">
-													<h4 className="text-lg font-semibold text-white">Supported Wallets</h4>
-													<div className="flex space-x-2">
-														<button
-															onClick={() => setSelectedChainType('all')}
-															className={`px-3 py-1 rounded text-xs transition-colors ${selectedChainType === 'all'
-																? 'bg-neonGreen/20 text-neonGreen border border-neonGreen/50'
-																: 'bg-dark-300 text-gray-400 hover:text-white'
-																}`}
-														>
-															All
-														</button>
-														<button
-															onClick={() => setSelectedChainType('evm')}
-															className={`px-3 py-1 rounded text-xs transition-colors ${selectedChainType === 'evm'
-																? 'bg-neonGreen/20 text-neonGreen border border-neonGreen/50'
-																: 'bg-dark-300 text-gray-400 hover:text-white'
-																}`}
-														>
-															EVM
-														</button>
-														<button
-															onClick={() => setSelectedChainType('solana')}
-															className={`px-3 py-1 rounded text-xs transition-colors ${selectedChainType === 'solana'
-																? 'bg-neonGreen/20 text-neonGreen border border-neonGreen/50'
-																: 'bg-dark-300 text-gray-400 hover:text-white'
-																}`}
-														>
-															Solana
-														</button>
-													</div>
-												</div>
-
-												<div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-													{getFilteredWallets().map((wallet, index) => (
-														<div key={index} className="p-3 border border-dark-300 rounded-lg hover:border-gray-500 transition-colors">
-															<div className="flex items-center space-x-3 mb-2">
-																{wallet.icon}
-																<div className="flex-1 min-w-0">
-																	<div className="text-white font-medium text-sm flex items-center">
-																		{wallet.name}
-																		{wallet.popular && <Star className="w-3 h-3 text-yellow-400 ml-1" />}
-																	</div>
-																</div>
-															</div>
-															<div className="text-xs text-gray-400 mb-2">{wallet.description}</div>
-															<div className="flex items-center space-x-2">
-																{wallet.type === 'both' ? (
-																	<>
-																		<Monitor className="w-3 h-3 text-gray-500" />
-																		<Smartphone className="w-3 h-3 text-gray-500" />
-																	</>
-																) : wallet.type === 'mobile' ? (
-																	<Smartphone className="w-3 h-3 text-gray-500" />
-																) : (
-																	<Monitor className="w-3 h-3 text-gray-500" />
-																)}
-															</div>
-														</div>
-													))}
-												</div>
-											</div>
-
-											{/* Shipping Address Info */}
-											<div className="p-4 border border-blue-600/30 rounded-lg bg-blue-600/5">
-												<div className="flex items-start space-x-3">
-													<MapPin className="w-5 h-5 text-blue-400 flex-shrink-0 mt-0.5" />
-													<div>
-														<div className="text-blue-400 font-medium mb-1">Shipping Address</div>
-														<div className="text-sm text-gray-300">
-															Your wallet address and shipping information will be saved for future purchases. Worldwide delivery available.
-														</div>
-													</div>
-												</div>
-											</div>
-										</div>
-									)}
-								</div>
-							)
-						))}
-					</div>
 				</div>
-			</CyberCard>
-		</div>
+
+
+			</CyberCard >
+		</div >
 	);
 };
 

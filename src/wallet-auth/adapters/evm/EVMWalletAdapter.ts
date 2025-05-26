@@ -1,11 +1,11 @@
 // src/wallet-auth/adapters/evm/EVMWalletAdapter.ts
-import { 
-	useAccount, 
-	useConnect, 
-	useDisconnect, 
-	useSignMessage, 
-	useSwitchNetwork,
-	useNetwork,
+import {
+	useAccount,
+	useConnect,
+	useDisconnect,
+	useSignMessage,
+	useSwitchChain,  // ✅ v2では useSwitchChain
+	useChainId,      // ✅ v2では useChainId
 } from 'wagmi';
 import { useConnectModal } from '@rainbow-me/rainbowkit';
 import {
@@ -20,24 +20,16 @@ import {
 import { WalletAdapter } from '../../core/WalletAdapterInterface';
 import { chainUtils, getEVMChains, CHAIN_DISPLAY_NAMES } from './chain-config';
 
-// window.ethereumの型定義を拡張
-declare global {
-	interface Window {
-		ethereum?: {
-			isMetaMask?: boolean;
-			isCoinbaseWallet?: boolean;
-			request?: (args: { method: string; params?: any[] }) => Promise<any>;
-		};
-	}
-}
+// 既存のwindow.ethereum定義を使用（型競合回避）
+// CoinbaseWalletSDKやMetaMaskが既に定義しているためコメントアウト
 
 /**
  * EVM系ウォレット用のAdapter実装
- * Wagmi + RainbowKitを使用してEVMチェーンのウォレット接続を管理
+ * Wagmi v2 + RainbowKitを使用してEVMチェーンのウォレット接続を管理
  */
 export class EVMWalletAdapter implements WalletAdapter {
 	readonly chainType: ChainType = 'evm';
-	
+
 	private stateSubscribers: ((state: WalletState) => void)[] = [];
 	private currentState: WalletState = {
 		isConnecting: false,
@@ -51,7 +43,7 @@ export class EVMWalletAdapter implements WalletAdapter {
 	}
 
 	get isSupported(): boolean {
-		return typeof window !== 'undefined' && typeof window.ethereum !== 'undefined';
+		return typeof window !== 'undefined' && typeof (window as any).ethereum !== 'undefined';
 	}
 
 	get supportedWallets(): WalletProvider[] {
@@ -62,7 +54,7 @@ export class EVMWalletAdapter implements WalletAdapter {
 				chainType: 'evm',
 				icon: '🦊',
 				downloadUrl: 'https://metamask.io/download/',
-				isInstalled: typeof window !== 'undefined' && !!window.ethereum?.isMetaMask,
+				isInstalled: typeof window !== 'undefined' && !!((window as any).ethereum?.isMetaMask),
 				capabilities: {
 					canSwitchChain: true,
 					canAddChain: true,
@@ -92,7 +84,7 @@ export class EVMWalletAdapter implements WalletAdapter {
 				chainType: 'evm',
 				icon: '🔵',
 				downloadUrl: 'https://www.coinbase.com/wallet',
-				isInstalled: typeof window !== 'undefined' && !!window.ethereum?.isCoinbaseWallet,
+				isInstalled: typeof window !== 'undefined' && !!((window as any).ethereum?.isCoinbaseWallet),
 				capabilities: {
 					canSwitchChain: true,
 					canAddChain: true,
@@ -106,27 +98,27 @@ export class EVMWalletAdapter implements WalletAdapter {
 		return wallets;
 	}
 
-	// Wagmi hooksをラップして使用する関数
+	// Wagmi v2 hooksをラップして使用する関数
 	private useWagmiHooks() {
 		const { address, isConnected, isConnecting, connector } = useAccount();
-		const { chain } = useNetwork();
-		const { connect, connectors, isLoading: isConnectLoading } = useConnect();
+		const chainId = useChainId(); // ✅ v2の正しいhook
+		const { connect, connectors, isPending } = useConnect(); // ✅ v2では isPending
 		const { disconnect } = useDisconnect();
 		const { signMessageAsync } = useSignMessage();
-		const { switchNetwork } = useSwitchNetwork();
+		const { switchChain } = useSwitchChain(); // ✅ v2の正しいhook
 		const { openConnectModal } = useConnectModal();
 
 		return {
 			address,
 			isConnected,
-			isConnecting: isConnecting || isConnectLoading,
+			isConnecting: isConnecting || isPending, // ✅ v2では isPending も確認
 			connector,
-			chain,
+			chainId, // ✅ 直接chainIdを取得
 			connect,
 			connectors,
 			disconnect,
 			signMessageAsync,
-			switchNetwork,
+			switchChain, // ✅ v2の正しい関数名
 			openConnectModal,
 		};
 	}
@@ -137,10 +129,10 @@ export class EVMWalletAdapter implements WalletAdapter {
 
 	subscribe(callback: (state: WalletState) => void): () => void {
 		this.stateSubscribers.push(callback);
-		
+
 		// 初回呼び出し
 		callback(this.currentState);
-		
+
 		// Unsubscribe関数を返す
 		return () => {
 			const index = this.stateSubscribers.indexOf(callback);
@@ -166,11 +158,10 @@ export class EVMWalletAdapter implements WalletAdapter {
 			this.notifyStateChange();
 
 			// RainbowKitのモーダルを開く
-			// 実際の接続処理はRainbowKitが行う
 			if (typeof window !== 'undefined') {
 				// カスタムイベントでRainbowKitモーダルを開く要求を送信
-				window.dispatchEvent(new CustomEvent('openWalletModal', { 
-					detail: { walletType } 
+				window.dispatchEvent(new CustomEvent('openWalletModal', {
+					detail: { walletType }
 				}));
 			}
 
@@ -179,7 +170,7 @@ export class EVMWalletAdapter implements WalletAdapter {
 
 			// 接続状態を確認して返す
 			const connection = this.createWalletConnection();
-			
+
 			this.currentState.isConnecting = false;
 			this.currentState.isConnected = true;
 			this.notifyStateChange();
@@ -195,9 +186,8 @@ export class EVMWalletAdapter implements WalletAdapter {
 
 	async disconnect(): Promise<void> {
 		try {
-			// Wagmiのdisconnect関数を呼び出す
-			// 実際の実装ではuseDisconnectフックを使用
-			
+			// Wagmi v2のdisconnect関数を呼び出す
+
 			this.currentState.isConnected = false;
 			this.currentState.isAuthenticated = false;
 			this.currentState.address = undefined;
@@ -245,8 +235,7 @@ export class EVMWalletAdapter implements WalletAdapter {
 		}
 
 		try {
-			// Wagmiのサインメッセージを使用
-			// 実際の実装ではuseSignMessageフックを使用
+			// Wagmi v2のサインメッセージを使用
 			const signature = await this.executeSignMessage(message);
 			return signature;
 		} catch (error) {
@@ -268,7 +257,7 @@ export class EVMWalletAdapter implements WalletAdapter {
 			signature,
 			address,
 			chainType: this.chainType,
-			chainId: this.getChainId() || undefined, // nullをundefinedに変換
+			chainId: this.getChainId() || undefined,
 			nonce,
 			timestamp: Date.now(),
 		};
@@ -276,16 +265,15 @@ export class EVMWalletAdapter implements WalletAdapter {
 
 	async switchChain(chainId: number | string): Promise<void> {
 		const numericChainId = typeof chainId === 'string' ? parseInt(chainId) : chainId;
-		
+
 		if (!chainUtils.isSupported(numericChainId)) {
 			throw new Error(`Chain ${chainId} is not supported`);
 		}
 
 		try {
-			// WagmiのswitchNetworkを使用
-			// 実際の実装ではuseSwitchNetworkフックを使用
+			// Wagmi v2のswitchChainを使用
 			await this.executeSwitchChain(numericChainId);
-			
+
 			this.currentState.chainId = numericChainId;
 			this.notifyStateChange();
 		} catch (error) {
@@ -295,8 +283,8 @@ export class EVMWalletAdapter implements WalletAdapter {
 
 	async addChain(chainConfig: ChainConfig): Promise<void> {
 		try {
-			if (typeof window !== 'undefined' && window.ethereum?.request) {
-				await window.ethereum.request({
+			if (typeof window !== 'undefined' && (window as any).ethereum?.request) {
+				await (window as any).ethereum.request({
 					method: 'wallet_addEthereumChain',
 					params: [{
 						chainId: `0x${chainConfig.chainId.toString(16)}`,
@@ -319,7 +307,7 @@ export class EVMWalletAdapter implements WalletAdapter {
 			chainId: chain.id,
 			name: chain.name,
 			nativeCurrency: chain.nativeCurrency,
-			rpcUrls: [...chain.rpcUrls.default.http], // readonly配列をmutable配列にコピー
+			rpcUrls: [...chain.rpcUrls.default.http],
 			blockExplorerUrls: chain.blockExplorers ? [chain.blockExplorers.default.url] : undefined,
 			isTestnet: chain.testnet,
 		}));
@@ -346,7 +334,7 @@ export class EVMWalletAdapter implements WalletAdapter {
 		return {
 			address: this.getAddress() || '',
 			chainType: this.chainType,
-			chainId: this.getChainId() || undefined, // nullをundefinedに変換
+			chainId: this.getChainId() || undefined,
 			walletType: this.getWalletType() || 'unknown',
 			isConnected: this.isConnected(),
 			connectedAt: new Date(),
@@ -371,7 +359,7 @@ This request will not trigger a blockchain transaction or cost any gas fees.`;
 		let message = 'An unknown error occurred';
 
 		if (error?.code) {
-			code = String(error.code); // 数値の場合は文字列に変換
+			code = String(error.code);
 		}
 
 		if (error?.message) {
@@ -380,9 +368,9 @@ This request will not trigger a blockchain transaction or cost any gas fees.`;
 			message = error;
 		}
 
-		// EVM固有のエラーコード処理（数値として比較）
+		// EVM固有のエラーコード処理
 		const numericCode = typeof error?.code === 'number' ? error.code : parseInt(code);
-		
+
 		if (numericCode === 4001) {
 			code = 'user-rejected';
 			message = 'User rejected the request';
@@ -404,12 +392,10 @@ This request will not trigger a blockchain transaction or cost any gas fees.`;
 
 	// これらのメソッドは実際にはReactコンポーネント内でhooksを使用して実装される
 	private async executeSignMessage(message: string): Promise<string> {
-		// 実際の実装ではuseSignMessageを使用
 		throw new Error('This method should be called from a React component with wagmi hooks');
 	}
 
 	private async executeSwitchChain(chainId: number): Promise<void> {
-		// 実際の実装ではuseSwitchNetworkを使用
 		throw new Error('This method should be called from a React component with wagmi hooks');
 	}
 }

@@ -29,6 +29,9 @@
 ├── src
 │   ├── app
 │   │   ├── api
+│   │   │   ├── auth
+│   │   │   │   └── wallet
+│   │   │   │       └── route.ts
 │   │   │   ├── demo
 │   │   │   │   └── invoice
 │   │   │   │       ├── [invoiceId]
@@ -36,6 +39,9 @@
 │   │   │   │       │       └── route.ts
 │   │   │   │       └── create
 │   │   │   │           └── route.ts
+│   │   │   ├── test
+│   │   │   │   └── admin
+│   │   │   │       └── route.ts
 │   │   │   └── utils
 │   │   │       ├── avalanche.ts
 │   │   │       ├── payment-monitor.ts
@@ -138,10 +144,13 @@
 │   │   └── usePriceConverter.ts
 │   ├── lib
 │   │   ├── avalanche-config.ts
+│   │   ├── firebase-admin.ts
 │   │   ├── firebase.ts
 │   │   └── firestore
 │   │       ├── inventory.ts
 │   │       ├── products.ts
+│   │       ├── users-wallet-extended.ts
+│   │       ├── users-wallet.ts
 │   │       └── users.ts
 │   ├── utils
 │   │   ├── errorHandling.ts
@@ -160,6 +169,7 @@
 ├── tailwind.config.js
 ├── tsconfig.json
 └── types
+    ├── api-wallet.ts
     ├── auth.ts
     ├── crypto.ts
     ├── dashboard.ts
@@ -170,4 +180,4 @@
     ├── user.ts
     └── wallet.ts
 
-44 directories, 126 files
+48 directories, 132 files

@@ -293,6 +293,17 @@ export const UnifiedAuthProvider = ({ children, config: userConfig = {} }: Unifi
 						throw new Error('Wallet not connected');
 					}
 
+					if (!evmWallet.isConnected) {
+						throw new Error('Wallet connection lost');
+					}
+
+					console.log('🔗 Wallet status confirmed:', {
+						address: evmWallet.address,
+						isConnected: evmWallet.isConnected,
+						chainId: evmWallet.chainId,
+						chainName: evmWallet.chainName
+					});
+
 					// 3. Nonceを保存（フロントエンド側）
 					authService.storeNonce(evmWallet.address, nonce);
 

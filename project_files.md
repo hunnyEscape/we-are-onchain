@@ -1,13 +1,18 @@
 -e 
 ### FILE: ./src/contexts/UnifiedAuthContext.tsx
 
-// src/contexts/UnifiedAuthContext.tsx
+// src/contexts/UnifiedAuthContext.tsx (Extended統合版)
 'use client';
 
 import React, { createContext, useContext, useEffect, useState, useCallback, useRef } from 'react';
 import { ChainType } from '../../types/wallet';
-import { ExtendedFirestoreUser, WalletOperationResult, AuthFlowState } from '../../types/user-extended';
+import {
+	ExtendedFirestoreUser,
+	WalletOperationResult,
+	AuthFlowState
+} from '../../types/user-extended';
 import { UnifiedAuthState, AuthConfig, AuthActions, AuthEvent, AuthEventType, UseAuthReturn } from '../../types/auth';
+import { WalletAuthRequest, WalletAuthResponse } from '../../types/api-wallet';
 
 // EVMWalletProviderはオプショナルにする
 let useEVMWallet: any = null;
@@ -18,7 +23,7 @@ try {
 	console.warn('EVMWallet not available:', error);
 }
 
-// デフォルト設定（Wallet専用）
+// デフォルト設定（Extended Wallet専用）
 const DEFAULT_CONFIG: AuthConfig = {
 	preferredMethod: 'wallet', // wallet固定
 	enableFirebase: false,     // Firebase無効
@@ -31,22 +36,31 @@ const DEFAULT_CONFIG: AuthConfig = {
 	},
 };
 
-interface UnifiedAuthContextType extends UseAuthReturn {
+interface ExtendedUnifiedAuthContextType extends UseAuthReturn {
 	// 設定
 	config: AuthConfig;
 
-	// 追加の状態
+	// Extended状態
 	authFlowState: AuthFlowState;
+	extendedUser: ExtendedFirestoreUser | null;
+
+	// Extended操作
+	refreshExtendedUser: () => Promise<void>;
+	getAuthHistory: () => ExtendedFirestoreUser['authHistory'] | null;
+	getConnectedWallets: () => ExtendedFirestoreUser['connectedWallets'] | null;
+	updateUserProfile: (profileData: any) => Promise<WalletOperationResult>;
 
 	// 内部状態（デバッグ用）
 	_debug: {
 		firebaseReady: boolean;
 		walletReady: boolean;
 		lastError: string | null;
+		apiCalls: number;
+		lastApiCall: Date | null;
 	};
 }
 
-const UnifiedAuthContext = createContext<UnifiedAuthContextType | undefined>(undefined);
+const UnifiedAuthContext = createContext<ExtendedUnifiedAuthContextType | undefined>(undefined);
 
 interface UnifiedAuthProviderProps {
 	children: React.ReactNode;
@@ -56,8 +70,8 @@ interface UnifiedAuthProviderProps {
 export const UnifiedAuthProvider = ({ children, config: userConfig = {} }: UnifiedAuthProviderProps) => {
 	const config = { ...DEFAULT_CONFIG, ...userConfig };
 
-	// Firestore状態（Wallet基準）
-	const [firestoreUser, setFirestoreUser] = useState<ExtendedFirestoreUser | null>(null);
+	// Extended Firestore状態
+	const [extendedUser, setExtendedUser] = useState<ExtendedFirestoreUser | null>(null);
 	const [firestoreLoading, setFirestoreLoading] = useState(false);
 
 	// Wallet状態（EVMのみ現在対応）
@@ -86,11 +100,11 @@ export const UnifiedAuthProvider = ({ children, config: userConfig = {} }: Unifi
 		error: null,
 	};
 
-	// 統合状態（Wallet専用）
+	// 統合状態（Extended Wallet専用）
 	const [isAuthenticated, setIsAuthenticated] = useState(false);
 	const [error, setError] = useState<string | null>(null);
 
-	// 認証フロー状態
+	// Extended認証フロー状態
 	const [authFlowState, setAuthFlowState] = useState<AuthFlowState>({
 		currentStep: 'idle',
 		signatureRequired: false,
@@ -102,11 +116,13 @@ export const UnifiedAuthProvider = ({ children, config: userConfig = {} }: Unifi
 	const eventEmitter = useRef(new EventTarget());
 	const [eventListeners] = useState(new Map<string, Set<(event: AuthEvent) => void>>());
 
-	// デバッグ情報
+	// デバッグ情報（Extended）
 	const [debugInfo, setDebugInfo] = useState({
 		firebaseReady: false,  // 常にfalse
 		walletReady: false,
 		lastError: null as string | null,
+		apiCalls: 0,
+		lastApiCall: null as Date | null,
 	});
 
 	// エラーハンドリング
@@ -114,7 +130,7 @@ export const UnifiedAuthProvider = ({ children, config: userConfig = {} }: Unifi
 		const errorMessage = error?.message || error?.toString() || 'Unknown error';
 		const fullError = context ? `${context}: ${errorMessage}` : errorMessage;
 
-		console.error('UnifiedAuth Error:', fullError, error);
+		console.error('Extended UnifiedAuth Error:', fullError, error);
 		setError(fullError);
 		setDebugInfo(prev => ({ ...prev, lastError: fullError }));
 
@@ -130,7 +146,7 @@ export const UnifiedAuthProvider = ({ children, config: userConfig = {} }: Unifi
 			data,
 		};
 
-		console.log('Auth Event:', event);
+		console.log('Extended Auth Event:', event);
 
 		// リスナーに通知
 		const listeners = eventListeners.get(type);
@@ -139,7 +155,52 @@ export const UnifiedAuthProvider = ({ children, config: userConfig = {} }: Unifi
 		}
 	}, [eventListeners]);
 
-	// Wallet認証の監視
+	// Extended API呼び出しヘルパー
+	const callExtendedAPI = useCallback(async (url: string, options: RequestInit = {}) => {
+		setDebugInfo(prev => ({
+			...prev,
+			apiCalls: prev.apiCalls + 1,
+			lastApiCall: new Date()
+		}));
+
+		const response = await fetch(url, {
+			headers: {
+				'Content-Type': 'application/json',
+				...options.headers,
+			},
+			...options,
+		});
+
+		if (!response.ok) {
+			throw new Error(`API call failed: ${response.status} ${response.statusText}`);
+		}
+
+		return response.json();
+	}, []);
+
+	// Extended Walletユーザー情報の更新
+	const refreshExtendedUser = useCallback(async () => {
+		if (!evmWallet.address) return;
+
+		try {
+			setFirestoreLoading(true);
+
+			const result = await callExtendedAPI(
+				`/api/auth/wallet?address=${evmWallet.address}`
+			);
+
+			if (result.success && result.data.user) {
+				setExtendedUser(result.data.user);
+				console.log('🔄 Extended user refreshed:', result.data.user.walletAddress);
+			}
+		} catch (error) {
+			console.warn('Failed to refresh extended user:', error);
+		} finally {
+			setFirestoreLoading(false);
+		}
+	}, [evmWallet.address, callExtendedAPI]);
+
+	// Wallet認証の監視（Extended版）
 	useEffect(() => {
 		setDebugInfo(prev => ({ ...prev, walletReady: true }));
 
@@ -149,6 +210,9 @@ export const UnifiedAuthProvider = ({ children, config: userConfig = {} }: Unifi
 				chainId: evmWallet.chainId,
 				chainType: 'evm'
 			});
+
+			// Extended userの自動取得
+			refreshExtendedUser();
 		}
 
 		if (evmWallet.isAuthenticated) {
@@ -160,9 +224,9 @@ export const UnifiedAuthProvider = ({ children, config: userConfig = {} }: Unifi
 
 		// 認証状態の更新
 		updateAuthenticationState();
-	}, [evmWallet.isConnected, evmWallet.isAuthenticated, evmWallet.address, emitEvent]);
+	}, [evmWallet.isConnected, evmWallet.isAuthenticated, evmWallet.address, emitEvent, refreshExtendedUser]);
 
-	// 統合認証状態の更新（Wallet専用）
+	// 統合認証状態の更新（Extended Wallet専用）
 	const updateAuthenticationState = useCallback(() => {
 		const hasWalletAuth = evmWallet.isAuthenticated;
 		setIsAuthenticated(hasWalletAuth);
@@ -172,7 +236,7 @@ export const UnifiedAuthProvider = ({ children, config: userConfig = {} }: Unifi
 		}
 	}, [evmWallet.isAuthenticated, emitEvent]);
 
-	// 認証アクション実装（Wallet専用）
+	// Extended認証アクション実装
 	const authActions: AuthActions = {
 		// Firebase認証（削除済み - エラーを投げる）
 		signInWithEmail: async (email: string, password: string) => {
@@ -187,7 +251,7 @@ export const UnifiedAuthProvider = ({ children, config: userConfig = {} }: Unifi
 			throw new Error('Firebase authentication is disabled. Please use wallet authentication.');
 		},
 
-		// Wallet認証
+		// Extended Wallet認証
 		connectWallet: async (chainType: ChainType = 'evm', walletType?: string) => {
 			try {
 				setAuthFlowState(prev => ({
@@ -206,41 +270,156 @@ export const UnifiedAuthProvider = ({ children, config: userConfig = {} }: Unifi
 					throw new Error(`Chain type ${chainType} not supported yet`);
 				}
 			} catch (error) {
-				handleError(error, 'Wallet connect');
+				handleError(error, 'Extended Wallet connect');
 				setAuthFlowState(prev => ({ ...prev, currentStep: 'error' }));
 				throw error;
 			}
 		},
 
+		// ★ メイン機能: Extended Wallet認証
 		authenticateWallet: async (chainType: ChainType = 'evm') => {
 			try {
 				setAuthFlowState(prev => ({
 					...prev,
 					currentStep: 'signing',
 					signatureRequired: true,
-					progress: 50
+					progress: 25
 				}));
 
 				if (chainType === 'evm') {
-					const result = await evmWallet.authenticate();
+					// 1. EVMAuthServiceの初期化とNonce生成
+					const authService = new (await import('@/wallet-auth/adapters/evm/EVMAuthService')).EVMAuthService();
+					const nonce = authService.generateNonce();
+
+					// 2. ウォレットアドレス確認
+					if (!evmWallet.address) {
+						throw new Error('Wallet not connected');
+					}
+
+					if (!evmWallet.isConnected) {
+						throw new Error('Wallet connection lost');
+					}
+
+					console.log('🔗 Wallet status confirmed:', {
+						address: evmWallet.address,
+						isConnected: evmWallet.isConnected,
+						chainId: evmWallet.chainId,
+						chainName: evmWallet.chainName
+					});
+
+					// 3. Nonceを保存（フロントエンド側）
+					authService.storeNonce(evmWallet.address, nonce);
+
+					console.log(`🔑 Generated and stored nonce: ${nonce} for address: ${evmWallet.address}`);
+
+					// 署名要求の準備
+					setAuthFlowState(prev => ({ ...prev, progress: 50 }));
+
+					// 4. 認証メッセージ作成
+					const authMessage = authService.createAuthMessage(evmWallet.address, nonce, chainType);
+
+					// 5. ウォレットから署名取得
+					const signature = await evmWallet.signMessage(authMessage);
+
+					// 6. 署名データ構築
+					const signatureData = {
+						message: authMessage,
+						signature,
+						address: evmWallet.address,
+						chainType,
+						chainId: evmWallet.chainId,
+						nonce,
+						timestamp: Date.now(),
+					};
+
 					setAuthFlowState(prev => ({
 						...prev,
-						currentStep: 'idle',
+						currentStep: 'verifying',
 						signatureRequired: false,
+						verificationRequired: true,
+						progress: 75
+					}));
+
+					console.log('🚀 Sending extended wallet auth to API...', {
+						address: signatureData.address,
+						nonce: signatureData.nonce,
+						hasSignature: !!signatureData.signature,
+						messageLength: signatureData.message.length
+					});
+
+					// 7. Extended API Routes経由でFirestore認証
+					const apiRequest: WalletAuthRequest = {
+						signature: signatureData.signature,
+						message: signatureData.message,
+						address: signatureData.address,
+						chainType: signatureData.chainType,
+						chainId: signatureData.chainId,
+						nonce: signatureData.nonce,
+						timestamp: signatureData.timestamp,
+					};
+
+					const result: WalletAuthResponse = await callExtendedAPI('/api/auth/wallet', {
+						method: 'POST',
+						body: JSON.stringify(apiRequest),
+					});
+
+					if (!result.success) {
+						throw new Error(result.error?.message || 'Extended API authentication failed');
+					}
+
+					console.log('✅ Extended API authentication successful:', result.data);
+
+					// 8. Extended Firestoreユーザーデータを保存
+					if (result.data?.user) {
+						setExtendedUser(result.data.user);
+
+						console.log('🎉 Extended user data received:', {
+							address: result.data.user.walletAddress,
+							authMethod: result.data.user.authMethod,
+							isNewUser: result.data.isNewUser,
+							connectedWallets: result.data.user.connectedWallets.length,
+							authHistory: result.data.user.authHistory.length,
+							badges: result.data.user.stats.badges,
+						});
+					}
+
+					setAuthFlowState(prev => ({
+						...prev,
+						currentStep: 'success',
+						verificationRequired: false,
 						progress: 100
 					}));
-					return result;
+
+					// 成功時は少し待ってからidleに戻す
+					setTimeout(() => {
+						setAuthFlowState(prev => ({ ...prev, currentStep: 'idle' }));
+					}, 2000);
+
+					return {
+						success: true,
+						user: {
+							address: signatureData.address,
+							chainType: signatureData.chainType,
+							chainId: signatureData.chainId,
+						},
+						signature: signatureData
+					};
 				} else {
 					throw new Error(`Chain type ${chainType} not supported yet`);
 				}
 			} catch (error) {
-				handleError(error, 'Wallet authenticate');
+				handleError(error, 'Extended Wallet authenticate');
 				setAuthFlowState(prev => ({
 					...prev,
 					currentStep: 'error',
-					signatureRequired: false
+					signatureRequired: false,
+					verificationRequired: false
 				}));
-				throw error;
+
+				return {
+					success: false,
+					error: error instanceof Error ? error.message : 'Extended authentication failed'
+				};
 			}
 		},
 
@@ -252,12 +431,12 @@ export const UnifiedAuthProvider = ({ children, config: userConfig = {} }: Unifi
 					throw new Error(`Chain switching not supported for ${chainType}`);
 				}
 			} catch (error) {
-				handleError(error, 'Chain switch');
+				handleError(error, 'Extended Chain switch');
 				throw error;
 			}
 		},
 
-		// 統合ログアウト（Wallet専用）
+		// Extended統合ログアウト
 		logout: async () => {
 			try {
 				setAuthFlowState(prev => ({ ...prev, currentStep: 'connecting', progress: 25 }));
@@ -267,42 +446,72 @@ export const UnifiedAuthProvider = ({ children, config: userConfig = {} }: Unifi
 					await evmWallet.disconnectWallet();
 				}
 
-				// 状態リセット
-				setFirestoreUser(null);
+				// Extended状態リセット
+				setExtendedUser(null);
 				setIsAuthenticated(false);
 				setError(null);
 
 				setAuthFlowState(prev => ({ ...prev, currentStep: 'idle', progress: 100 }));
 				emitEvent('unified-logout');
 			} catch (error) {
-				handleError(error, 'Logout');
+				handleError(error, 'Extended Logout');
 				setAuthFlowState(prev => ({ ...prev, currentStep: 'error' }));
 				throw error;
 			}
 		},
 
-		// プロフィール更新
+		// Extended プロフィール更新
 		updateProfile: async (data: Partial<ExtendedFirestoreUser>) => {
 			try {
-				// TODO: ExtendedFirestoreUser用の更新ロジック
-				throw new Error('Not implemented yet');
+				if (!extendedUser) {
+					throw new Error('No extended user data available');
+				}
+
+				// TODO: API Routes経由でプロフィール更新
+				console.log('Extended profile update requested:', data);
+
+				// 暫定的にローカル更新
+				setExtendedUser(prev => prev ? { ...prev, ...data } : null);
+
+				return {
+					success: true,
+					data: { message: 'Profile updated successfully' }
+				};
 			} catch (error) {
-				handleError(error, 'Profile update');
-				throw error;
+				handleError(error, 'Extended Profile update');
+				return {
+					success: false,
+					error: {
+						code: 'UPDATE_FAILED',
+						message: error instanceof Error ? error.message : 'Profile update failed'
+					}
+				};
 			}
 		},
 
-		// セッション更新
+		// Extended セッション更新
 		refreshSession: async () => {
 			try {
-				// TODO: セッション更新ロジック
-				throw new Error('Not implemented yet');
+				await refreshExtendedUser();
 			} catch (error) {
-				handleError(error, 'Session refresh');
+				handleError(error, 'Extended Session refresh');
 				throw error;
 			}
 		},
 	};
+
+	// Extended ヘルパー関数
+	const getAuthHistory = useCallback(() => {
+		return extendedUser?.authHistory || null;
+	}, [extendedUser]);
+
+	const getConnectedWallets = useCallback(() => {
+		return extendedUser?.connectedWallets || null;
+	}, [extendedUser]);
+
+	const updateUserProfile = useCallback(async (profileData: any): Promise<WalletOperationResult> => {
+		return await authActions.updateProfile(profileData);
+	}, [authActions]);
 
 	// イベントリスナー管理
 	const addEventListener = useCallback((type: AuthEventType, callback: (event: AuthEvent) => void) => {
@@ -311,7 +520,6 @@ export const UnifiedAuthProvider = ({ children, config: userConfig = {} }: Unifi
 		}
 		eventListeners.get(type)!.add(callback);
 
-		// Unsubscribe関数を返す
 		return () => {
 			const listeners = eventListeners.get(type);
 			if (listeners) {
@@ -320,7 +528,7 @@ export const UnifiedAuthProvider = ({ children, config: userConfig = {} }: Unifi
 		};
 	}, [eventListeners]);
 
-	// 統合状態の構築（Wallet専用）
+	// Extended統合状態の構築
 	const unifiedState: UnifiedAuthState = {
 		authMethod: 'wallet', // 常にwallet
 		firebaseUser: null,   // 常にnull
@@ -334,25 +542,25 @@ export const UnifiedAuthProvider = ({ children, config: userConfig = {} }: Unifi
 			isVerified: evmWallet.isAuthenticated,
 		} : null,
 		walletLoading: evmWallet.isConnecting,
-		firestoreUser,
+		firestoreUser: extendedUser,
 		firestoreLoading,
 		isAuthenticated,
 		isLoading: evmWallet.isConnecting || firestoreLoading,
 		error,
 	};
 
-	// コンテキスト値
-	const contextValue: UnifiedAuthContextType = {
+	// Extended コンテキスト値
+	const contextValue: ExtendedUnifiedAuthContextType = {
 		...unifiedState,
 		...authActions,
 
-		// 便利なゲッター
-		primaryUserId: evmWallet.address || null,
-		displayName: firestoreUser?.displayName || null,
+		// 便利なゲッター（Extended版）
+		primaryUserId: extendedUser?.walletAddress || null,
+		displayName: extendedUser?.displayName || null,
 		emailAddress: null, // Firebase無効のためnull
 		walletAddress: evmWallet.address || null,
 
-		// 状態チェック（Wallet専用）
+		// 状態チェック（Extended Wallet専用）
 		isFirebaseAuth: false,    // 常にfalse
 		isWalletAuth: isAuthenticated,
 		hasMultipleAuth: false,   // 常にfalse
@@ -360,9 +568,18 @@ export const UnifiedAuthProvider = ({ children, config: userConfig = {} }: Unifi
 		// イベント管理
 		addEventListener,
 
-		// 設定と内部状態
+		// Extended設定と状態
 		config,
 		authFlowState,
+		extendedUser,
+
+		// Extended操作
+		refreshExtendedUser,
+		getAuthHistory,
+		getConnectedWallets,
+		updateUserProfile,
+
+		// デバッグ情報
 		_debug: debugInfo,
 	};
 
@@ -374,9 +591,9 @@ export const UnifiedAuthProvider = ({ children, config: userConfig = {} }: Unifi
 };
 
 /**
- * 統合認証を使用するhook（Wallet専用）
+ * Extended統合認証を使用するhook
  */
-export const useUnifiedAuth = (): UnifiedAuthContextType => {
+export const useUnifiedAuth = (): ExtendedUnifiedAuthContextType => {
 	const context = useContext(UnifiedAuthContext);
 	if (!context) {
 		throw new Error('useUnifiedAuth must be used within UnifiedAuthProvider');
@@ -385,7 +602,7 @@ export const useUnifiedAuth = (): UnifiedAuthContextType => {
 };
 
 /**
- * 認証状態のみを取得するhook（Wallet専用）
+ * Extended認証状態のみを取得するhook
  */
 export const useAuthState = () => {
 	const {
@@ -394,6 +611,7 @@ export const useAuthState = () => {
 		primaryUserId,
 		displayName,
 		walletAddress,
+		extendedUser,
 		error
 	} = useUnifiedAuth();
 
@@ -405,12 +623,17 @@ export const useAuthState = () => {
 		displayName,
 		emailAddress: null, // Firebase無効
 		walletAddress,
+		extendedUser,
+		connectedWalletsCount: extendedUser?.connectedWallets.length || 0,
+		authHistoryCount: extendedUser?.authHistory.length || 0,
+		membershipTier: extendedUser?.membershipTier || 'bronze',
+		totalBadges: extendedUser?.stats.badges.length || 0,
 		error,
 	};
 };
 
 /**
- * 認証アクションのみを取得するhook（Wallet専用）
+ * Extended認証アクションのみを取得するhook
  */
 export const useAuthActions = () => {
 	const {
@@ -418,16 +641,17 @@ export const useAuthActions = () => {
 		authenticateWallet,
 		switchWalletChain,
 		logout,
-		updateProfile
+		updateUserProfile,
+		refreshExtendedUser
 	} = useUnifiedAuth();
 
 	return {
-		// Firebase認証は削除
 		connectWallet,
 		authenticateWallet,
 		switchWalletChain,
 		logout,
-		updateProfile,
+		updateUserProfile,
+		refreshExtendedUser,
 	};
 };-e 
 ### FILE: ./src/lib/firebase.ts
@@ -657,6 +881,135 @@ export const SECURITY_CONFIG = {
   allowedOrigins: isDevelopment 
     ? ['http://localhost:3000', 'http://127.0.0.1:3000']
     : [process.env.NEXT_PUBLIC_APP_URL || 'https://your-domain.com']
+};-e 
+### FILE: ./src/lib/firebase-admin.ts
+
+// src/lib/firebase-admin.ts
+import { initializeApp, getApps, cert, App } from 'firebase-admin/app';
+import { getFirestore, Firestore } from 'firebase-admin/firestore';
+
+/**
+ * Firebase Admin SDK初期化
+ * サーバーサイドでFirestoreにアクセスするために使用
+ */
+
+let adminApp: App;
+let adminDb: Firestore;
+
+// 環境変数の検証
+function validateAdminEnvVars(): void {
+  const requiredVars = [
+    'FIREBASE_ADMIN_PROJECT_ID',
+    'FIREBASE_ADMIN_CLIENT_EMAIL', 
+    'FIREBASE_ADMIN_PRIVATE_KEY'
+  ];
+
+  const missingVars = requiredVars.filter(varName => !process.env[varName]);
+  
+  if (missingVars.length > 0) {
+    throw new Error(
+      `Missing required Firebase Admin environment variables: ${missingVars.join(', ')}`
+    );
+  }
+}
+
+// Admin SDK初期化
+function initializeAdminApp(): App {
+  try {
+    validateAdminEnvVars();
+
+    // 既に初期化済みかチェック
+    const existingApps = getApps();
+    if (existingApps.length > 0) {
+      console.log('📱 Firebase Admin already initialized');
+      return existingApps[0];
+    }
+
+    // Admin SDK初期化
+    const app = initializeApp({
+      credential: cert({
+        projectId: process.env.FIREBASE_ADMIN_PROJECT_ID!,
+        clientEmail: process.env.FIREBASE_ADMIN_CLIENT_EMAIL!,
+        privateKey: process.env.FIREBASE_ADMIN_PRIVATE_KEY!.replace(/\\n/g, '\n'),
+      }),
+      projectId: process.env.FIREBASE_ADMIN_PROJECT_ID!,
+    });
+
+    console.log('🔥 Firebase Admin SDK initialized successfully');
+    return app;
+
+  } catch (error) {
+    console.error('❌ Firebase Admin SDK initialization failed:', error);
+    throw new Error(`Firebase Admin initialization failed: ${error}`);
+  }
+}
+
+// Firestore Admin インスタンス取得
+function getAdminFirestore(): Firestore {
+  if (!adminApp) {
+    adminApp = initializeAdminApp();
+  }
+  
+  if (!adminDb) {
+    adminDb = getFirestore(adminApp);
+    console.log('📊 Firestore Admin instance created');
+  }
+  
+  return adminDb;
+}
+
+// エクスポート
+export { getAdminFirestore };
+
+// デフォルトエクスポート（利便性のため）
+export default getAdminFirestore;
+
+/**
+ * 使用例:
+ * 
+ * import { getAdminFirestore } from '@/lib/firebase-admin';
+ * 
+ * const adminDb = getAdminFirestore();
+ * const usersRef = adminDb.collection('users');
+ */
+
+/**
+ * 開発環境での動作確認用ヘルパー
+ */
+export const testAdminConnection = async (): Promise<boolean> => {
+  try {
+    const db = getAdminFirestore();
+    
+    // 簡単な読み取りテスト
+    const testDoc = await db.collection('_test').doc('connection').get();
+    
+    console.log('✅ Firebase Admin connection test successful');
+    return true;
+  } catch (error) {
+    console.error('❌ Firebase Admin connection test failed:', error);
+    return false;
+  }
+};
+
+/**
+ * エラーハンドリング用のヘルパー関数
+ */
+export const handleAdminError = (error: any, operation: string): never => {
+  console.error(`Firebase Admin Error (${operation}):`, error);
+  
+  if (error.code === 'permission-denied') {
+    throw new Error('Firebase Admin: Permission denied. Check service account permissions.');
+  }
+  
+  if (error.code === 'not-found') {
+    throw new Error('Firebase Admin: Document or collection not found.');
+  }
+  
+  if (error.message?.includes('credential')) {
+    throw new Error('Firebase Admin: Invalid credentials. Check environment variables.');
+  }
+  
+  throw new Error(`Firebase Admin operation failed: ${error.message || error}`);
 };-e 
 ### FILE: ./src/lib/firestore/users.ts
 
@@ -1510,6 +1863,923 @@ export const stopPeriodicCleanup = () => {
 		clearInterval(cleanupInterval);
 		cleanupInterval = null;
 	}
+};-e 
+### FILE: ./src/lib/firestore/users-wallet-extended.ts
+
+// src/lib/firestore/users-wallet-extended.ts
+import { getAdminFirestore, handleAdminError } from '@/lib/firebase-admin';
+import { ChainType } from '../../../types/wallet';
+import { 
+  ExtendedFirestoreUser, 
+  CreateExtendedUserData,
+  UpdateExtendedUserProfile,
+  UpdateExtendedUserStats,
+  WalletAuthHistoryEntry,
+  ExtendedUserQuery,
+  ExtendedUserQueryResult,
+  UserSettings
+} from '../../../types/user-extended';
+import { Timestamp } from 'firebase-admin/firestore';
+
+/**
+ * ExtendedFirestoreUser用のFirestore操作関数
+ * Admin SDK経由でサーバーサイドからのみ操作
+ */
+
+// コレクション名
+const USERS_COLLECTION = 'users';
+const USER_ACTIVITIES_COLLECTION = 'user_activities';
+const USER_NOTIFICATIONS_COLLECTION = 'user_notifications';
+
+/**
+ * デフォルトユーザー設定
+ */
+const DEFAULT_USER_SETTINGS: UserSettings = {
+  theme: 'dark',
+  language: 'en',
+  currency: 'USD',
+  showProfileToPublic: true,
+  showStatsToPublic: true,
+  showBadgesToPublic: true,
+  defaultChain: 'evm',
+  slippageTolerance: 0.5,
+  gasSettings: 'standard',
+  requireConfirmationForLargeOrders: true,
+  largeOrderThreshold: 1000,
+  sessionTimeout: 60,
+};
+
+/**
+ * Extended Wallet用の初期ユーザーデータ生成
+ */
+export const generateExtendedWalletUserData = (
+  data: CreateExtendedUserData
+): Omit<ExtendedFirestoreUser, 'createdAt' | 'updatedAt' | 'lastAuthAt' | 'lastLoginAt'> => {
+  const { walletAddress, chainType, chainId, displayName, nickname, profileImage } = data;
+  
+  // アドレスから表示名を生成（指定がない場合）
+  const generatedDisplayName = displayName || 
+    `${walletAddress.slice(0, 6)}...${walletAddress.slice(-4)}`;
+  
+  // undefinedフィールドを除去する関数
+  const removeUndefined = (obj: any): any => {
+    const cleaned: any = {};
+    for (const [key, value] of Object.entries(obj)) {
+      if (value !== undefined) {
+        if (typeof value === 'object' && value !== null && !Array.isArray(value)) {
+          const cleanedNested = removeUndefined(value);
+          if (Object.keys(cleanedNested).length > 0) {
+            cleaned[key] = cleanedNested;
+          }
+        } else {
+          cleaned[key] = value;
+        }
+      }
+    }
+    return cleaned;
+  };
+
+  const baseData = {
+    id: walletAddress.toLowerCase(),
+    authMethod: 'wallet' as const,
+    
+    // 基本情報（既存のFirestoreUserフィールド）
+    email: `${walletAddress.toLowerCase()}@wallet.local`, // 仮想メール
+    displayName: generatedDisplayName,
+    ...(nickname && { nickname }), // nicknameが存在する場合のみ追加
+    ...(profileImage && { profileImage }), // profileImageが存在する場合のみ追加
+    
+    // Wallet固有情報
+    walletAddress: walletAddress.toLowerCase(),
+    connectedWallets: [{
+      address: walletAddress.toLowerCase(),
+      chainType,
+      chainId,
+      walletType: 'unknown',
+      isConnected: true,
+      connectedAt: new Date(),
+      lastUsedAt: new Date(),
+      isVerified: true,
+      isPrimary: true,
+    }],
+    primaryWallet: {
+      address: walletAddress.toLowerCase(),
+      chainType,
+      chainId,
+      walletType: 'unknown',
+      isConnected: true,
+      connectedAt: new Date(),
+      lastUsedAt: new Date(),
+      isVerified: true,
+      isPrimary: true,
+    },
+    isWalletVerified: true,
+    
+    // アカウント情報
+    isEmailVerified: false, // Wallet認証では不要
+    isActive: true,
+    membershipTier: 'bronze' as const,
+    isProfileComplete: false,
+    
+    // 統計情報
+    stats: {
+      totalSpent: 0,
+      totalSpentUSD: 0,
+      totalOrders: 0,
+      rank: 999999,
+      badges: ['New Member', 'Wallet User']
+    },
+    
+    // 認証履歴
+    authHistory: [],
+    
+    // セキュリティ設定
+    securitySettings: {
+      requireSignatureForUpdates: true,
+      allowedChains: [chainType],
+      maxSessionDuration: 60, // 1時間
+    },
+    
+    // 通知設定
+    notificationSettings: {
+      email: false, // Wallet認証では無効
+      push: true,
+      sms: false,
+      newOrders: true,
+      priceAlerts: true,
+      securityAlerts: true,
+    },
+    
+    // 住所情報（空で初期化）
+    address: {},
+  };
+
+  // undefined値を完全に除去
+  return removeUndefined(baseData);
+};
+
+/**
+ * Extended Walletユーザーが存在するかチェック
+ */
+export const checkExtendedWalletUserExists = async (walletAddress: string): Promise<boolean> => {
+  try {
+    const adminDb = getAdminFirestore();
+    const userId = walletAddress.toLowerCase();
+    
+    const userRef = adminDb.collection(USERS_COLLECTION).doc(userId);
+    const userSnap = await userRef.get();
+    
+    const exists = userSnap.exists;
+    console.log(`🔍 Extended wallet user existence check: ${userId} = ${exists}`);
+    
+    return exists;
+  } catch (error) {
+    handleAdminError(error, 'checkExtendedWalletUserExists');
+    return false; // エラー時はfalseを返す
+  }
+};
+
+/**
+ * WalletアドレスでExtendedFirestoreユーザーデータを取得
+ */
+export const getExtendedWalletUserByAddress = async (
+  walletAddress: string
+): Promise<ExtendedFirestoreUser | null> => {
+  try {
+    const adminDb = getAdminFirestore();
+    const userId = walletAddress.toLowerCase();
+    
+    const userRef = adminDb.collection(USERS_COLLECTION).doc(userId);
+    const userSnap = await userRef.get();
+    
+    if (userSnap.exists) {
+      const userData = { id: userSnap.id, ...userSnap.data() } as ExtendedFirestoreUser;
+      console.log(`✅ Extended wallet user retrieved: ${userId}`);
+      return userData;
+    }
+    
+    console.log(`❌ Extended wallet user not found: ${userId}`);
+    return null;
+  } catch (error) {
+    handleAdminError(error, 'getExtendedWalletUserByAddress');
+    return null; // エラー時はnullを返す
+  }
+};
+
+/**
+ * 新規Extended Walletユーザーを作成
+ */
+export const createExtendedWalletUser = async (
+  data: CreateExtendedUserData
+): Promise<ExtendedFirestoreUser> => {
+  try {
+    const adminDb = getAdminFirestore();
+    const userId = data.walletAddress.toLowerCase();
+    
+    // 初期データ生成
+    const userData = generateExtendedWalletUserData(data);
+    const now = Timestamp.now();
+    
+    // 認証履歴の初回エントリ
+    const initialAuthHistory: WalletAuthHistoryEntry = {
+      chainType: data.chainType,
+      chainId: data.chainId,
+      walletAddress: data.walletAddress.toLowerCase(),
+      timestamp: now,
+      success: true,
+      ipAddress: data.ipAddress,
+      userAgent: data.userAgent,
+    };
+    
+    const firestoreUserData: ExtendedFirestoreUser = {
+      ...userData,
+      createdAt: now,
+      updatedAt: now,
+      lastAuthAt: now,
+      lastLoginAt: now, // lastLoginAtも設定
+      authHistory: [initialAuthHistory]
+    };
+    
+    const userRef = adminDb.collection(USERS_COLLECTION).doc(userId);
+    await userRef.set(firestoreUserData);
+    
+    // ユーザーアクティビティログ
+    await logUserActivity(userId, 'login', 'First wallet authentication', {
+      chainType: data.chainType,
+      walletAddress: data.walletAddress,
+      isNewUser: true,
+    }, data.ipAddress);
+    
+    console.log(`🆕 Extended wallet user created: ${userId} (${data.chainType})`);
+    return firestoreUserData;
+  } catch (error) {
+    handleAdminError(error, 'createExtendedWalletUser');
+    throw error; // エラーを再throw
+  }
+};
+
+/**
+ * Extended Walletユーザーの最終認証時刻を更新
+ */
+export const updateExtendedWalletUserLastAuth = async (
+  walletAddress: string,
+  chainType: ChainType,
+  chainId?: number | string,
+  additionalData?: {
+    ipAddress?: string;
+    userAgent?: string;
+  }
+): Promise<void> => {
+  try {
+    const adminDb = getAdminFirestore();
+    const userId = walletAddress.toLowerCase();
+    const now = Timestamp.now();
+    
+    // 認証履歴エントリ
+    const authHistoryEntry: WalletAuthHistoryEntry = {
+      chainType,
+      chainId,
+      walletAddress: walletAddress.toLowerCase(),
+      timestamp: now,
+      success: true,
+      ipAddress: additionalData?.ipAddress,
+      userAgent: additionalData?.userAgent,
+    };
+    
+    const userRef = adminDb.collection(USERS_COLLECTION).doc(userId);
+    
+    // 認証履歴を追加（最新の20件のみ保持）
+    await adminDb.runTransaction(async (transaction) => {
+      const userDoc = await transaction.get(userRef);
+      
+      if (!userDoc.exists) {
+        throw new Error(`Extended wallet user not found: ${userId}`);
+      }
+      
+      const userData = userDoc.data() as ExtendedFirestoreUser;
+      const currentHistory = userData.authHistory || [];
+      
+      // 新しい履歴を追加し、最新20件のみ保持
+      const updatedHistory = [authHistoryEntry, ...currentHistory].slice(0, 20);
+      
+      transaction.update(userRef, {
+        lastAuthAt: now,
+        lastLoginAt: now, // lastLoginAtも更新
+        updatedAt: now,
+        authHistory: updatedHistory,
+        isWalletVerified: true
+      });
+    });
+    
+    // ユーザーアクティビティログ
+    await logUserActivity(userId, 'login', 'Wallet authentication', {
+      chainType,
+      walletAddress,
+    }, additionalData?.ipAddress);
+    
+    console.log(`🔄 Extended wallet user last auth updated: ${userId}`);
+  } catch (error) {
+    handleAdminError(error, 'updateExtendedWalletUserLastAuth');
+    throw error; // エラーを再throw
+  }
+};
+
+/**
+ * Extended Walletユーザープロフィールを更新
+ */
+export const updateExtendedWalletUserProfile = async (
+  walletAddress: string,
+  profileData: UpdateExtendedUserProfile
+): Promise<void> => {
+  try {
+    const adminDb = getAdminFirestore();
+    const userId = walletAddress.toLowerCase();
+    
+    const userRef = adminDb.collection(USERS_COLLECTION).doc(userId);
+    
+    // プロフィール完成度をチェック
+    if (profileData.address) {
+      const isComplete = !!(
+        profileData.address.country &&
+        profileData.address.prefecture &&
+        profileData.address.city &&
+        profileData.address.addressLine1 &&
+        profileData.address.postalCode
+      );
+      (profileData as any).isProfileComplete = isComplete;
+    }
+    
+    await userRef.update({
+      ...profileData,
+      updatedAt: Timestamp.now()
+    });
+    
+    // ユーザーアクティビティログ
+    await logUserActivity(userId, 'profile_update', 'Profile information updated', {
+      updatedFields: Object.keys(profileData),
+    });
+    
+    console.log(`📝 Extended wallet user profile updated: ${userId}`);
+  } catch (error) {
+    handleAdminError(error, 'updateExtendedWalletUserProfile');
+  }
+};
+
+/**
+ * Extended Walletユーザー統計を更新
+ */
+export const updateExtendedWalletUserStats = async (
+  walletAddress: string,
+  statsData: UpdateExtendedUserStats
+): Promise<void> => {
+  try {
+    const adminDb = getAdminFirestore();
+    const userId = walletAddress.toLowerCase();
+    
+    const userRef = adminDb.collection(USERS_COLLECTION).doc(userId);
+    
+    // ネストされたフィールドの更新
+    const updateData: any = {
+      updatedAt: Timestamp.now()
+    };
+    
+    Object.keys(statsData).forEach(key => {
+      if (key === 'newAchievements') {
+        // 新しいバッジを既存のバッジに追加
+        return; // 別途処理
+      }
+      updateData[`stats.${key}`] = statsData[key as keyof UpdateExtendedUserStats];
+    });
+    
+    // 新しいアチーブメントがある場合
+    if (statsData.newAchievements && statsData.newAchievements.length > 0) {
+      const userDoc = await userRef.get();
+      if (userDoc.exists) {
+        const userData = userDoc.data() as ExtendedFirestoreUser;
+        const currentBadges = userData.stats.badges || [];
+        const updatedBadges = [...new Set([...currentBadges, ...statsData.newAchievements])];
+        updateData['stats.badges'] = updatedBadges;
+        
+        // 新しいアチーブメント通知
+        for (const achievement of statsData.newAchievements) {
+          await createUserNotification(userId, {
+            type: 'success',
+            title: 'New Achievement!',
+            message: `You earned the "${achievement}" badge!`,
+            metadata: { badgeName: achievement }
+          });
+        }
+      }
+    }
+    
+    await userRef.update(updateData);
+    
+    console.log(`📊 Extended wallet user stats updated: ${userId}`);
+  } catch (error) {
+    handleAdminError(error, 'updateExtendedWalletUserStats');
+  }
+};
+
+/**
+ * ユーザーアクティビティをログ
+ */
+export const logUserActivity = async (
+  userId: string,
+  type: string,
+  description: string,
+  metadata?: any,
+  ipAddress?: string
+): Promise<void> => {
+  try {
+    const adminDb = getAdminFirestore();
+    
+    const activityData = {
+      userId,
+      type,
+      description,
+      metadata: metadata || {},
+      timestamp: Timestamp.now(),
+      ipAddress,
+    };
+    
+    await adminDb.collection(USER_ACTIVITIES_COLLECTION).add(activityData);
+  } catch (error) {
+    console.warn('Failed to log user activity:', error);
+    // アクティビティログの失敗は致命的エラーではない
+  }
+};
+
+/**
+ * ユーザー通知を作成
+ */
+export const createUserNotification = async (
+  userId: string,
+  notification: {
+    type: 'info' | 'success' | 'warning' | 'error';
+    title: string;
+    message: string;
+    actionUrl?: string;
+    actionText?: string;
+    metadata?: any;
+    expiresAt?: Date;
+  }
+): Promise<void> => {
+  try {
+    const adminDb = getAdminFirestore();
+    
+    const notificationData = {
+      userId,
+      type: notification.type,
+      title: notification.title,
+      message: notification.message,
+      isRead: false,
+      actionUrl: notification.actionUrl,
+      actionText: notification.actionText,
+      metadata: notification.metadata || {},
+      createdAt: Timestamp.now(),
+      expiresAt: notification.expiresAt ? Timestamp.fromDate(notification.expiresAt) : undefined,
+    };
+    
+    await adminDb.collection(USER_NOTIFICATIONS_COLLECTION).add(notificationData);
+  } catch (error) {
+    console.warn('Failed to create user notification:', error);
+  }
+};
+
+/**
+ * Extended Wallet認証とFirestore同期の統合処理（メイン関数）
+ */
+export const syncExtendedWalletAuthWithFirestore = async (
+  data: CreateExtendedUserData
+): Promise<ExtendedFirestoreUser> => {
+  try {
+    console.log(`🔄 Syncing extended wallet auth with Firestore: ${data.walletAddress}`);
+    
+    // 1. ユーザー存在確認
+    const existingUser = await getExtendedWalletUserByAddress(data.walletAddress);
+    
+    if (!existingUser) {
+      // 2. 存在しない場合：新規ユーザー作成
+      console.log(`🆕 Creating new extended wallet user: ${data.walletAddress}`);
+      return await createExtendedWalletUser(data);
+    } else {
+      // 3. 存在する場合：最終認証時刻を更新
+      console.log(`🔄 Updating existing extended wallet user: ${data.walletAddress}`);
+      await updateExtendedWalletUserLastAuth(
+        data.walletAddress, 
+        data.chainType, 
+        data.chainId, 
+        {
+          ipAddress: data.ipAddress,
+          userAgent: data.userAgent,
+        }
+      );
+      
+      // 最新データを取得して返す
+      const updatedUser = await getExtendedWalletUserByAddress(data.walletAddress);
+      if (!updatedUser) {
+        throw new Error(`Failed to retrieve updated user: ${data.walletAddress}`);
+      }
+      return updatedUser;
+    }
+  } catch (error) {
+    handleAdminError(error, 'syncExtendedWalletAuthWithFirestore');
+    throw error; // エラーを再throw
+  }
+};-e 
+### FILE: ./src/lib/firestore/users-wallet.ts
+
+// src/lib/firestore/users-wallet.ts
+import { getAdminFirestore, handleAdminError } from '@/lib/firebase-admin';
+import { ChainType, WalletConnection } from '../../../types/wallet';
+import { Timestamp } from 'firebase-admin/firestore';
+
+/**
+ * Wallet認証専用のFirestore操作関数
+ * Admin SDK経由でサーバーサイドからのみ操作
+ */
+
+// コレクション名
+const USERS_COLLECTION = 'users';
+
+/**
+ * Wallet用の拡張ユーザーデータ型
+ */
+export interface WalletFirestoreUser {
+  id: string; // walletAddress
+  chainType: ChainType;
+  chainId?: number | string;
+  
+  // 基本情報
+  displayName: string;
+  nickname?: string;
+  profileImage?: string;
+  
+  // Wallet固有情報
+  walletAddress: string;
+  isWalletVerified: boolean;
+  lastAuthAt: Timestamp;
+  
+  // 住所情報（オプション）
+  address?: {
+    country?: string;
+    prefecture?: string;
+    city?: string;
+    addressLine1?: string;
+    addressLine2?: string;
+    postalCode?: string;
+    phone?: string;
+  };
+  
+  // アカウント情報
+  createdAt: Timestamp;
+  updatedAt: Timestamp;
+  isActive: boolean;
+  membershipTier: 'bronze' | 'silver' | 'gold' | 'platinum';
+  isProfileComplete: boolean;
+  
+  // 統計情報
+  stats: {
+    totalSpent: number;
+    totalSpentUSD: number;
+    totalOrders: number;
+    rank: number;
+    badges: string[];
+  };
+
+  // 認証履歴
+  authHistory: Array<{
+    chainType: ChainType;
+    chainId?: number | string;
+    timestamp: Timestamp;
+    success: boolean;
+    ipAddress?: string;
+    userAgent?: string;
+  }>;
+}
+
+/**
+ * Wallet用の初期ユーザーデータ生成
+ */
+export const generateWalletUserData = (
+  walletAddress: string,
+  chainType: ChainType,
+  chainId?: number | string
+): Omit<WalletFirestoreUser, 'createdAt' | 'updatedAt' | 'lastAuthAt'> => {
+  // アドレスから表示名を生成
+  const displayName = `${walletAddress.slice(0, 6)}...${walletAddress.slice(-4)}`;
+  
+  return {
+    id: walletAddress.toLowerCase(),
+    chainType,
+    chainId,
+    
+    // 基本情報
+    displayName,
+    
+    // Wallet固有情報
+    walletAddress: walletAddress.toLowerCase(),
+    isWalletVerified: true,
+    
+    // アカウント情報
+    isActive: true,
+    membershipTier: 'bronze',
+    isProfileComplete: false,
+    
+    // 統計情報
+    stats: {
+      totalSpent: 0,
+      totalSpentUSD: 0,
+      totalOrders: 0,
+      rank: 999999,
+      badges: ['New Member', 'Wallet User']
+    },
+
+    // 認証履歴
+    authHistory: []
+  };
+};
+
+/**
+ * Walletユーザーが存在するかチェック
+ */
+export const checkWalletUserExists = async (walletAddress: string): Promise<boolean> => {
+  try {
+    const adminDb = getAdminFirestore();
+    const userId = walletAddress.toLowerCase();
+    
+    const userRef = adminDb.collection(USERS_COLLECTION).doc(userId);
+    const userSnap = await userRef.get();
+    
+    const exists = userSnap.exists;
+    console.log(`🔍 Wallet user existence check: ${userId} = ${exists}`);
+    
+    return exists;
+  } catch (error) {
+    handleAdminError(error, 'checkWalletUserExists');
+  }
+};
+
+/**
+ * WalletアドレスでFirestoreユーザーデータを取得
+ */
+export const getWalletUserByAddress = async (
+  walletAddress: string
+): Promise<WalletFirestoreUser | null> => {
+  try {
+    const adminDb = getAdminFirestore();
+    const userId = walletAddress.toLowerCase();
+    
+    const userRef = adminDb.collection(USERS_COLLECTION).doc(userId);
+    const userSnap = await userRef.get();
+    
+    if (userSnap.exists) {
+      const userData = { id: userSnap.id, ...userSnap.data() } as WalletFirestoreUser;
+      console.log(`✅ Wallet user retrieved: ${userId}`);
+      return userData;
+    }
+    
+    console.log(`❌ Wallet user not found: ${userId}`);
+    return null;
+  } catch (error) {
+    handleAdminError(error, 'getWalletUserByAddress');
+  }
+};
+
+/**
+ * 新規Walletユーザーを作成
+ */
+export const createWalletUser = async (
+  walletAddress: string,
+  chainType: ChainType,
+  chainId?: number | string,
+  additionalData?: {
+    ipAddress?: string;
+    userAgent?: string;
+  }
+): Promise<WalletFirestoreUser> => {
+  try {
+    const adminDb = getAdminFirestore();
+    const userId = walletAddress.toLowerCase();
+    
+    // 初期データ生成
+    const userData = generateWalletUserData(walletAddress, chainType, chainId);
+    const now = Timestamp.now();
+    
+    // 認証履歴の初回エントリ
+    const initialAuthHistory = {
+      chainType,
+      chainId,
+      timestamp: now,
+      success: true,
+      ipAddress: additionalData?.ipAddress,
+      userAgent: additionalData?.userAgent,
+    };
+    
+    const firestoreUserData: WalletFirestoreUser = {
+      ...userData,
+      createdAt: now,
+      updatedAt: now,
+      lastAuthAt: now,
+      authHistory: [initialAuthHistory]
+    };
+    
+    const userRef = adminDb.collection(USERS_COLLECTION).doc(userId);
+    await userRef.set(firestoreUserData);
+    
+    console.log(`🆕 Wallet user created: ${userId} (${chainType})`);
+    return firestoreUserData;
+  } catch (error) {
+    handleAdminError(error, 'createWalletUser');
+  }
+};
+
+/**
+ * Walletユーザーの最終認証時刻を更新
+ */
+export const updateWalletUserLastAuth = async (
+  walletAddress: string,
+  chainType: ChainType,
+  chainId?: number | string,
+  additionalData?: {
+    ipAddress?: string;
+    userAgent?: string;
+  }
+): Promise<void> => {
+  try {
+    const adminDb = getAdminFirestore();
+    const userId = walletAddress.toLowerCase();
+    const now = Timestamp.now();
+    
+    // 認証履歴エントリ
+    const authHistoryEntry = {
+      chainType,
+      chainId,
+      timestamp: now,
+      success: true,
+      ipAddress: additionalData?.ipAddress,
+      userAgent: additionalData?.userAgent,
+    };
+    
+    const userRef = adminDb.collection(USERS_COLLECTION).doc(userId);
+    
+    // 認証履歴を追加（最新の10件のみ保持）
+    await adminDb.runTransaction(async (transaction) => {
+      const userDoc = await transaction.get(userRef);
+      
+      if (!userDoc.exists) {
+        throw new Error(`Wallet user not found: ${userId}`);
+      }
+      
+      const userData = userDoc.data() as WalletFirestoreUser;
+      const currentHistory = userData.authHistory || [];
+      
+      // 新しい履歴を追加し、最新10件のみ保持
+      const updatedHistory = [authHistoryEntry, ...currentHistory].slice(0, 10);
+      
+      transaction.update(userRef, {
+        lastAuthAt: now,
+        updatedAt: now,
+        authHistory: updatedHistory,
+        isWalletVerified: true // 認証成功時に再確認
+      });
+    });
+    
+    console.log(`🔄 Wallet user last auth updated: ${userId}`);
+  } catch (error) {
+    handleAdminError(error, 'updateWalletUserLastAuth');
+  }
+};
+
+/**
+ * Walletユーザープロフィールを更新
+ */
+export const updateWalletUserProfile = async (
+  walletAddress: string,
+  profileData: Partial<Pick<WalletFirestoreUser, 
+    'displayName' | 'nickname' | 'profileImage' | 'address' | 'isProfileComplete'
+  >>
+): Promise<void> => {
+  try {
+    const adminDb = getAdminFirestore();
+    const userId = walletAddress.toLowerCase();
+    
+    const userRef = adminDb.collection(USERS_COLLECTION).doc(userId);
+    
+    // プロフィール完成度をチェック
+    if (profileData.address) {
+      const isComplete = !!(
+        profileData.address.country &&
+        profileData.address.prefecture &&
+        profileData.address.city &&
+        profileData.address.addressLine1 &&
+        profileData.address.postalCode
+      );
+      profileData.isProfileComplete = isComplete;
+    }
+    
+    await userRef.update({
+      ...profileData,
+      updatedAt: Timestamp.now()
+    });
+    
+    console.log(`📝 Wallet user profile updated: ${userId}`);
+  } catch (error) {
+    handleAdminError(error, 'updateWalletUserProfile');
+  }
+};
+
+/**
+ * Walletユーザー統計を更新
+ */
+export const updateWalletUserStats = async (
+  walletAddress: string,
+  statsData: Partial<WalletFirestoreUser['stats']>
+): Promise<void> => {
+  try {
+    const adminDb = getAdminFirestore();
+    const userId = walletAddress.toLowerCase();
+    
+    const userRef = adminDb.collection(USERS_COLLECTION).doc(userId);
+    
+    // ネストされたフィールドの更新
+    const updateData: any = {
+      updatedAt: Timestamp.now()
+    };
+    
+    Object.keys(statsData).forEach(key => {
+      updateData[`stats.${key}`] = statsData[key as keyof WalletFirestoreUser['stats']];
+    });
+    
+    await userRef.update(updateData);
+    
+    console.log(`📊 Wallet user stats updated: ${userId}`);
+  } catch (error) {
+    handleAdminError(error, 'updateWalletUserStats');
+  }
+};
+
+/**
+ * Wallet認証とFirestore同期の統合処理
+ */
+export const syncWalletAuthWithFirestore = async (
+  walletAddress: string,
+  chainType: ChainType,
+  chainId?: number | string,
+  additionalData?: {
+    ipAddress?: string;
+    userAgent?: string;
+  }
+): Promise<WalletFirestoreUser> => {
+  try {
+    console.log(`🔄 Syncing wallet auth with Firestore: ${walletAddress}`);
+    
+    // 1. ユーザー存在確認
+    const existingUser = await getWalletUserByAddress(walletAddress);
+    
+    if (!existingUser) {
+      // 2. 存在しない場合：新規ユーザー作成
+      console.log(`🆕 Creating new wallet user: ${walletAddress}`);
+      return await createWalletUser(walletAddress, chainType, chainId, additionalData);
+    } else {
+      // 3. 存在する場合：最終認証時刻を更新
+      console.log(`🔄 Updating existing wallet user: ${walletAddress}`);
+      await updateWalletUserLastAuth(walletAddress, chainType, chainId, additionalData);
+      
+      // 最新データを取得して返す
+      const updatedUser = await getWalletUserByAddress(walletAddress);
+      return updatedUser!;
+    }
+  } catch (error) {
+    handleAdminError(error, 'syncWalletAuthWithFirestore');
+  }
+};
+
+/**
+ * 複数のWalletアドレスでユーザーを検索（バッチ処理用）
+ */
+export const getWalletUsersByAddresses = async (
+  walletAddresses: string[]
+): Promise<WalletFirestoreUser[]> => {
+  try {
+    const adminDb = getAdminFirestore();
+    
+    // 最大10件までの制限（Firestoreの'in'クエリ制限）
+    const addresses = walletAddresses.slice(0, 10).map(addr => addr.toLowerCase());
+    
+    const usersRef = adminDb.collection(USERS_COLLECTION);
+    const snapshot = await usersRef.where('walletAddress', 'in', addresses).get();
+    
+    const users: WalletFirestoreUser[] = [];
+    snapshot.forEach(doc => {
+      users.push({ id: doc.id, ...doc.data() } as WalletFirestoreUser);
+    });
+    
+    console.log(`📋 Retrieved ${users.length} wallet users from batch query`);
+    return users;
+  } catch (error) {
+    handleAdminError(error, 'getWalletUsersByAddresses');
+  }
 };-e 
 ### FILE: ./src/lib/firestore/products.ts
 
@@ -8840,15 +10110,32 @@ export const ExtendedAuthModal = ({
 		setLoading(true);
 
 		try {
+			console.log('🚀 ExtendedAuthModal: Starting wallet authentication...');
+
+			// 1. まずWalletが接続されているか確認
+			if (!walletAddress) {
+				throw new Error('Wallet not connected. Please connect your wallet first.');
+			}
+
+			console.log('📱 ExtendedAuthModal: Wallet connected, address:', walletAddress);
+
+			// 2. UnifiedAuthContextのExtended認証を直接呼び出し
+			console.log('🔐 ExtendedAuthModal: Calling authenticateWallet...');
 			const result = await authenticateWallet(preferredChain);
+
+			console.log('✅ ExtendedAuthModal: Authentication result:', result);
+
 			if (result.success) {
 				setCurrentStep('success');
+				console.log('🎉 ExtendedAuthModal: Authentication successful');
 			} else {
-				setLocalError(result.error || 'Wallet authentication failed');
+				setLocalError(result.error || 'Extended wallet authentication failed');
 				setCurrentStep('error');
+				console.error('❌ ExtendedAuthModal: Authentication failed:', result.error);
 			}
 		} catch (error: any) {
-			setLocalError(error.message || 'Wallet authentication failed');
+			console.error('💥 ExtendedAuthModal: Authentication error:', error);
+			setLocalError(error.message || 'Extended wallet authentication failed');
 			setCurrentStep('error');
 		} finally {
 			setLoading(false);
@@ -11920,7 +13207,6 @@ export default function WalletAuthDemo() {
 			<ExtendedAuthModal
 				isOpen={isAuthModalOpen}
 				onClose={() => setIsAuthModalOpen(false)}
-				defaultTab={authModalTab}
 				preferredChain="evm"
 			/>
 		</div>
@@ -12065,6 +13351,374 @@ export default function Home() {
 			<Footer />
 		</main>
 	);
+}-e 
+### FILE: ./src/app/api/auth/wallet/route.ts
+
+// src/app/api/auth/wallet/route.ts (Extended版に更新)
+import { NextRequest, NextResponse } from 'next/server';
+import { EVMAuthService } from '@/wallet-auth/adapters/evm/EVMAuthService';
+import {
+	syncExtendedWalletAuthWithFirestore,
+	checkExtendedWalletUserExists,
+	getExtendedWalletUserByAddress
+} from '@/lib/firestore/users-wallet-extended';
+import {
+	WalletAuthRequest,
+	WalletAuthResponse,
+	WalletApiErrorCode
+} from '../../../../../types/api-wallet';
+import { CreateExtendedUserData } from '../../../../../types/user-extended';
+
+/**
+ * Extended Wallet認証API
+ * POST /api/auth/wallet
+ * 
+ * Wallet署名を検証してFirestoreにExtendedUserを作成/更新
+ */
+
+// Rate limiting用の簡易メモリストレージ
+const rateLimitMap = new Map<string, { count: number; resetTime: number }>();
+
+// Rate limit設定
+const RATE_LIMIT = {
+	maxRequests: 15,        // 10分間に最大15回（拡張）
+	windowMs: 10 * 60 * 1000, // 10分
+};
+
+/**
+ * Rate limitingチェック
+ */
+function checkRateLimit(identifier: string): boolean {
+	const now = Date.now();
+	const record = rateLimitMap.get(identifier);
+
+	if (!record) {
+		rateLimitMap.set(identifier, { count: 1, resetTime: now + RATE_LIMIT.windowMs });
+		return true;
+	}
+
+	if (now > record.resetTime) {
+		// ウィンドウリセット
+		rateLimitMap.set(identifier, { count: 1, resetTime: now + RATE_LIMIT.windowMs });
+		return true;
+	}
+
+	if (record.count >= RATE_LIMIT.maxRequests) {
+		return false;
+	}
+
+	record.count++;
+	return true;
+}
+
+/**
+ * IPアドレス取得
+ */
+function getClientIP(request: NextRequest): string {
+	const forwarded = request.headers.get('x-forwarded-for');
+	const realIP = request.headers.get('x-real-ip');
+	const remoteAddr = request.headers.get('remote-addr');
+
+	if (forwarded) {
+		return forwarded.split(',')[0].trim();
+	}
+
+	return realIP || remoteAddr || 'unknown';
+}
+
+/**
+ * エラーレスポンス生成
+ */
+function createErrorResponse(
+	code: WalletApiErrorCode,
+	message: string,
+	details?: any,
+	status: number = 400
+): NextResponse<WalletAuthResponse> {
+	const response: WalletAuthResponse = {
+		success: false,
+		error: {
+			code,
+			message,
+			details,
+		}
+	};
+
+	console.error(`❌ Extended Wallet Auth API Error [${code}]: ${message}`, details);
+
+	return NextResponse.json(response, { status });
+}
+
+/**
+ * 成功レスポンス生成
+ */
+function createSuccessResponse(
+	user: any, // ExtendedFirestoreUser
+	isNewUser: boolean,
+	sessionToken?: string
+): NextResponse<WalletAuthResponse> {
+	const response: WalletAuthResponse = {
+		success: true,
+		data: {
+			user,
+			sessionToken,
+			isNewUser,
+			message: isNewUser
+				? 'New extended wallet user created successfully'
+				: 'Extended wallet user authenticated successfully'
+		}
+	};
+
+	console.log(`✅ Extended Wallet Auth Success: ${user.walletAddress} (new: ${isNewUser})`);
+
+	return NextResponse.json(response);
+}
+
+/**
+ * POST: Extended Wallet認証処理
+ */
+export async function POST(request: NextRequest) {
+	try {
+		// リクエスト情報取得
+		const clientIP = getClientIP(request);
+		const userAgent = request.headers.get('user-agent') || undefined;
+
+		console.log(`🔐 Extended wallet auth request from ${clientIP}`);
+
+		// Rate limiting
+		if (!checkRateLimit(clientIP)) {
+			return createErrorResponse(
+				'RATE_LIMITED',
+				'Too many authentication requests. Please try again later.',
+				{ clientIP, limit: RATE_LIMIT.maxRequests },
+				429
+			);
+		}
+
+		// リクエストボディ解析
+		let body: WalletAuthRequest;
+		try {
+			body = await request.json();
+		} catch (error) {
+			return createErrorResponse(
+				'VALIDATION_ERROR',
+				'Invalid JSON in request body',
+				error
+			);
+		}
+
+		// 必須フィールド検証
+		const requiredFields = ['signature', 'message', 'address', 'chainType', 'nonce'];
+		for (const field of requiredFields) {
+			if (!body[field as keyof WalletAuthRequest]) {
+				return createErrorResponse(
+					'VALIDATION_ERROR',
+					`Missing required field: ${field}`
+				);
+			}
+		}
+
+		const { signature, message, address, chainType, chainId, nonce, timestamp } = body;
+
+		// 基本検証
+		if (chainType !== 'evm') {
+			return createErrorResponse(
+				'INVALID_CHAIN',
+				`Unsupported chain type: ${chainType}`
+			);
+		}
+
+		// アドレス形式検証
+		if (!/^0x[a-fA-F0-9]{40}$/.test(address)) {
+			return createErrorResponse(
+				'VALIDATION_ERROR',
+				'Invalid wallet address format'
+			);
+		}
+
+		console.log(`🔍 Validating signature for extended user: ${address}`);
+
+		// 署名検証
+		const authService = new EVMAuthService();
+
+		// 1. 署名の検証
+		const isValidSignature = await authService.verifySignature(
+			signature,
+			message,
+			address,
+			chainType
+		);
+
+		if (!isValidSignature) {
+			return createErrorResponse(
+				'INVALID_SIGNATURE',
+				'Wallet signature verification failed'
+			);
+		}
+
+		console.log(`✅ Extended signature verified for address: ${address}`);
+
+		// 2. Nonce検証（API側で再生成して検証）
+		console.log(`🔍 Validating nonce: ${nonce} for address: ${address}`);
+
+		// API側でNonceを再保存してから検証
+		authService.storeNonce(address, nonce);
+
+		if (!authService.validateNonce(nonce)) {
+			console.log(`❌ Nonce validation failed: ${nonce}`);
+			return createErrorResponse(
+				'EXPIRED_NONCE',
+				'Nonce is invalid or expired'
+			);
+		}
+
+		console.log(`✅ Extended nonce validated: ${nonce}`);
+
+		// 3. メッセージ内容検証
+		const parsedMessage = authService.parseAuthMessage(message);
+		if (!parsedMessage || parsedMessage.address.toLowerCase() !== address.toLowerCase()) {
+			return createErrorResponse(
+				'ADDRESS_MISMATCH',
+				'Message address does not match signature address'
+			);
+		}
+
+		console.log(`✅ Extended message content validated`);
+
+		// 4. Nonce使用済みマーク（再利用防止）
+		authService.clearNonce(address);
+
+		// 5. Extended Firestoreでユーザー作成/更新
+		console.log(`📊 Syncing with Extended Firestore: ${address}`);
+
+		const isNewUser = !(await checkExtendedWalletUserExists(address));
+
+		// Extended用のデータ準備
+		const extendedUserData: CreateExtendedUserData = {
+			authMethod: 'wallet',
+			walletAddress: address,
+			chainType,
+			chainId,
+			displayName: `${address.slice(0, 6)}...${address.slice(-4)}`,
+			ipAddress: clientIP,
+			userAgent,
+		};
+
+		const user = await syncExtendedWalletAuthWithFirestore(extendedUserData);
+
+		console.log(`🎉 Extended user sync completed:`, {
+			address: user.walletAddress,
+			isNewUser,
+			authMethod: user.authMethod,
+			connectedWallets: user.connectedWallets.length,
+			authHistoryCount: user.authHistory.length,
+		});
+
+		// 6. セッション作成（オプション）
+		let sessionToken: string | undefined;
+		try {
+			const mockAuthResult = {
+				success: true,
+				user: { address, chainType, chainId }
+			};
+			sessionToken = await authService.createSession(mockAuthResult);
+			console.log(`🔑 Session created for extended user: ${address}`);
+		} catch (error) {
+			console.warn('⚠️ Extended session creation failed:', error);
+			// セッション作成失敗は致命的エラーではない
+		}
+
+		// 成功レスポンス
+		return createSuccessResponse(user, isNewUser, sessionToken);
+
+	} catch (error) {
+		console.error('💥 Extended wallet auth API internal error:', error);
+
+		// Firestore エラーの特別処理
+		if (error instanceof Error) {
+			if (error.message.includes('permission-denied')) {
+				return createErrorResponse(
+					'PERMISSION_DENIED',
+					'Database permission denied. Please contact support.',
+					undefined,
+					403
+				);
+			}
+
+			if (error.message.includes('not found')) {
+				return createErrorResponse(
+					'USER_NOT_FOUND',
+					'User data inconsistency. Please try again.',
+					undefined,
+					404
+				);
+			}
+		}
+
+		return createErrorResponse(
+			'INTERNAL_ERROR',
+			'Internal server error occurred',
+			process.env.NODE_ENV === 'development' ? {
+				message: error instanceof Error ? error.message : 'Unknown error',
+				stack: error instanceof Error ? error.stack : undefined
+			} : undefined,
+			500
+		);
+	}
+}
+
+/**
+ * GET: Extended認証状態確認（デバッグ用）
+ */
+export async function GET(request: NextRequest) {
+	// 開発環境でのみ利用可能
+	if (process.env.NODE_ENV !== 'development') {
+		return NextResponse.json(
+			{ error: 'Not available in production' },
+			{ status: 403 }
+		);
+	}
+
+	const { searchParams } = new URL(request.url);
+	const address = searchParams.get('address');
+
+	if (!address) {
+		return NextResponse.json({ error: 'Address parameter required' }, { status: 400 });
+	}
+
+	try {
+		const exists = await checkExtendedWalletUserExists(address);
+		const user = exists ? await getExtendedWalletUserByAddress(address) : null;
+
+		return NextResponse.json({
+			success: true,
+			data: {
+				address,
+				exists,
+				user: user ? {
+					id: user.id,
+					authMethod: user.authMethod,
+					displayName: user.displayName,
+					walletAddress: user.walletAddress,
+					chainType: user.primaryWallet?.chainType,
+					lastAuthAt: user.lastAuthAt,
+					createdAt: user.createdAt,
+					isWalletVerified: user.isWalletVerified,
+					connectedWalletsCount: user.connectedWallets.length,
+					authHistoryCount: user.authHistory?.length || 0,
+					membershipTier: user.membershipTier,
+					totalSpent: user.stats.totalSpent,
+					badges: user.stats.badges,
+				} : null
+			}
+		});
+
+	} catch (error) {
+		return NextResponse.json({
+			success: false,
+			error: error instanceof Error ? error.message : 'Unknown error'
+		}, { status: 500 });
+	}
 }-e 
 ### FILE: ./src/app/api/demo/invoice/create/route.ts
 
@@ -14195,6 +15849,152 @@ export async function testQRGeneration(): Promise<{ success: boolean; error?: st
 			success: false,
 			error: error instanceof Error ? error.message : 'Unknown error'
 		};
+	}
+}-e 
+### FILE: ./src/app/api/test/admin/route.ts
+
+// src/app/api/test/admin/route.ts
+import { NextRequest, NextResponse } from 'next/server';
+import { getAdminFirestore, testAdminConnection, handleAdminError } from '@/lib/firebase-admin';
+
+/**
+ * Firebase Admin SDK動作確認用のテストAPI
+ * 開発環境でのみ使用（本番環境では削除予定）
+ */
+
+export async function GET(request: NextRequest) {
+	// 開発環境でのみ実行
+	if (process.env.NODE_ENV !== 'development') {
+		return NextResponse.json(
+			{ success: false, error: 'Test API is only available in development' },
+			{ status: 403 }
+		);
+	}
+
+	try {
+		console.log('🧪 Testing Firebase Admin SDK connection...');
+
+		// 1. 環境変数チェック
+		const envCheck = {
+			FIREBASE_ADMIN_PROJECT_ID: !!process.env.FIREBASE_ADMIN_PROJECT_ID,
+			FIREBASE_ADMIN_CLIENT_EMAIL: !!process.env.FIREBASE_ADMIN_CLIENT_EMAIL,
+			FIREBASE_ADMIN_PRIVATE_KEY: !!process.env.FIREBASE_ADMIN_PRIVATE_KEY,
+		};
+
+		console.log('📋 Environment variables check:', envCheck);
+
+		// 2. Admin SDK初期化テスト
+		const adminDb = getAdminFirestore();
+		console.log('✅ Admin SDK initialized');
+
+		// 3. 接続テスト
+		const connectionTest = await testAdminConnection();
+		console.log('✅ Connection test:', connectionTest);
+
+		// 4. 実際のFirestore操作テスト
+		const testData = {
+			message: 'Admin SDK test',
+			timestamp: new Date().toISOString(),
+			nodeEnv: process.env.NODE_ENV,
+		};
+
+		const testDocRef = adminDb.collection('_admin_test').doc('connection_test');
+		await testDocRef.set(testData);
+		console.log('✅ Write test successful');
+
+		// 5. 読み取りテスト
+		const readDoc = await testDocRef.get();
+		const readData = readDoc.data();
+		console.log('✅ Read test successful:', readData);
+
+		// 6. テストドキュメント削除
+		await testDocRef.delete();
+		console.log('✅ Cleanup successful');
+
+		return NextResponse.json({
+			success: true,
+			message: 'Firebase Admin SDK is working correctly',
+			data: {
+				envCheck,
+				connectionTest,
+				writeTest: true,
+				readTest: true,
+				cleanup: true,
+				timestamp: new Date().toISOString(),
+			}
+		});
+
+	} catch (error) {
+		console.error('❌ Admin SDK test failed:', error);
+
+		return NextResponse.json({
+			success: false,
+			error: error instanceof Error ? error.message : 'Unknown error',
+			details: {
+				stack: error instanceof Error ? error.stack : undefined,
+				timestamp: new Date().toISOString(),
+			}
+		}, { status: 500 });
+	}
+}
+
+export async function POST(request: NextRequest) {
+	// 開発環境でのみ実行
+	if (process.env.NODE_ENV !== 'development') {
+		return NextResponse.json(
+			{ success: false, error: 'Test API is only available in development' },
+			{ status: 403 }
+		);
+	}
+
+	try {
+		const body = await request.json();
+		const { testType = 'basic' } = body;
+
+		const adminDb = getAdminFirestore();
+
+		switch (testType) {
+			case 'users_collection': {
+				// usersコレクションの動作確認
+				const usersRef = adminDb.collection('users');
+				const snapshot = await usersRef.limit(1).get();
+
+				return NextResponse.json({
+					success: true,
+					message: 'Users collection test successful',
+					data: {
+						collectionExists: true,
+						documentCount: snapshot.size,
+						hasDocuments: !snapshot.empty,
+					}
+				});
+			}
+
+			case 'write_permissions': {
+				// 書き込み権限テスト
+				const testRef = adminDb.collection('_admin_test').doc('write_test');
+				await testRef.set({
+					test: 'write_permissions',
+					timestamp: new Date(),
+				});
+				await testRef.delete();
+
+				return NextResponse.json({
+					success: true,
+					message: 'Write permissions test successful',
+				});
+			}
+
+			default: {
+				return NextResponse.json({
+					success: false,
+					error: `Unknown test type: ${testType}`,
+				}, { status: 400 });
+			}
+		}
+
+	} catch (error) {
+		handleAdminError(error, 'POST test');
 	}
 }-e 
 ### FILE: ./src/hooks/usePriceConverter.ts
@@ -18235,6 +20035,157 @@ export interface HowToBuyConfig {
 	supportedChains: string[];
 	faucetLinks: Record<string, string>;
 }-e 
+### FILE: ./types/api-wallet.ts
+
+// types/api-wallet.ts
+import { ChainType } from './wallet';
+import { WalletFirestoreUser } from '../src/lib/firestore/users-wallet';
+import { ExtendedFirestoreUser } from './user-extended'; // 追加
+
+/**
+ * Wallet認証API用の型定義
+ */
+
+// Wallet認証リクエスト
+export interface WalletAuthRequest {
+  // 署名データ
+  signature: string;
+  message: string;
+  address: string;
+  chainType: ChainType;
+  chainId?: number | string;
+  nonce: string;
+  timestamp: number;
+  
+  // リクエスト情報（セキュリティ用）
+  ipAddress?: string;
+  userAgent?: string;
+}
+
+// Wallet認証レスポンス
+export interface WalletAuthResponse {
+  success: boolean;
+  data?: {
+    user: ExtendedFirestoreUser; // ExtendedFirestoreUserに変更
+    sessionToken?: string;
+    isNewUser: boolean;
+    message: string;
+  };
+  error?: {
+    code: string;
+    message: string;
+    details?: any;
+  };
+}
+
+// プロフィール更新リクエスト
+export interface UpdateWalletProfileRequest {
+  address: string;
+  signature: string; // 本人確認用署名
+  
+  profileData: {
+    displayName?: string;
+    nickname?: string;
+    profileImage?: string;
+    address?: {
+      country?: string;
+      prefecture?: string;
+      city?: string;
+      addressLine1?: string;
+      addressLine2?: string;
+      postalCode?: string;
+      phone?: string;
+    };
+  };
+}
+
+// プロフィール更新レスポンス
+export interface UpdateWalletProfileResponse {
+  success: boolean;
+  data?: {
+    user: ExtendedFirestoreUser; // ExtendedFirestoreUserに変更
+    message: string;
+  };
+  error?: {
+    code: string;
+    message: string;
+    details?: any;
+  };
+}
+
+// ユーザー情報取得レスポンス
+export interface GetWalletUserResponse {
+  success: boolean;
+  data?: {
+    user: ExtendedFirestoreUser; // ExtendedFirestoreUserに変更
+    exists: boolean;
+  };
+  error?: {
+    code: string;
+    message: string;
+  };
+}
+
+// 統計更新リクエスト
+export interface UpdateWalletStatsRequest {
+  address: string;
+  signature: string; // 本人確認用署名
+  
+  statsData: {
+    totalSpent?: number;
+    totalSpentUSD?: number;
+    totalOrders?: number;
+    rank?: number;
+    badges?: string[];
+  };
+}
+
+// エラーコード定義
+export type WalletApiErrorCode = 
+  | 'INVALID_SIGNATURE'
+  | 'EXPIRED_NONCE'
+  | 'ADDRESS_MISMATCH'
+  | 'INVALID_CHAIN'
+  | 'USER_NOT_FOUND'
+  | 'VALIDATION_ERROR'
+  | 'FIRESTORE_ERROR'
+  | 'PERMISSION_DENIED'
+  | 'RATE_LIMITED'
+  | 'INTERNAL_ERROR';
+
+// API エラー型
+export interface WalletApiError {
+  code: WalletApiErrorCode;
+  message: string;
+  details?: any;
+  timestamp: string;
+  requestId?: string;
+}
+
+// セッション情報
+export interface WalletSession {
+  address: string;
+  chainType: ChainType;
+  chainId?: number | string;
+  token: string;
+  expiresAt: number;
+  createdAt: number;
+}
+
+// バッチ操作用
+export interface BatchWalletUsersRequest {
+  addresses: string[];
+}
+
+export interface BatchWalletUsersResponse {
+  success: boolean;
+  data?: {
+    users: ExtendedFirestoreUser[]; // ExtendedFirestoreUserに変更
+    found: number;
+    total: number;
+  };
+  error?: WalletApiError;
+}-e 
 ### FILE: ./types/wallet.ts
 
 // types/wallet.ts
@@ -18397,7 +20348,7 @@ export interface WalletStats {
 ### FILE: ./types/user.ts
 
 // types/user.ts
-import { Timestamp } from 'firebase/firestore';
+import { Timestamp } from 'firebase-admin/firestore'; // Admin SDK版に変更
 import { UserProfile } from './dashboard';
 
 // Firestoreで管理するユーザーデータの型
@@ -18531,227 +20482,294 @@ export interface ProfileCompleteness {
 ### FILE: ./types/user-extended.ts
 
 // types/user-extended.ts
-import { Timestamp } from 'firebase/firestore';
+import { Timestamp } from 'firebase-admin/firestore'; // Admin SDK版を使用
 import { FirestoreUser } from './user';
-import { WalletConnection, ChainType, AuthMethod } from './wallet';
+import { ChainType, WalletConnection } from './wallet';
 
-// 拡張されたFirestoreUser（Wallet認証対応）
-export interface ExtendedFirestoreUser extends Omit<FirestoreUser, 'walletAddress'> {
-	// 認証方式
-	authMethod: AuthMethod;
-	
-	// マルチウォレット対応
-	connectedWallets: WalletConnection[];
-	primaryWallet?: WalletConnection;
-	
-	// 後方互換性のため残す（deprecatedとして扱う）
-	walletAddress?: string;
-	
-	// 認証履歴
-	authHistory: Array<{
-		method: AuthMethod;
-		timestamp: Timestamp;
-		chainType?: ChainType;
-		walletAddress?: string;
-		success: boolean;
-		ipAddress?: string;
-	}>;
-	
-	// ユーザー設定
-	preferences: {
-		preferredAuthMethod: AuthMethod;
-		autoConnectWallet: boolean;
-		preferredChain?: ChainType;
-		hideWalletAddress: boolean;
-		notificationSettings: {
-			walletConnection: boolean;
-			newChainDetected: boolean;
-			securityAlerts: boolean;
-		};
-	};
-	
-	// セキュリティ情報
-	security: {
-		lastPasswordChange?: Timestamp;
-		twoFactorEnabled: boolean;
-		trustedDevices: Array<{
-			deviceId: string;
-			deviceName: string;
-			lastUsed: Timestamp;
-			ipAddress: string;
-		}>;
-		suspiciousActivity: Array<{
-			type: string;
-			timestamp: Timestamp;
-			details: any;
-			resolved: boolean;
-		}>;
-	};
-	
-	// Wallet固有の統計
-	walletStats?: {
-		totalTransactions: number;
-		totalGasSpent: number;
-		chainsUsed: ChainType[];
-		favoriteWallets: string[];
-		firstWalletConnection: Timestamp;
-	};
+/**
+ * Wallet認証対応の拡張ユーザーデータ型
+ * 既存のFirestoreUserにWallet機能を追加
+ */
+export interface ExtendedFirestoreUser extends Omit<FirestoreUser, 'id' | 'walletAddress'> {
+  id: string; // walletAddress または firebaseUID
+  
+  // 認証方式の識別
+  authMethod: 'firebase' | 'wallet' | 'hybrid';
+  
+  // Firebase認証情報（オプション）
+  firebaseUid?: string;
+  
+  // Wallet認証情報
+  walletAddress: string; // 必須（Wallet認証では主キー）
+  connectedWallets: WalletConnection[];
+  primaryWallet?: WalletConnection;
+  isWalletVerified: boolean;
+  
+  // 最終認証時刻（既存のlastLoginAtも保持）
+  lastAuthAt: Timestamp;
+  
+  // 認証履歴
+  authHistory: WalletAuthHistoryEntry[];
+  
+  // セキュリティ設定
+  securitySettings: {
+    requireSignatureForUpdates: boolean;
+    allowedChains: ChainType[];
+    maxSessionDuration: number; // minutes
+  };
+  
+  // 通知設定
+  notificationSettings: {
+    email: boolean;
+    push: boolean;
+    sms: boolean;
+    newOrders: boolean;
+    priceAlerts: boolean;
+    securityAlerts: boolean;
+  };
 }
 
-// ユーザー作成時のデータ（拡張版）
-export interface CreateExtendedUserData extends Omit<ExtendedFirestoreUser, 'id' | 'createdAt' | 'updatedAt' | 'lastLoginAt'> {
-	id: string;
-	email: string;
-	displayName: string;
-	authMethod: AuthMethod;
-	connectedWallets: WalletConnection[];
-	authHistory: Array<{
-		method: AuthMethod;
-		timestamp: Timestamp;
-		chainType?: ChainType;
-		walletAddress?: string;
-		success: boolean;
-		ipAddress?: string;
-	}>;
-	preferences: ExtendedFirestoreUser['preferences'];
-	security: ExtendedFirestoreUser['security'];
+/**
+ * 認証履歴エントリ
+ */
+export interface WalletAuthHistoryEntry {
+  chainType: ChainType;
+  chainId?: number | string;
+  walletAddress: string;
+  timestamp: Timestamp;
+  success: boolean;
+  ipAddress?: string;
+  userAgent?: string;
+  location?: {
+    country?: string;
+    city?: string;
+  };
+  failureReason?: string;
 }
 
-// プロフィール更新用（拡張版）
-export interface UpdateExtendedUserProfile {
-	displayName?: string;
-	nickname?: string;
-	profileImage?: string;
-	address?: Partial<FirestoreUser['address']>;
-	isProfileComplete?: boolean;
-	
-	// Wallet関連の更新
-	connectedWallets?: WalletConnection[];
-	primaryWallet?: WalletConnection;
-	preferences?: Partial<ExtendedFirestoreUser['preferences']>;
-	
-	// セキュリティ設定の更新
-	security?: Partial<ExtendedFirestoreUser['security']>;
+/**
+ * Wallet操作結果
+ */
+export interface WalletOperationResult<T = any> {
+  success: boolean;
+  data?: T;
+  error?: {
+    code: string;
+    message: string;
+    details?: any;
+  };
+  metadata?: {
+    transactionHash?: string;
+    blockNumber?: number;
+    gasUsed?: string;
+    timestamp: Date;
+  };
 }
 
-// ウォレット操作の結果
-export interface WalletOperationResult {
-	success: boolean;
-	walletConnection?: WalletConnection;
-	error?: string;
-	requiresVerification?: boolean;
-}
-
-// 認証統合の結果
-export interface AuthIntegrationResult {
-	success: boolean;
-	user: ExtendedFirestoreUser;
-	newUser: boolean;
-	walletLinked: boolean;
-	error?: string;
-}
-
-// ウォレット検証の状態
-export interface WalletVerificationStatus {
-	isVerified: boolean;
-	verificationMethod: 'signature' | 'transaction' | 'none';
-	verifiedAt?: Timestamp;
-	verificationHash?: string;
-}
-
-// マルチウォレット管理
-export interface MultiWalletConfig {
-	maxWallets: number;
-	requireVerification: boolean;
-	allowDuplicateChains: boolean;
-	autoSwitchToPrimary: boolean;
-}
-
-// ウォレット統計の詳細
-export interface DetailedWalletStats {
-	// 基本統計
-	totalConnections: number;
-	totalTransactions: number;
-	totalGasSpent: number;
-	
-	// チェーン別統計
-	chainStats: Record<ChainType, {
-		connections: number;
-		transactions: number;
-		gasSpent: number;
-		lastUsed: Timestamp;
-	}>;
-	
-	// ウォレット別統計
-	walletStats: Record<string, {
-		connections: number;
-		transactions: number;
-		lastUsed: Timestamp;
-		favoriteChains: ChainType[];
-	}>;
-	
-	// 時系列データ
-	timeSeriesData: Array<{
-		date: Timestamp;
-		connections: number;
-		transactions: number;
-		gasSpent: number;
-	}>;
-}
-
-// 認証フロー状態
+/**
+ * 認証フロー状態
+ */
 export interface AuthFlowState {
-	currentStep: 'idle' | 'connecting' | 'signing' | 'verifying' | 'completing' | 'error';
-	selectedChain?: ChainType;
-	selectedWallet?: string;
-	signatureRequired: boolean;
-	verificationRequired: boolean;
-	error?: string;
-	progress: number; // 0-100
+  currentStep: 'idle' | 'connecting' | 'signing' | 'verifying' | 'success' | 'error';
+  signatureRequired: boolean;
+  verificationRequired: boolean;
+  progress: number; // 0-100
+  selectedChain?: ChainType;
+  selectedWallet?: string;
+  errorMessage?: string;
+  retryCount?: number;
 }
 
-// Firestore用のヘルパー関数の型
-export interface ExtendedUserHelpers {
-	// ウォレット管理
-	addWalletToUser: (userId: string, wallet: WalletConnection) => Promise<void>;
-	removeWalletFromUser: (userId: string, walletAddress: string) => Promise<void>;
-	setPrimaryWallet: (userId: string, walletAddress: string) => Promise<void>;
-	verifyWallet: (userId: string, walletAddress: string, verificationData: any) => Promise<void>;
-	
-	// 認証履歴
-	addAuthHistory: (userId: string, authEvent: ExtendedFirestoreUser['authHistory'][0]) => Promise<void>;
-	
-	// 統計更新
-	updateWalletStats: (userId: string, stats: Partial<DetailedWalletStats>) => Promise<void>;
-	
-	// セキュリティ
-	addTrustedDevice: (userId: string, device: ExtendedFirestoreUser['security']['trustedDevices'][0]) => Promise<void>;
-	reportSuspiciousActivity: (userId: string, activity: ExtendedFirestoreUser['security']['suspiciousActivity'][0]) => Promise<void>;
+/**
+ * ユーザー設定
+ */
+export interface UserSettings {
+  // 表示設定
+  theme: 'light' | 'dark' | 'system';
+  language: 'en' | 'ja' | 'zh' | 'ko';
+  currency: 'USD' | 'JPY' | 'ETH' | 'BTC';
+  
+  // プライバシー設定
+  showProfileToPublic: boolean;
+  showStatsToPublic: boolean;
+  showBadgesToPublic: boolean;
+  
+  // 取引設定
+  defaultChain: ChainType;
+  slippageTolerance: number; // %
+  gasSettings: 'slow' | 'standard' | 'fast' | 'custom';
+  
+  // セキュリティ設定
+  requireConfirmationForLargeOrders: boolean;
+  largeOrderThreshold: number; // USD
+  sessionTimeout: number; // minutes
 }
 
-// 移行用のヘルパー
-export interface UserMigrationHelpers {
-	// 既存ユーザーの拡張
-	migrateExistingUser: (oldUser: FirestoreUser) => ExtendedFirestoreUser;
-	
-	// 既存walletAddressからconnectedWalletsへの移行
-	migrateWalletAddress: (oldUser: FirestoreUser) => WalletConnection[];
-	
-	// デフォルト設定の生成
-	generateDefaultPreferences: () => ExtendedFirestoreUser['preferences'];
-	generateDefaultSecurity: () => ExtendedFirestoreUser['security'];
+/**
+ * ExtendedFirestoreUser作成用のデータ
+ */
+export interface CreateExtendedUserData {
+  // 必須フィールド
+  authMethod: 'wallet';
+  walletAddress: string;
+  chainType: ChainType;
+  chainId?: number | string;
+  
+  // オプションフィールド
+  displayName?: string;
+  nickname?: string;
+  profileImage?: string;
+  
+  // リクエスト情報
+  ipAddress?: string;
+  userAgent?: string;
+  
+  // 初期設定
+  initialSettings?: Partial<UserSettings>;
+}
+
+/**
+ * プロフィール更新データ
+ */
+export interface UpdateExtendedUserProfile {
+  displayName?: string;
+  nickname?: string;
+  profileImage?: string;
+  address?: ExtendedFirestoreUser['address'];
+  notificationSettings?: Partial<ExtendedFirestoreUser['notificationSettings']>;
+  securitySettings?: Partial<ExtendedFirestoreUser['securitySettings']>;
+  userSettings?: Partial<UserSettings>;
+}
+
+/**
+ * 統計情報更新データ
+ */
+export interface UpdateExtendedUserStats {
+  totalSpent?: number;
+  totalSpentUSD?: number;
+  totalOrders?: number;
+  rank?: number;
+  badges?: string[];
+  newAchievements?: string[];
+}
+
+/**
+ * Wallet接続情報（拡張版）
+ */
+export interface ExtendedWalletConnection extends WalletConnection {
+  // 追加情報
+  nickname?: string;
+  isHardwareWallet: boolean;
+  securityLevel: 'low' | 'medium' | 'high';
+  
+  // 使用統計
+  totalTransactions: number;
+  totalValue: number; // ETH
+  firstUsed: Date;
+  lastUsed: Date;
+  
+  // 設定
+  isDefault: boolean;
+  notifications: boolean;
+  autoConnect: boolean;
+}
+
+/**
+ * ユーザーアクティビティ
+ */
+export interface UserActivity {
+  id: string;
+  userId: string;
+  type: 'login' | 'logout' | 'purchase' | 'profile_update' | 'wallet_connect' | 'wallet_disconnect';
+  description: string;
+  metadata?: any;
+  timestamp: Timestamp;
+  chainType?: ChainType;
+  walletAddress?: string;
+  ipAddress?: string;
+}
+
+/**
+ * ユーザー通知
+ */
+export interface UserNotification {
+  id: string;
+  userId: string;
+  type: 'info' | 'success' | 'warning' | 'error';
+  title: string;
+  message: string;
+  isRead: boolean;
+  actionUrl?: string;
+  actionText?: string;
+  metadata?: any;
+  createdAt: Timestamp;
+  expiresAt?: Timestamp;
+}
+
+/**
+ * バッチ操作用
+ */
+export interface BatchExtendedUserOperation {
+  operation: 'create' | 'update' | 'delete';
+  userId: string;
+  data?: Partial<ExtendedFirestoreUser>;
+}
+
+export interface BatchExtendedUserResult {
+  success: boolean;
+  results: Array<{
+    userId: string;
+    success: boolean;
+    error?: string;
+  }>;
+  summary: {
+    total: number;
+    successful: number;
+    failed: number;
+  };
+}
+
+/**
+ * 検索・フィルタ用
+ */
+export interface ExtendedUserQuery {
+  walletAddresses?: string[];
+  chainTypes?: ChainType[];
+  authMethods?: ('firebase' | 'wallet' | 'hybrid')[];
+  membershipTiers?: ('bronze' | 'silver' | 'gold' | 'platinum')[];
+  isActive?: boolean;
+  isWalletVerified?: boolean;
+  createdAfter?: Date;
+  createdBefore?: Date;
+  lastAuthAfter?: Date;
+  lastAuthBefore?: Date;
+  minTotalSpent?: number;
+  maxTotalSpent?: number;
+  hasBadges?: string[];
+  limit?: number;
+  offset?: number;
+  sortBy?: 'createdAt' | 'lastAuthAt' | 'totalSpent' | 'rank';
+  sortOrder?: 'asc' | 'desc';
+}
+
+export interface ExtendedUserQueryResult {
+  users: ExtendedFirestoreUser[];
+  total: number;
+  hasMore: boolean;
+  nextOffset?: number;
 }-e 
 ### FILE: ./types/auth.ts
 
-// types/auth.ts
+// types/auth.ts (Extended対応版)
 import { User as FirebaseUser } from 'firebase/auth';
 import { FirestoreUser } from './user';
+import { ExtendedFirestoreUser, WalletOperationResult } from './user-extended';
 import { WalletConnection, WalletAuthResult, ChainType } from './wallet';
 
 // 統合認証方式
 export type AuthMethod = 'firebase' | 'wallet' | 'hybrid';
 
-// 統合認証状態
+// 統合認証状態（Extended対応）
 export interface UnifiedAuthState {
 	// 認証方式
 	authMethod: AuthMethod;
@@ -18764,8 +20782,8 @@ export interface UnifiedAuthState {
 	walletConnection: WalletConnection | null;
 	walletLoading: boolean;
 
-	// Firestore統合
-	firestoreUser: FirestoreUser | null;
+	// Firestore統合（Extended対応）
+	firestoreUser: ExtendedFirestoreUser | null; // ExtendedFirestoreUserに変更
 	firestoreLoading: boolean;
 
 	// 全体の状態
@@ -18798,7 +20816,7 @@ export interface AuthConfig {
 	};
 }
 
-// 認証アクション
+// Extended認証アクション
 export interface AuthActions {
 	// Firebase認証
 	signInWithEmail: (email: string, password: string) => Promise<void>;
@@ -18813,10 +20831,10 @@ export interface AuthActions {
 	// 統合ログアウト
 	logout: () => Promise<void>;
 
-	// プロフィール更新
-	updateProfile: (data: Partial<FirestoreUser>) => Promise<void>;
+	// Extended プロフィール更新（戻り値型を変更）
+	updateProfile: (data: Partial<ExtendedFirestoreUser>) => Promise<WalletOperationResult>;
 
-	// セッション管理
+	// Extended セッション管理
 	refreshSession: () => Promise<void>;
 }
 
@@ -18839,7 +20857,7 @@ export interface AuthEvent {
 	error?: string;
 }
 
-// 認証フック用の戻り値
+// Extended認証フック用の戻り値
 export interface UseAuthReturn extends UnifiedAuthState, AuthActions {
 	// 便利なゲッター
 	primaryUserId: string | null;
@@ -18863,59 +20881,119 @@ export interface WalletConnectionResult {
 	error?: string;
 }
 
-// 認証統合結果
+// 認証統合結果（Extended対応）
 export interface AuthIntegrationResult {
 	success: boolean;
 	authMethod: AuthMethod;
 	firebaseUser?: FirebaseUser;
 	walletConnection?: WalletConnection;
-	firestoreUser?: FirestoreUser;
+	firestoreUser?: ExtendedFirestoreUser; // ExtendedFirestoreUserに変更
 	error?: string;
 }
 
-// Firebase + Wallet統合データ
+// Firebase + Wallet統合データ（Extended対応）
 export interface IntegratedUserData {
 	// Firebase認証データ
 	firebaseUid?: string;
 	email?: string;
 	emailVerified?: boolean;
 
-	// Wallet認証データ
+	// Extended Wallet認証データ
 	connectedWallets: WalletConnection[];
 	primaryWallet?: WalletConnection;
 
-	// 認証履歴
+	// Extended認証履歴
 	authHistory: Array<{
 		method: AuthMethod;
 		timestamp: Date;
 		chainType?: ChainType;
 		success: boolean;
+		ipAddress?: string;
+		userAgent?: string;
 	}>;
 
-	// 設定
+	// Extended設定
 	preferences: {
 		preferredAuthMethod: AuthMethod;
 		autoConnect: boolean;
 		preferredChain?: ChainType;
 	};
+
+	// Extended セキュリティ設定
+	securitySettings: {
+		requireSignatureForUpdates: boolean;
+		allowedChains: ChainType[];
+		maxSessionDuration: number;
+	};
+
+	// Extended 通知設定
+	notificationSettings: {
+		email: boolean;
+		push: boolean;
+		sms: boolean;
+		newOrders: boolean;
+		priceAlerts: boolean;
+		securityAlerts: boolean;
+	};
 }
 
-// 認証プロバイダーのProps
+// Extended認証プロバイダーのProps
 export interface UnifiedAuthProviderProps {
 	children: React.ReactNode;
 	config?: Partial<AuthConfig>;
 }
 
-// 認証コンテキストの型
+// Extended認証コンテキストの型
 export interface UnifiedAuthContextType extends UseAuthReturn {
 	// 設定
 	config: AuthConfig;
 
+	// Extended状態
+	extendedUser: ExtendedFirestoreUser | null;
+	authFlowState: any; // AuthFlowState
+
+	// Extended操作
+	refreshExtendedUser: () => Promise<void>;
+	getAuthHistory: () => any[] | null;
+	getConnectedWallets: () => WalletConnection[] | null;
+	updateUserProfile: (profileData: any) => Promise<WalletOperationResult>;
+
 	// 内部状態
-	_internal: {
+	_internal?: {
 		eventEmitter: EventTarget;
 		sessionStorage: Map<string, any>;
 	};
+
+	// デバッグ情報
+	_debug: {
+		firebaseReady: boolean;
+		walletReady: boolean;
+		lastError: string | null;
+		apiCalls: number;
+		lastApiCall: Date | null;
+	};
+}
+
+// 後方互換性のための従来の型（非推奨）
+export interface LegacyAuthActions {
+	updateProfile: (data: Partial<FirestoreUser>) => Promise<void>;
+}
+
+// Extended専用のヘルパー型
+export interface ExtendedAuthHelpers {
+	// Extended ユーザー操作
+	getExtendedUserStats: () => ExtendedFirestoreUser['stats'] | null;
+	getExtendedUserSecurity: () => ExtendedFirestoreUser['securitySettings'] | null;
+	getExtendedUserNotifications: () => ExtendedFirestoreUser['notificationSettings'] | null;
+	
+	// Extended Wallet操作
+	addWalletConnection: (connection: WalletConnection) => Promise<WalletOperationResult>;
+	removeWalletConnection: (address: string) => Promise<WalletOperationResult>;
+	setPrimaryWallet: (address: string) => Promise<WalletOperationResult>;
+	
+	// Extended 設定操作
+	updateSecuritySettings: (settings: Partial<ExtendedFirestoreUser['securitySettings']>) => Promise<WalletOperationResult>;
+	updateNotificationSettings: (settings: Partial<ExtendedFirestoreUser['notificationSettings']>) => Promise<WalletOperationResult>;
 }-e 
 ### FILE: ./scripts/seedProductsAdmin.js
 

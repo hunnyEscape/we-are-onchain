@@ -499,7 +499,6 @@ export default function WalletAuthDemo() {
 			<ExtendedAuthModal
 				isOpen={isAuthModalOpen}
 				onClose={() => setIsAuthModalOpen(false)}
-				defaultTab={authModalTab}
 				preferredChain="evm"
 			/>
 		</div>

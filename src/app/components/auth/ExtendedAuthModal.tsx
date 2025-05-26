@@ -37,10 +37,31 @@ export const ExtendedAuthModal = ({
 	const [localError, setLocalError] = useState('');
 	const [loading, setLoading] = useState(false);
 
+	// 🔧 authFlowStateの変更を監視して自動的にステップを更新
+	useEffect(() => {
+		console.log('🔄 AuthFlowState changed:', authFlowState);
+		
+		// authFlowStateに基づいてcurrentStepを更新
+		if (authFlowState.currentStep === 'signing' && currentStep !== 'wallet-sign') {
+			setCurrentStep('wallet-sign');
+			setLoading(true);
+		} else if (authFlowState.currentStep === 'success' && currentStep !== 'success') {
+			setCurrentStep('success');
+			setLoading(false);
+		} else if (authFlowState.currentStep === 'error' && currentStep !== 'error') {
+			setCurrentStep('error');
+			setLoading(false);
+		} else if (authFlowState.currentStep === 'idle' && authFlowState.progress === 100 && isAuthenticated) {
+			// 認証完了後のidle状態
+			setCurrentStep('success');
+			setLoading(false);
+		}
+	}, [authFlowState, currentStep, isAuthenticated]);
+
 	// 認証成功時の自動クローズ
 	useEffect(() => {
-		if (isAuthenticated && currentStep !== 'success') {
-			setCurrentStep('success');
+		if (isAuthenticated && currentStep === 'success') {
+			console.log('🎉 Authentication completed, closing modal in 2 seconds...');
 			setTimeout(() => {
 				onClose();
 				resetState();
@@ -50,11 +71,13 @@ export const ExtendedAuthModal = ({
 
 	// エラー処理
 	useEffect(() => {
-		if (authError) {
+		if (authError && !localError) {
+			console.log('❌ Auth error detected:', authError);
 			setLocalError(authError);
 			setCurrentStep('error');
+			setLoading(false);
 		}
-	}, [authError]);
+	}, [authError, localError]);
 
 	// 状態リセット
 	const resetState = () => {
@@ -77,11 +100,17 @@ export const ExtendedAuthModal = ({
 		setCurrentStep('wallet-connect');
 
 		try {
+			console.log('🔗 Starting wallet connection...');
 			await connectWallet(preferredChain);
+			
+			// 接続成功後、署名ステップに移動
+			console.log('✅ Wallet connected, moving to sign step');
 			setCurrentStep('wallet-sign');
 		} catch (error: any) {
+			console.error('❌ Wallet connection failed:', error);
 			setLocalError(error.message || 'Wallet connection failed');
 			setCurrentStep('error');
+		} finally {
 			setLoading(false);
 		}
 	};
@@ -92,18 +121,35 @@ export const ExtendedAuthModal = ({
 		setLoading(true);
 
 		try {
+			console.log('🚀 ExtendedAuthModal: Starting wallet authentication...');
+
+			// 1. まずWalletが接続されているか確認
+			if (!walletAddress) {
+				throw new Error('Wallet not connected. Please connect your wallet first.');
+			}
+
+			console.log('📱 ExtendedAuthModal: Wallet connected, address:', walletAddress);
+
+			// 2. UnifiedAuthContextのExtended認証を直接呼び出し
+			console.log('🔐 ExtendedAuthModal: Calling authenticateWallet...');
 			const result = await authenticateWallet(preferredChain);
+
+			console.log('✅ ExtendedAuthModal: Authentication result:', result);
+
 			if (result.success) {
-				setCurrentStep('success');
+				console.log('🎉 ExtendedAuthModal: Authentication successful');
+				// 成功時はauthFlowStateの変更によって自動的にステップが更新される
 			} else {
-				setLocalError(result.error || 'Wallet authentication failed');
+				setLocalError(result.error || 'Extended wallet authentication failed');
 				setCurrentStep('error');
+				console.error('❌ ExtendedAuthModal: Authentication failed:', result.error);
 			}
 		} catch (error: any) {
-			setLocalError(error.message || 'Wallet authentication failed');
+			console.error('💥 ExtendedAuthModal: Authentication error:', error);
+			setLocalError(error.message || 'Extended wallet authentication failed');
 			setCurrentStep('error');
 		} finally {
-			setLoading(false);
+			// loadingはauthFlowStateの変更で制御されるため、ここでは設定しない
 		}
 	};
 
@@ -117,6 +163,20 @@ export const ExtendedAuthModal = ({
 		setLocalError('');
 		setLoading(false);
 	};
+
+	// 🔧 現在の状態をログ出力（デバッグ用）
+	useEffect(() => {
+		console.log('🔍 Modal state:', {
+			currentStep,
+			loading,
+			localError,
+			walletAddress,
+			isAuthenticated,
+			authFlowStep: authFlowState.currentStep,
+			authFlowProgress: authFlowState.progress,
+			signatureRequired: authFlowState.signatureRequired
+		});
+	}, [currentStep, loading, localError, walletAddress, isAuthenticated, authFlowState]);
 
 	if (!isOpen) return null;
 
@@ -154,6 +214,13 @@ export const ExtendedAuthModal = ({
 										currentStep === 'wallet-sign' ? 'Confirm your identity by signing' :
 											'Connect your Web3 wallet to access the platform'}
 							</p>
+							
+							{/* 🔧 デバッグ情報の表示 */}
+							{process.env.NODE_ENV === 'development' && (
+								<div className="text-xs text-gray-500 mt-1">
+									Step: {currentStep} | Flow: {authFlowState.currentStep} | Progress: {authFlowState.progress}%
+								</div>
+							)}
 						</div>
 						<button
 							onClick={onClose}
@@ -287,7 +354,7 @@ export const ExtendedAuthModal = ({
 									{loading ? (
 										<div className="flex items-center justify-center">
 											<Loader2 className="w-5 h-5 animate-spin mr-2" />
-											Waiting for signature...
+											{authFlowState.signatureRequired ? 'Waiting for signature...' : 'Processing...'}
 										</div>
 									) : (
 										'Sign Message'

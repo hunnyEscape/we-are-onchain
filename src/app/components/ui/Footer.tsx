@@ -1,10 +1,10 @@
 'use client';
-
+import WalletConnectButton from '../common/WalletConnectButton';
 import Link from 'next/link';
-
+import { useAuthModal } from '@/contexts/AuthModalContext';
 const Footer = () => {
 	const currentYear = new Date().getFullYear();
-
+	const { openAuthModal } = useAuthModal();
 	const productLinks = [
 		{ href: '/products/whey-protein', label: 'Whey Protein' },
 		{ href: '/products/bcaa', label: 'BCAA' },
@@ -31,6 +31,22 @@ const Footer = () => {
 		{ href: '/terms', label: 'Terms of Service' },
 		{ href: '/cookies', label: 'Cookie Policy' },
 	];
+
+	const handleAuthModalOpen = () => {
+		openAuthModal({
+			title: 'Connect Your Wallet',
+			preferredChain: 'evm',
+			onSuccess: (user) => {
+				console.log('🎉 Header: User authenticated successfully:', user.walletAddress);
+				// 必要に応じて追加の処理（例：リダイレクト）
+			},
+			onError: (error) => {
+				console.error('❌ Header: Authentication failed:', error);
+			},
+			autoClose: true,
+		});
+		//setIsMobileMenuOpen(false);
+	};
 
 	return (
 		<footer className="w-full relative bg-black border-t border-dark-300 overflow-hidden z-20">
@@ -71,11 +87,15 @@ const Footer = () => {
 								The first Web3-native protein brand. Premium supplements powered by blockchain technology and community governance.
 							</p>
 
-
-							{/* Connect Wallet */}
-							<button className="w-full px-6 py-3 bg-gradient-to-r from-neonGreen to-neonOrange text-black font-semibold rounded-sm transition-all duration-200 hover:shadow-lg hover:shadow-neonGreen/25 group">
-								<span className="relative z-10 text-sm">Login</span>
-							</button>
+							<WalletConnectButton
+								variant="desktop"
+								showChainInfo={true}
+								showDisconnectButton={true}
+								showProfileLink={true}
+								onProfileClick={()=>{}}
+								onConnectClick={handleAuthModalOpen}
+								size="md"
+							/>
 						</div>
 
 						{/* Products */}
@@ -99,7 +119,7 @@ const Footer = () => {
 								))}
 							</ul>
 						</div>
-						
+
 						<div>
 							<h3 className="text-white font-heading font-semibold mb-4 relative">
 								Company
@@ -156,7 +176,7 @@ const Footer = () => {
 						</div>
 					</div>
 
-			
+
 					<div className="flex flex-col lg:flex-row justify-between items-center space-y-4 lg:space-y-0">
 						{/* Legal Links */}
 						<div className="flex flex-wrap items-center space-x-6">

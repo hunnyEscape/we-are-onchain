@@ -213,18 +213,19 @@ const WalletConnectButton = ({
 						disabled={isLoading}
 						size={size}
 						variant="primary"
-						className="inline-flex items-center gap-2 w-full !flex-row"
+						/* もうこのあたりは気にせず… */
+						className="w-full"
 					>
 						{isLoading ? (
-							<>
+							<span className="inline-flex items-center gap-2">
 								<Loader2 className="w-4 h-4 animate-spin" />
-								Connecting...
-							</>
+								Connecting…
+							</span>
 						) : (
-							<>
+							<span className="inline-flex items-center gap-2">
 								<Wallet className="w-4 h-4" />
 								Connect
-							</>
+							</span>
 						)}
 					</CyberButton>
 

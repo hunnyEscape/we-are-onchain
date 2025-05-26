@@ -88,10 +88,6 @@ export const GlobalAuthModal = () => {
 	return (
 		<>
 			<AuthModalProvider />
-			{/* デバッグ情報表示（開発環境のみ） */}
-			{process.env.NODE_ENV === 'development' && (
-				<AuthModalDebugInfo />
-			)}
 		</>
 	);
 };

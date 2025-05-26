@@ -5,7 +5,7 @@ import React from 'react';
 import CyberCard from '../../../components/common/CyberCard';
 import CyberButton from '../../../components/common/CyberButton';
 import { useCart, usePanel } from '../../context/DashboardContext';
-import { useAuth } from '@/contexts/AuthContext';
+import { useUnifiedAuth } from '@/contexts/UnifiedAuthContext';
 import {
 	ShoppingCart,
 	Trash2,
@@ -25,7 +25,7 @@ const CartSection: React.FC = () => {
 	} = useCart();
 
 	const { openPanel } = usePanel();
-	const { user } = useAuth();
+	const { isAuthenticated, isLoading, walletAddress, displayName } = useUnifiedAuth();
 
 	// カートアイテムの詳細情報を取得
 	const cartItemsWithDetails = getCartItemsWithDetails();
@@ -47,7 +47,7 @@ const CartSection: React.FC = () => {
 
 	const handleCheckout = () => {
 		try {
-			if (!user) {
+			if (!walletAddress) {
 				// ログインが必要
 				window.dispatchEvent(new CustomEvent('openAuthModal'));
 				return;
@@ -56,7 +56,7 @@ const CartSection: React.FC = () => {
 			// TODO: チェックアウト処理を実装
 			console.log('Checkout initiated', {
 				cartItems,
-				user: user.uid
+				user: walletAddress
 			});
 
 			alert('Checkout initiated!');

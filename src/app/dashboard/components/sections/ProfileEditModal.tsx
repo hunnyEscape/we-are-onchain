@@ -2,7 +2,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { useAuth } from '@/contexts/AuthContext';
+import { useUnifiedAuth } from '@/contexts/UnifiedAuthContext';
 import CyberButton from '../../../components/common/CyberButton';
 import { FirestoreUser, UpdateUserProfile } from '../../../../../types/user';
 import {
@@ -30,7 +30,7 @@ export const ProfileEditModal: React.FC<ProfileEditModalProps> = ({
 	onClose,
 	firestoreUser
 }) => {
-	const { updateProfile } = useAuth();
+	const { updateProfile } = useUnifiedAuth();
 	const [loading, setLoading] = useState(false);
 	const [error, setError] = useState<string | null>(null);
 	const [success, setSuccess] = useState(false);

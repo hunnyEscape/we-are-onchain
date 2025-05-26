@@ -2,7 +2,6 @@
 import { Montserrat, Space_Grotesk } from 'next/font/google';
 import './globals.css';
 import type { Metadata } from 'next';
-import { AuthProvider } from '@/contexts/AuthContext';
 import { EVMWalletProvider } from '@/wallet-auth/adapters/evm/wagmi-provider';
 import { EVMWalletProvider as EVMWalletContextProvider } from '@/wallet-auth/adapters/evm/EVMWalletAdapterWrapper';
 import { UnifiedAuthProvider } from '@/contexts/UnifiedAuthContext';
@@ -43,7 +42,7 @@ export default function RootLayout({
 					{/* EVM Wallet Context Provider */}
 					<EVMWalletContextProvider>
 						{/* Firebase Auth Provider (既存) */}
-						<AuthProvider>
+
 							{/* 統合認証プロバイダー */}
 							<UnifiedAuthProvider
 								config={{
@@ -60,7 +59,7 @@ export default function RootLayout({
 							>
 								{children}
 							</UnifiedAuthProvider>
-						</AuthProvider>
+
 					</EVMWalletContextProvider>
 				</EVMWalletProvider>
 			</body>

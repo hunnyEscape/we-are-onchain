@@ -2,7 +2,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { useAuth } from '@/contexts/AuthContext';
+import { useUnifiedAuth } from '@/contexts/UnifiedAuthContext';
 import CyberCard from '../components/common/CyberCard';
 import CyberButton from '../components/common/CyberButton';
 import { ProfileEditModal } from '../dashboard/components/sections/ProfileEditModal';
@@ -35,7 +35,16 @@ import {
 } from '@/utils/userHelpers';
 
 export default function ProfilePage() {
-	const { user, loading, firestoreUser, firestoreLoading } = useAuth();
+	// Wallet認証のみ使用
+	const { 
+		isAuthenticated, 
+		isLoading, 
+		walletAddress,
+		displayName,
+		firestoreUser,
+		firestoreLoading 
+	} = useUnifiedAuth();
+	
 	const [copiedAddress, setCopiedAddress] = useState(false);
 	const [isEditModalOpen, setIsEditModalOpen] = useState(false);
 
@@ -48,7 +57,7 @@ export default function ProfilePage() {
 	}, []);
 
 	// ローディング状態
-	if (loading || firestoreLoading) {
+	if (isLoading || firestoreLoading) {
 		return (
 			<div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
 				<div className="space-y-8">
@@ -75,7 +84,7 @@ export default function ProfilePage() {
 	}
 
 	// 未認証の場合のプロンプト
-	if (!user) {
+	if (!isAuthenticated) {
 		return (
 			<div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
 				<div className="space-y-8">
@@ -95,11 +104,11 @@ export default function ProfilePage() {
 							</div>
 
 							<h3 className="text-2xl font-bold text-white mb-4">
-								Authentication Required
+								Wallet Connection Required
 							</h3>
 
 							<p className="text-gray-400 mb-8 max-w-md mx-auto">
-								Please log in to access your profile, view your order history, and track your achievements in the on-chain protein revolution.
+								Please connect your wallet to access your profile, view your order history, and track your achievements in the on-chain protein revolution.
 							</p>
 
 							<div className="flex flex-col sm:flex-row gap-4 justify-center">
@@ -111,8 +120,8 @@ export default function ProfilePage() {
 										window.dispatchEvent(loginEvent);
 									}}
 								>
-									<LogIn className="w-4 h-4" />
-									<span>Sign In</span>
+									<Wallet className="w-4 h-4" />
+									<span>Connect Wallet</span>
 								</CyberButton>
 
 								<CyberButton
@@ -126,7 +135,7 @@ export default function ProfilePage() {
 							</div>
 
 							<div className="mt-8 p-4 border border-neonGreen/30 rounded-sm bg-neonGreen/5">
-								<h4 className="text-neonGreen font-semibold mb-2">Why Sign In?</h4>
+								<h4 className="text-neonGreen font-semibold mb-2">Why Connect?</h4>
 								<ul className="text-sm text-gray-300 space-y-1 text-left max-w-xs mx-auto">
 									<li>• Track your order history</li>
 									<li>• Earn badges and achievements</li>
@@ -166,7 +175,7 @@ export default function ProfilePage() {
 							</h3>
 
 							<p className="text-gray-400 mb-8 max-w-md mx-auto">
-								We're setting up your profile. This usually takes just a moment.
+								We're setting up your profile based on your wallet. This usually takes just a moment.
 							</p>
 
 							<div className="flex flex-col sm:flex-row gap-4 justify-center">
@@ -196,12 +205,13 @@ export default function ProfilePage() {
 	// プロフィール完成度を計算
 	const profileCompleteness = calculateProfileCompleteness(firestoreUser);
 	const formattedStats = formatUserStats(firestoreUser.stats);
-	const displayName = getUserDisplayName(firestoreUser, user);
-	const avatarUrl = getUserAvatarUrl(firestoreUser, user);
-	const initials = getUserInitials(firestoreUser, user);
+	
+	// Wallet専用のユーザー情報
+	const userDisplayName = displayName || walletAddress?.slice(0, 6) + '...' + walletAddress?.slice(-4) || 'Anonymous';
+	const userInitials = displayName ? displayName[0].toUpperCase() : (walletAddress ? walletAddress[2].toUpperCase() : 'U');
 
 	const handleCopyAddress = () => {
-		navigator.clipboard.writeText(firestoreUser.walletAddress || firestoreUser.id);
+		navigator.clipboard.writeText(walletAddress || firestoreUser.id);
 		setCopiedAddress(true);
 		setTimeout(() => setCopiedAddress(false), 2000);
 	};
@@ -320,7 +330,7 @@ export default function ProfilePage() {
 					</div>
 				)}
 
-				{/* Welcome Message */}
+				{/* Welcome Message - Wallet Version */}
 				<div className="bg-gradient-to-r from-neonGreen/10 to-neonOrange/10 border border-neonGreen/30 rounded-sm p-4">
 					<div className="flex items-center justify-between">
 						<div className="flex items-center space-x-3">
@@ -328,14 +338,13 @@ export default function ProfilePage() {
 								{profileCompleteness.isComplete ? (
 									<CheckCircle className="w-5 h-5 text-black" />
 								) : (
-									<User className="w-5 h-5 text-black" />
+									<Wallet className="w-5 h-5 text-black" />
 								)}
 							</div>
 							<div>
-								<h3 className="text-white font-semibold">Welcome back, {displayName}!</h3>
+								<h3 className="text-white font-semibold">Welcome back, {userDisplayName}!</h3>
 								<p className="text-sm text-gray-400">
-									Connected via {user.providerData[0]?.providerId === 'google.com' ? 'Google' : 'Email'}
-									{user.emailVerified && <span className="text-neonGreen ml-2">✓ Verified</span>}
+									Connected via Wallet
 									{profileCompleteness.isComplete && <span className="text-neonGreen ml-2">✓ Complete</span>}
 								</p>
 							</div>
@@ -359,42 +368,29 @@ export default function ProfilePage() {
 						<div className="flex items-start space-x-6">
 							{/* Avatar */}
 							<div className="flex-shrink-0">
-								{avatarUrl ? (
-									<img
-										src={avatarUrl}
-										alt="Profile"
-										className="w-20 h-20 rounded-full border-2 border-neonGreen"
-									/>
-								) : (
-									<div className="w-20 h-20 bg-gradient-to-br from-neonGreen to-neonOrange rounded-full flex items-center justify-center">
-										<span className="text-2xl font-bold text-black">
-											{initials}
-										</span>
-									</div>
-								)}
+								<div className="w-20 h-20 bg-gradient-to-br from-neonGreen to-neonOrange rounded-full flex items-center justify-center">
+									<span className="text-2xl font-bold text-black">
+										{userInitials}
+									</span>
+								</div>
 							</div>
 
 							{/* Profile Info */}
 							<div className="flex-1">
 								<div className="flex items-center space-x-3 mb-2">
-									<h3 className="text-xl font-bold text-white">{displayName}</h3>
-									{firestoreUser.nickname && firestoreUser.nickname !== displayName && (
+									<h3 className="text-xl font-bold text-white">{userDisplayName}</h3>
+									{firestoreUser.nickname && firestoreUser.nickname !== userDisplayName && (
 										<span className="text-sm text-gray-400">({firestoreUser.nickname})</span>
-									)}
-								</div>
-
-								<div className="flex items-center space-x-2 mb-2">
-									<span className="text-sm text-gray-400">Email:</span>
-									<span className="text-sm text-gray-300">{firestoreUser.email}</span>
-									{user.emailVerified && (
-										<span className="text-xs bg-neonGreen/20 text-neonGreen px-2 py-1 rounded">Verified</span>
 									)}
 								</div>
 
 								<div className="flex items-center space-x-2 mb-4">
 									<Wallet className="w-4 h-4 text-gray-400" />
 									<span className="font-mono text-sm text-gray-300">
-										User ID: {firestoreUser.id.slice(0, 8)}...{firestoreUser.id.slice(-4)}
+										{walletAddress ? 
+											`${walletAddress.slice(0, 10)}...${walletAddress.slice(-8)}` :
+											`User ID: ${firestoreUser.id.slice(0, 8)}...${firestoreUser.id.slice(-4)}`
+										}
 									</span>
 									<button
 										onClick={handleCopyAddress}
@@ -416,10 +412,12 @@ export default function ProfilePage() {
 								</div>
 
 								{/* Address Display */}
-								<div className="mt-4 p-3 bg-dark-200/30 rounded-sm">
-									<div className="text-sm text-gray-400 mb-1">Address</div>
-									<div className="text-sm text-gray-300">{formatAddress(firestoreUser.address)}</div>
-								</div>
+								{firestoreUser.address && (
+									<div className="mt-4 p-3 bg-dark-200/30 rounded-sm">
+										<div className="text-sm text-gray-400 mb-1">Shipping Address</div>
+										<div className="text-sm text-gray-300">{formatAddress(firestoreUser.address)}</div>
+									</div>
+								)}
 							</div>
 						</div>
 					</CyberCard>

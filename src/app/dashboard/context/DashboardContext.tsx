@@ -3,7 +3,7 @@
 
 import React, { createContext, useContext, useReducer, useEffect } from 'react';
 import { DashboardState, CartItem, UserProfile, SectionType } from '../../../../types/dashboard';
-import { useAuth } from '@/contexts/AuthContext';
+import { useUnifiedAuth } from '@/contexts/UnifiedAuthContext';
 
 // カート有効期限（30日）
 const CART_EXPIRY_DAYS = 30;
@@ -170,7 +170,7 @@ const DashboardContext = createContext<{
 // Provider
 export function DashboardProvider({ children }: { children: React.ReactNode }) {
 	const [state, dispatch] = useReducer(dashboardReducer, initialState);
-	const { user } = useAuth();
+	const { isAuthenticated, walletAddress } = useUnifiedAuth()
 
 	// Load from localStorage on mount (クライアントサイドのみ)
 	useEffect(() => {

@@ -5,6 +5,8 @@ import type { Metadata } from 'next';
 import { EVMWalletProvider } from '@/auth/providers/wagmi-provider';
 import { EVMWalletProvider as EVMWalletContextProvider } from '@/auth/providers/EVMWalletAdapterWrapper';
 import { UnifiedAuthProvider } from '@/auth/contexts/UnifiedAuthContext';
+import { AuthModalProvider } from '@/contexts/AuthModalContext';
+import { GlobalAuthModal } from './components/modals/AuthModalProvider';
 
 // フォント設定の最適化
 const montserrat = Montserrat({
@@ -43,10 +45,10 @@ export const metadata: Metadata = {
 	},
 };
 
-// 認証設定の定数化
+// 認証設定の定数化（Updated: Wallet専用）
 const AUTH_CONFIG: Partial<any> = {
-	preferredMethod: 'hybrid',
-	enableFirebase: true,
+	preferredMethod: 'wallet', // wallet専用に変更
+	enableFirebase: false,     // Firebase無効
 	enableWallet: true,
 	autoConnect: true,
 	sessionTimeout: 24 * 60, // 24時間
@@ -54,6 +56,14 @@ const AUTH_CONFIG: Partial<any> = {
 		enabledChains: ['evm'],
 		preferredChain: 'evm',
 	},
+};
+
+// グローバル認証モーダルのデフォルト設定
+const GLOBAL_MODAL_CONFIG = {
+	preferredChain: 'evm' as const,
+	autoClose: true,
+	showChainSelector: true,
+	title: 'Connect Your Wallet',
 };
 
 export default function RootLayout({
@@ -68,17 +78,57 @@ export default function RootLayout({
 			suppressHydrationWarning={true}
 		>
 			<body className="bg-black text-white min-h-screen font-sans antialiased">
-				{/* Wallet & Auth Provider Stack */}
+				{/* Provider Stack - 正しい階層順序 */}
 				<EVMWalletProvider
 					appName="We are on-chain"
 					projectId={process.env.NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID}
 				>
 					<EVMWalletContextProvider>
 						<UnifiedAuthProvider config={AUTH_CONFIG}>
-							{children}
+							<AuthModalProvider defaultOptions={GLOBAL_MODAL_CONFIG}>
+								{/* メインコンテンツ */}
+								{children}
+								
+								{/* グローバル認証モーダル - 最上位レイヤー */}
+								<GlobalAuthModal />
+							</AuthModalProvider>
 						</UnifiedAuthProvider>
 					</EVMWalletContextProvider>
 				</EVMWalletProvider>
+
+
+
+				{/* 開発環境用のデバッグスクリプト */}
+				{process.env.NODE_ENV === 'development' && (
+					<script
+						dangerouslySetInnerHTML={{
+							__html: `
+								// グローバル認証モーダルのデバッグヘルパー
+								window.debugAuthModal = {
+									open: (options = {}) => {
+										window.dispatchEvent(new CustomEvent('openAuthModal', { detail: options }));
+									},
+									close: () => {
+										window.dispatchEvent(new CustomEvent('closeAuthModal'));
+									},
+									test: () => {
+										console.log('🧪 Testing AuthModal...');
+										window.debugAuthModal.open({ 
+											title: 'Debug Test Modal',
+											preferredChain: 'evm'
+										});
+									}
+								};
+								
+								// コンソールにヘルプを表示
+								console.log('🔐 AuthModal Debug Commands:');
+								console.log('  window.debugAuthModal.open({ title: "Test" })');
+								console.log('  window.debugAuthModal.close()');
+								console.log('  window.debugAuthModal.test()');
+							`,
+						}}
+					/>
+				)}
 			</body>
 		</html>
 	);

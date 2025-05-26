@@ -2,14 +2,14 @@
 'use client';
 
 import React, { createContext, useContext, useEffect, useState, useCallback, useRef } from 'react';
-import { ChainType } from '@/auth/types/wallet';
+import { ChainType } from '@/types/wallet';
 import {
 	ExtendedFirestoreUser,
 	WalletOperationResult,
 	AuthFlowState
-} from '../types/user-extended';
-import { UnifiedAuthState, AuthConfig, AuthActions, AuthEvent, AuthEventType, UseAuthReturn } from '@/auth/types/auth';
-import { WalletAuthRequest, WalletAuthResponse } from '@/auth/types/api-wallet';
+} from '@/types/user-extended';
+import { UnifiedAuthState, AuthConfig, AuthActions, AuthEvent, AuthEventType, UseAuthReturn } from '@/types/auth';
+import { WalletAuthRequest, WalletAuthResponse } from '@/types/api-wallet';
 
 // EVMWalletProviderはオプショナルにする
 let useEVMWallet: any = null;

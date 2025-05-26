@@ -138,16 +138,10 @@
 │   │   ├── providers
 │   │   │   ├── EVMWalletAdapterWrapper.tsx
 │   │   │   └── wagmi-provider.tsx
-│   │   ├── services
-│   │   │   ├── EVMAuthService.ts
-│   │   │   ├── EVMWalletAdapter.ts
-│   │   │   └── WalletAdapterInterface.ts
-│   │   └── types
-│   │       ├── api-wallet.ts
-│   │       ├── auth.ts
-│   │       ├── user-extended.ts
-│   │       ├── user.ts
-│   │       └── wallet.ts
+│   │   └── services
+│   │       ├── EVMAuthService.ts
+│   │       ├── EVMWalletAdapter.ts
+│   │       └── WalletAdapterInterface.ts
 │   ├── contexts
 │   │   └── DashboardContext.tsx
 │   ├── hooks
@@ -181,4 +175,4 @@
 ├── tailwind.config.js
 └── tsconfig.json
 
-49 directories, 132 files
+48 directories, 127 files

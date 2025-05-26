@@ -3,6 +3,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { useUnifiedAuth } from '@/auth/contexts/UnifiedAuthContext';
+import { useAuthModal } from '@/contexts/AuthModalContext';
 import CyberCard from '../components/common/CyberCard';
 import CyberButton from '../components/common/CyberButton';
 import { ProfileEditModal } from '../dashboard/components/sections/ProfileEditModal';
@@ -37,6 +38,9 @@ export default function ProfilePage() {
 		firestoreLoading
 	} = useUnifiedAuth();
 
+	// グローバル認証モーダル
+	const { openAuthModal } = useAuthModal();
+
 	const [copiedAddress, setCopiedAddress] = useState(false);
 	const [isEditModalOpen, setIsEditModalOpen] = useState(false);
 
@@ -47,6 +51,22 @@ export default function ProfilePage() {
 			document.title = 'We are on-chain';
 		};
 	}, []);
+
+	// グローバルモーダル経由での認証
+	const handleConnectWallet = () => {
+		openAuthModal({
+			title: 'Connect Your Wallet',
+			preferredChain: 'evm',
+			onSuccess: (user) => {
+				console.log('🎉 Profile: User authenticated successfully:', user.walletAddress);
+				// プロフィールページでは特別な処理は不要（自動的にリダイレクトされる）
+			},
+			onError: (error) => {
+				console.error('❌ Profile: Authentication failed:', error);
+			},
+			autoClose: true,
+		});
+	};
 
 	// ローディング状態
 	if (isLoading || firestoreLoading) {
@@ -107,10 +127,7 @@ export default function ProfilePage() {
 								<CyberButton
 									variant="primary"
 									className="flex items-center space-x-2"
-									onClick={() => {
-										const loginEvent = new CustomEvent('openAuthModal');
-										window.dispatchEvent(loginEvent);
-									}}
+									onClick={handleConnectWallet}
 								>
 									<Wallet className="w-4 h-4" />
 									<span>Connect Wallet</span>

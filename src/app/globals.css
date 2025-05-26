@@ -8,10 +8,47 @@
 	--background-rgb: 0, 0, 0;
 	--neon-green: 0, 255, 127;
 	--neon-orange: 255, 109, 0;
+
+	/* グローバル認証モーダル用のz-index定義 */
+	--z-index-header: 50;
+	--z-index-modal: 100;
+	--z-index-modal-overlay: 90;
+	--z-index-debug: 90;
 }
 
 html {
 	scroll-behavior: smooth;
+}
+
+/* モーダル表示時のボディスクロール制御 */
+body.modal-open {
+	overflow: hidden;
+	padding-right: var(--scrollbar-width, 0);
+}
+
+/* カスタムスクロールバー幅の計算（モーダル用） */
+@media (min-width: 1024px) {
+	:root {
+		--scrollbar-width: 17px;
+	}
+}
+
+/* モーダルアニメーション最適化 */
+.auth-modal-enter {
+	opacity: 0;
+	transform: scale(0.95);
+}
+
+.auth-modal-enter-active {
+	opacity: 1;
+	transform: scale(1);
+	transition: opacity 200ms ease-out, transform 200ms ease-out;
+}
+
+/* デバッグモード用のアウトライン */
+.debug-modal-boundary {
+	outline: 2px dashed rgba(147, 51, 234, 0.5);
+	outline-offset: 4px;
 }
 
 @keyframes flicker {

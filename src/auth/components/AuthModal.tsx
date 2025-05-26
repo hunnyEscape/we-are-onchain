@@ -3,7 +3,7 @@
 
 import { useState, useEffect } from 'react';
 import { useUnifiedAuth } from '@/auth/contexts/UnifiedAuthContext';
-import { ChainType } from '@/auth/types/wallet';
+import { ChainType } from '@/types/wallet';
 import { Wallet, Shield, ChevronRight, AlertCircle, CheckCircle, Loader2, Settings } from 'lucide-react';
 
 interface ExtendedAuthModalProps {

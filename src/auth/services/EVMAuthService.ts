@@ -5,7 +5,7 @@ import {
 	ChainType,
 	WalletAuthResult,
 	WalletSignatureData
-} from '@/auth/types/wallet';
+} from '@/types/wallet';
 import { WalletAdapter, WalletAuthService } from './WalletAdapterInterface';
 
 /**

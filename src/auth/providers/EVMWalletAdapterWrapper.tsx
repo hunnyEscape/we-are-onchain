@@ -17,7 +17,7 @@ import {
 	WalletSignatureData,
 	WalletState,
 	WalletAuthResult
-} from '@/auth/types/wallet';
+} from '@/types/wallet';
 import { EVMAuthService } from '../services/EVMAuthService';
 
 interface EVMWalletContextType {

@@ -2,7 +2,7 @@
 'use client';
 
 import React from 'react';
-import { ChainCardProps } from '@/types/chain-selection';
+import { ChainCardProps, SelectableChain } from '@/types/chain-selection';
 import CyberCard from '@/app/components/common/CyberCard';
 import {
 	Check,

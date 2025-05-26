@@ -2,7 +2,7 @@
 'use client';
 
 import React, { useState, useEffect, useMemo } from 'react';
-import { ChainSelectorProps, SelectableChain, SelectableChainId } from '@/types/chain-selection';
+import { SelectableChain, SelectableChainId, ChainSelectorProps } from '@/types/chain-selection';
 import { testnetUtils, SUPPORTED_TESTNETS } from '@/auth/config/testnet-chains';
 import { ChainSelectionUtils } from '@/auth/utils/chain-utils';
 import ChainCard from './ChainCard';

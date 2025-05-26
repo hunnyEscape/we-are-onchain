@@ -5872,16 +5872,30 @@ export const formatChainError = (error: ChainUtilError, chainId?: SelectableChai
 
 import { useState, useEffect } from 'react';
 import { useUnifiedAuth } from '@/auth/contexts/UnifiedAuthContext';
+import { useAuthModal } from '../../contexts/AuthModalContext';
 import { ChainType } from '@/types/wallet';
-import { Wallet, Shield, ChevronRight, AlertCircle, CheckCircle, Loader2, Settings } from 'lucide-react';
+import { SelectableChain, SelectableChainId } from '@/types/chain-selection';
+import { testnetUtils } from '@/auth/config/testnet-chains';
+import ChainSelector from './ChainSelector';
+import CyberCard from '@/app/components/common/CyberCard';
+import GridPattern from '@/app/components/common/GridPattern';
+import { 
+  Wallet, 
+  Shield, 
+  ChevronRight, 
+  ArrowLeft,
+  AlertCircle, 
+  CheckCircle, 
+  Loader2, 
+  Settings,
+  Zap
+} from 'lucide-react';
 
 interface ExtendedAuthModalProps {
 	isOpen: boolean;
 	onClose: () => void;
 	preferredChain?: ChainType;
 }
-
-type AuthStep = 'wallet-connect' | 'wallet-sign' | 'success' | 'error';
 
 export const ExtendedAuthModal = ({
 	isOpen,
@@ -5895,64 +5909,81 @@ export const ExtendedAuthModal = ({
 
 		// 状態
 		isLoading,
-		authFlowState,
+		authFlowState: unifiedAuthFlowState,
 		walletAddress,
 		isAuthenticated,
 		error: authError,
 	} = useUnifiedAuth();
 
-	// ローカル状態
-	const [currentStep, setCurrentStep] = useState<AuthStep>('wallet-connect');
-	const [localError, setLocalError] = useState('');
-	const [loading, setLoading] = useState(false);
+	const {
+		modalOptions,
+		authFlowState,
+		setAuthStep,
+		goBackStep,
+		selectChain,
+		switchChain,
+		getSelectedChain,
+		updateProgress,
+		setStepStatus,
+	} = useAuthModal();
 
-	// 🔧 authFlowStateの変更を監視して自動的にステップを更新
+	// ローカル状態
+	const [localError, setLocalError] = useState('');
+	const [isProcessing, setIsProcessing] = useState(false);
+
+	// authFlowStateの変更を監視してステップを自動更新
 	useEffect(() => {
-		console.log('🔄 AuthFlowState changed:', authFlowState);
+		console.log('🔄 AuthFlowState changed:', unifiedAuthFlowState);
 		
-		// authFlowStateに基づいてcurrentStepを更新
-		if (authFlowState.currentStep === 'signing' && currentStep !== 'wallet-sign') {
-			setCurrentStep('wallet-sign');
-			setLoading(true);
-		} else if (authFlowState.currentStep === 'success' && currentStep !== 'success') {
-			setCurrentStep('success');
-			setLoading(false);
-		} else if (authFlowState.currentStep === 'error' && currentStep !== 'error') {
-			setCurrentStep('error');
-			setLoading(false);
-		} else if (authFlowState.currentStep === 'idle' && authFlowState.progress === 100 && isAuthenticated) {
-			// 認証完了後のidle状態
-			setCurrentStep('success');
-			setLoading(false);
+		if (unifiedAuthFlowState.currentStep === 'signing') {
+			setAuthStep('wallet-sign');
+			setStepStatus({ signatureRequired: true });
+			setIsProcessing(true);
+		} else if (unifiedAuthFlowState.currentStep === 'success') {
+			setAuthStep('success');
+			setIsProcessing(false);
+		} else if (unifiedAuthFlowState.currentStep === 'error') {
+			setAuthStep('error');
+			setIsProcessing(false);
+		} else if (unifiedAuthFlowState.currentStep === 'idle' && isAuthenticated) {
+			setAuthStep('success');
+			setIsProcessing(false);
 		}
-	}, [authFlowState, currentStep, isAuthenticated]);
+	}, [unifiedAuthFlowState, isAuthenticated, setAuthStep, setStepStatus]);
 
 	// 認証成功時の自動クローズ
 	useEffect(() => {
-		if (isAuthenticated && currentStep === 'success') {
+		if (isAuthenticated && authFlowState.currentStep === 'success') {
 			console.log('🎉 Authentication completed, closing modal in 2 seconds...');
-			setTimeout(() => {
-				onClose();
-				resetState();
-			}, 2000);
+			updateProgress(100);
+			
+			if (modalOptions.autoClose !== false) {
+				setTimeout(() => {
+					onClose();
+					resetState();
+				}, 2000);
+			}
 		}
-	}, [isAuthenticated, currentStep, onClose]);
+	}, [isAuthenticated, authFlowState.currentStep, modalOptions.autoClose, onClose, updateProgress]);
 
 	// エラー処理
 	useEffect(() => {
 		if (authError && !localError) {
 			console.log('❌ Auth error detected:', authError);
 			setLocalError(authError);
-			setCurrentStep('error');
-			setLoading(false);
+			setAuthStep('error');
+			setIsProcessing(false);
 		}
-	}, [authError, localError]);
+	}, [authError, localError, setAuthStep]);
 
 	// 状態リセット
 	const resetState = () => {
-		setCurrentStep('wallet-connect');
+		const initialStep = modalOptions.step?.skipChainSelection ? 'wallet-connect' : 'chain-select';
+		setAuthStep(initialStep);
 		setLocalError('');
-		setLoading(false);
+		setIsProcessing(false);
+		updateProgress(0);
+		setStepStatus({ signatureRequired: false, verificationRequired: false });
 	};
 
 	// モーダルクローズ時のリセット
@@ -5962,131 +5993,218 @@ export const ExtendedAuthModal = ({
 		}
 	}, [isOpen]);
 
-	// 🔧 段階的な接続+認証処理（安全版）
+	// チェーン選択のハンドラー
+	const handleChainSelect = async (chain: SelectableChain) => {
+		try {
+			console.log('🔗 Chain selected:', chain.displayName);
+			setLocalError('');
+			updateProgress(25);
+
+			// チェーン選択を記録
+			const success = await selectChain(chain.id);
+			
+			if (success) {
+				// チェーン切り替えが必要な場合
+				if (modalOptions.chainSelection?.requireChainSwitch) {
+					updateProgress(50);
+					await switchChain(chain.id);
+				}
+				
+				// 次のステップに進む
+				setTimeout(() => {
+					setAuthStep('wallet-connect');
+					updateProgress(75);
+				}, 500);
+			}
+		} catch (error) {
+			console.error('❌ Chain selection error:', error);
+			setLocalError(error instanceof Error ? error.message : 'Chain selection failed');
+		}
+	};
+
+	// ウォレット接続+認証の一括処理
 	const handleWalletConnectAndAuth = async () => {
 		setLocalError('');
-		setLoading(true);
-		setCurrentStep('wallet-connect');
+		setIsProcessing(true);
+		updateProgress(25);
 
 		try {
 			console.log('🔗 Starting wallet connection...');
-			const connection = await connectWallet(preferredChain);
+			
+			// 選択されたチェーンを取得
+			const selectedChain = getSelectedChain();
+			const chainType = selectedChain?.id === 'avalanche-fuji' ? 'evm' : 'evm'; // 現在は両方EVM
+			
+			// ウォレット接続
+			const connection = await connectWallet(chainType);
 			console.log('✅ Wallet connection result:', connection);
 			
-			// 接続成功後、wallet-signステップに移行
-			setCurrentStep('wallet-sign');
-			console.log('📱 Moving to sign step');
-
-			const result = await authenticateWallet(preferredChain,connection.address);
+			updateProgress(50);
+			setAuthStep('wallet-sign');
+			
+			// 認証実行
+			const result = await authenticateWallet(chainType, connection.address);
+			
+			if (result.success) {
+				console.log('🎉 Authentication successful');
+				updateProgress(100);
+			} else {
+				throw new Error(result.error || 'Authentication failed');
+			}
 			
 		} catch (error: any) {
 			console.error('❌ Wallet connection failed:', error);
 			setLocalError(error.message || 'Wallet connection failed');
-			setCurrentStep('error');
-			setLoading(false);
+			setAuthStep('error');
+			updateProgress(0);
+		} finally {
+			setIsProcessing(false);
 		}
 	};
 
+	// 手動認証
 	const handleWalletAuth = async () => {
 		setLocalError('');
-		setLoading(true);
+		setIsProcessing(true);
 
 		try {
-			console.log('🚀 ExtendedAuthModal: Starting manual wallet authentication...');
+			console.log('🚀 Manual wallet authentication...');
 
 			if (!walletAddress) {
 				throw new Error('Wallet not connected. Please connect your wallet first.');
 			}
 
-			console.log('📱 ExtendedAuthModal: Wallet connected, address:', walletAddress);
-			console.log('🔐 ExtendedAuthModal: Calling authenticateWallet...');
+			const selectedChain = getSelectedChain();
+			const chainType = selectedChain?.id === 'avalanche-fuji' ? 'evm' : 'evm';
 			
-			const result = await authenticateWallet(preferredChain);
-			console.log('✅ ExtendedAuthModal: Authentication result:', result);
+			const result = await authenticateWallet(chainType);
 
 			if (result.success) {
-				console.log('🎉 ExtendedAuthModal: Authentication successful');
+				console.log('🎉 Manual authentication successful');
 			} else {
-				setLocalError(result.error || 'Extended wallet authentication failed');
-				setCurrentStep('error');
-				console.error('❌ ExtendedAuthModal: Authentication failed:', result.error);
+				throw new Error(result.error || 'Authentication failed');
 			}
 		} catch (error: any) {
-			console.error('💥 ExtendedAuthModal: Authentication error:', error);
-			setLocalError(error.message || 'Extended wallet authentication failed');
-			setCurrentStep('error');
+			console.error('💥 Manual authentication error:', error);
+			setLocalError(error.message || 'Authentication failed');
+			setAuthStep('error');
+		} finally {
+			setIsProcessing(false);
 		}
 	};
 
 	// 戻るボタン処理
 	const handleBack = () => {
-		if (currentStep === 'wallet-sign') {
-			setCurrentStep('wallet-connect');
-		} else if (currentStep === 'error') {
-			setCurrentStep('wallet-connect');
+		const success = goBackStep();
+		if (!success) {
+			// 最初のステップの場合
+			setAuthStep(modalOptions.step?.skipChainSelection ? 'wallet-connect' : 'chain-select');
 		}
 		setLocalError('');
-		setLoading(false);
+		setIsProcessing(false);
+		updateProgress(Math.max(0, authFlowState.progress - 25));
 	};
 
-	// 🔧 現在の状態をログ出力（デバッグ用）
-	useEffect(() => {
-		console.log('🔍 Modal state:', {
-			currentStep,
-			loading,
-			localError,
-			walletAddress,
-			isAuthenticated,
-			authFlowStep: authFlowState.currentStep,
-			authFlowProgress: authFlowState.progress,
-			signatureRequired: authFlowState.signatureRequired
-		});
-	}, [currentStep, loading, localError, walletAddress, isAuthenticated, authFlowState]);
+	// ステップ別のタイトル取得
+	const getStepTitle = () => {
+		const stepTitles = modalOptions.step?.stepTitles;
+		switch (authFlowState.currentStep) {
+			case 'chain-select':
+				return stepTitles?.chainSelect || 'Select Network';
+			case 'wallet-connect':
+				return stepTitles?.walletConnect || 'Connect Wallet';
+			case 'wallet-sign':
+				return stepTitles?.walletSign || 'Sign Message';
+			case 'success':
+				return stepTitles?.success || 'Welcome!';
+			case 'error':
+				return stepTitles?.error || 'Connection Failed';
+			default:
+				return modalOptions.title || 'Connect Wallet';
+		}
+	};
+
+	// ステップ別の説明取得
+	const getStepDescription = () => {
+		switch (authFlowState.currentStep) {
+			case 'chain-select':
+				return modalOptions.chainSelection?.customDescription || 'Choose your preferred blockchain network';
+			case 'wallet-connect':
+				return 'Connect your Web3 wallet to access the platform';
+			case 'wallet-sign':
+				return 'Confirm your identity by signing the authentication message';
+			case 'success':
+				return 'Authentication successful! Welcome to the platform.';
+			case 'error':
+				return 'Please try again or contact support if the problem persists.';
+			default:
+				return 'Connect your Web3 wallet to get started';
+		}
+	};
+
+	// プログレスバー表示判定
+	const shouldShowProgress = () => {
+		return modalOptions.step?.showStepProgress && 
+			   authFlowState.progress > 0 && 
+			   authFlowState.progress < 100 && 
+			   authFlowState.currentStep !== 'success';
+	};
 
 	if (!isOpen) return null;
 
 	return (
 		<div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-			<div className="relative bg-black/95 backdrop-blur-md border border-neonGreen/30 rounded-lg shadow-2xl w-full max-w-md overflow-hidden">
-				{/* Scanline effect */}
-				<div className="absolute inset-0 overflow-hidden pointer-events-none">
-					<div className="absolute w-full h-px bg-gradient-to-r from-transparent via-neonGreen to-transparent animate-scanline opacity-30"></div>
-				</div>
-
-				{/* Progress indicator */}
-				{authFlowState.progress > 0 && authFlowState.progress < 100 && (
+			<CyberCard 
+				className="relative w-full max-w-2xl overflow-hidden animate-fade-in"
+				showEffects={true}
+			>
+				{/* 背景エフェクト */}
+				<GridPattern size={30} opacity={0.03} animated={true} />
+				
+				{/* プログレスバー */}
+				{shouldShowProgress() && (
 					<div className="absolute top-0 left-0 right-0 h-1 bg-dark-300">
 						<div
-							className="h-full bg-gradient-to-r from-neonGreen to-neonOrange transition-all duration-300"
+							className="h-full bg-gradient-to-r from-neonGreen to-neonOrange transition-all duration-500"
 							style={{ width: `${authFlowState.progress}%` }}
 						/>
 					</div>
 				)}
 
 				<div className="relative p-8">
-					{/* Header */}
-					<div className="flex justify-between items-center mb-6">
-						<div>
-							<h2 className="text-2xl font-heading font-bold text-white mb-1">
-								{currentStep === 'success' ? 'Welcome!' :
-									currentStep === 'error' ? 'Connection Failed' :
-										currentStep === 'wallet-sign' ? 'Sign Message' :
-											'Connect Wallet'}
-							</h2>
-							<p className="text-sm text-gray-400">
-								{currentStep === 'success' ? 'Authentication successful' :
-									currentStep === 'error' ? 'Please try again' :
-										currentStep === 'wallet-sign' ? 'Confirm your identity by signing' :
-											'Connect your Web3 wallet to access the platform'}
-							</p>
-							
-							{/* 🔧 デバッグ情報の表示 */}
-							{process.env.NODE_ENV === 'development' && (
-								<div className="text-xs text-gray-500 mt-1">
-									Step: {currentStep} | Flow: {authFlowState.currentStep} | Progress: {authFlowState.progress}%
-								</div>
+					{/* ヘッダー */}
+					<div className="flex justify-between items-start mb-6">
+						<div className="flex items-center space-x-4">
+							{/* 戻るボタン */}
+							{modalOptions.step?.allowStepBack && 
+							 authFlowState.stepManagement?.canGoBack && 
+							 authFlowState.currentStep !== 'success' && (
+								<button
+									onClick={handleBack}
+									className="p-2 text-gray-400 hover:text-neonGreen transition-colors rounded-sm hover:bg-dark-200 border border-dark-300 hover:border-neonGreen/50"
+									aria-label="Go back"
+								>
+									<ArrowLeft className="w-5 h-5" />
+								</button>
 							)}
+							
+							<div>
+								<h2 className="text-2xl font-heading font-bold text-white mb-1">
+									{getStepTitle()}
+								</h2>
+								<p className="text-sm text-gray-400">
+									{getStepDescription()}
+								</p>
+								
+								{/* デバッグ情報 */}
+								{process.env.NODE_ENV === 'development' && (
+									<div className="text-xs text-gray-500 mt-1">
+										Debug: {authFlowState.currentStep} | Progress: {authFlowState.progress}%
+									</div>
+								)}
+							</div>
 						</div>
+						
 						<button
 							onClick={onClose}
 							className="text-gray-400 hover:text-neonGreen transition-colors text-2xl font-light"
@@ -6095,18 +6213,16 @@ export const ExtendedAuthModal = ({
 						</button>
 					</div>
 
-					{/* Error Display */}
-					{(localError || authError) && currentStep !== 'success' && (
-						<div className="bg-red-900/30 border border-red-500/50 text-red-300 px-4 py-3 rounded-sm mb-4 text-sm">
+					{/* エラー表示 */}
+					{(localError || authError) && authFlowState.currentStep !== 'success' && (
+						<div className="bg-gradient-to-r from-red-900/30 to-red-800/30 border border-red-500/50 text-red-300 px-4 py-3 rounded-sm mb-6 backdrop-blur-sm">
 							<div className="flex items-center">
 								<AlertCircle className="w-4 h-4 mr-2 flex-shrink-0" />
 								<div>
-									<div>{localError || authError}</div>
-									{/* 🔧 デバッグ情報の表示 */}
+									<div className="text-sm font-medium">{localError || authError}</div>
 									{process.env.NODE_ENV === 'development' && (
-										<div className="text-xs text-gray-400 mt-2">
-											Debug: walletAddress = {walletAddress || 'null'} | 
-											isAuthenticated = {isAuthenticated ? 'true' : 'false'}
+										<div className="text-xs text-red-200 mt-1">
+											Wallet: {walletAddress || 'Not connected'} | Auth: {isAuthenticated ? 'Yes' : 'No'}
 										</div>
 									)}
 								</div>
@@ -6114,173 +6230,257 @@ export const ExtendedAuthModal = ({
 						</div>
 					)}
 
-					{/* Success State */}
-					{currentStep === 'success' && (
-						<div className="text-center py-8">
-							<div className="w-16 h-16 bg-gradient-to-br from-neonGreen/20 to-neonOrange/20 rounded-full flex items-center justify-center mx-auto mb-4">
-								<CheckCircle className="w-8 h-8 text-neonGreen" />
-							</div>
-							<h3 className="text-xl font-bold text-white mb-2">Authentication Complete</h3>
-							<p className="text-gray-400 mb-4">You are now connected to the network</p>
-							{walletAddress && (
-								<div className="bg-neonGreen/10 border border-neonGreen/30 rounded-sm p-3">
-									<p className="text-xs text-gray-400">Connected Wallet</p>
-									<p className="text-sm text-neonGreen font-mono">{walletAddress.slice(0, 6)}...{walletAddress.slice(-4)}</p>
-								</div>
-							)}
-						</div>
-					)}
+					{/* メインコンテンツ */}
+					<div className="min-h-[400px]">
+						{/* チェーン選択ステップ */}
+						{authFlowState.currentStep === 'chain-select' && (
+							<ChainSelector
+								onChainSelect={handleChainSelect}
+								title={modalOptions.chainSelection?.customTitle}
+								description={modalOptions.chainSelection?.customDescription}
+								allowedChains={modalOptions.chainSelection?.availableChains}
+								variant={modalOptions.chainSelection?.variant || 'default'}
+								columns={modalOptions.chainSelection?.columns || 2}
+								loading={isProcessing}
+								error={localError}
+								className="animate-slide-in"
+							/>
+						)}
 
-					{/* Wallet Connect Step */}
-					{currentStep === 'wallet-connect' && (
-						<div className="space-y-4">
-							{/* Web3 Authentication Info */}
-							<div className="bg-gradient-to-r from-neonGreen/10 to-neonOrange/10 border border-neonGreen/30 rounded-sm p-4">
-								<div className="flex items-center mb-2">
-									<Shield className="w-5 h-5 text-neonGreen mr-2" />
-									<span className="text-white font-semibold">Web3 Authentication</span>
-								</div>
-								<p className="text-sm text-gray-300 mb-3">
-									Connect your crypto wallet for secure, decentralized authentication.
-								</p>
-								<ul className="text-xs text-gray-400 space-y-1">
-									<li>• No passwords required</li>
-									<li>• Cryptographic signature verification</li>
-									<li>• Supports MetaMask, WalletConnect, and more</li>
-								</ul>
-							</div>
+						{/* ウォレット接続ステップ */}
+						{authFlowState.currentStep === 'wallet-connect' && (
+							<div className="space-y-6 animate-slide-in">
+								{/* 選択されたチェーン表示 */}
+								{getSelectedChain() && (
+									<CyberCard className="bg-gradient-to-r from-neonGreen/10 to-neonOrange/10 border-neonGreen/30">
+										<div className="flex items-center space-x-3">
+											<span className="text-2xl">{getSelectedChain()?.icon}</span>
+											<div>
+												<div className="text-white font-medium">
+													Selected Network: {getSelectedChain()?.displayName}
+												</div>
+												<div className="text-gray-400 text-sm">
+													Chain ID: {getSelectedChain()?.chainId}
+												</div>
+											</div>
+										</div>
+									</CyberCard>
+								)}
 
-							{/* Connect Button */}
-							<button
-								onClick={handleWalletConnectAndAuth}
-								disabled={loading}
-								className="w-full relative px-6 py-4 bg-gradient-to-r from-neonGreen to-neonOrange text-black font-semibold rounded-sm overflow-hidden group transition-all duration-200 hover:shadow-lg hover:shadow-neonGreen/25 disabled:opacity-50 disabled:cursor-not-allowed"
-							>
-								<div className="flex items-center justify-center">
-									{loading ? (
-										<>
-											<Loader2 className="w-5 h-5 animate-spin mr-2" />
-											Connecting...
-										</>
-									) : (
-										<>
-											<Wallet className="w-5 h-5 mr-2" />
-											Connect Wallet
-											<ChevronRight className="w-4 h-4 ml-2" />
-										</>
+								{/* Web3認証情報 */}
+								<CyberCard className="bg-gradient-to-r from-neonGreen/5 to-neonOrange/5">
+									<div className="flex items-center mb-3">
+										<Shield className="w-5 h-5 text-neonGreen mr-2" />
+										<span className="text-white font-semibold">Web3 Authentication</span>
+									</div>
+									<p className="text-sm text-gray-300 mb-4">
+										Connect your crypto wallet for secure, decentralized authentication.
+									</p>
+									<ul className="text-xs text-gray-400 space-y-1">
+										<li>• No passwords required</li>
+										<li>• Cryptographic signature verification</li>
+										<li>• Supports MetaMask, WalletConnect, and more</li>
+									</ul>
+								</CyberCard>
+
+								{/* 接続ボタン */}
+								<button
+									onClick={handleWalletConnectAndAuth}
+									disabled={isProcessing}
+									className="w-full relative px-6 py-4 bg-gradient-to-r from-neonGreen to-neonOrange text-black font-semibold rounded-sm overflow-hidden group transition-all duration-200 hover:shadow-lg hover:shadow-neonGreen/25 disabled:opacity-50 disabled:cursor-not-allowed"
+								>
+									<div className="flex items-center justify-center">
+										{isProcessing ? (
+											<>
+												<Loader2 className="w-5 h-5 animate-spin mr-2" />
+												Connecting...
+											</>
+										) : (
+											<>
+												<Wallet className="w-5 h-5 mr-2" />
+												Connect Wallet
+												<ChevronRight className="w-4 h-4 ml-2" />
+											</>
+										)}
+									</div>
+								</button>
+
+								{/* 追加情報 */}
+								<div className="text-center">
+									<p className="text-xs text-gray-500">
+										New to Web3 wallets?{' '}
+										<a
+											href="https://ethereum.org/en/wallets/"
+											target="_blank"
+											rel="noopener noreferrer"
+											className="text-neonGreen hover:text-neonOrange transition-colors"
+										>
+											Learn More
+										</a>
+									</p>
+								</div>
+							</div>
+						)}
+
+						{/* 署名ステップ */}
+						{authFlowState.currentStep === 'wallet-sign' && (
+							<div className="text-center space-y-6 animate-slide-in">
+								<div className="w-16 h-16 bg-gradient-to-br from-neonGreen/20 to-neonOrange/20 rounded-full flex items-center justify-center mx-auto border border-neonGreen/30">
+									<Wallet className="w-8 h-8 text-neonGreen" />
+								</div>
+
+								<div>
+									<h3 className="text-xl font-bold text-white mb-2">Sign Authentication Message</h3>
+									<p className="text-gray-400 mb-4">
+										{isProcessing && unifiedAuthFlowState.signatureRequired 
+											? 'Please check your wallet and sign the message to complete authentication.'
+											: 'Please sign the message in your wallet to verify your identity.'
+										}
+									</p>
+									{walletAddress && (
+										<CyberCard className="bg-neonGreen/10 border-neonGreen/30 inline-block">
+											<p className="text-xs text-gray-400">Connected Wallet</p>
+											<p className="text-sm text-neonGreen font-mono">
+												{walletAddress.slice(0, 6)}...{walletAddress.slice(-4)}
+											</p>
+										</CyberCard>
 									)}
 								</div>
-							</button>
 
-							{/* Additional Info */}
-							<div className="text-center">
-								<p className="text-xs text-gray-500">
-									New to Web3 wallets?{' '}
-									<a
-										href="https://ethereum.org/en/wallets/"
-										target="_blank"
-										rel="noopener noreferrer"
-										className="text-neonGreen hover:text-neonOrange transition-colors"
+								{/* 署名状態インジケーター */}
+								{unifiedAuthFlowState.signatureRequired && (
+									<CyberCard className="bg-neonOrange/10 border-neonOrange/30">
+										<div className="flex items-center justify-center text-neonOrange">
+											<Settings className="w-4 h-4 mr-2" />
+											<span className="text-sm">Signature required in wallet</span>
+										</div>
+									</CyberCard>
+								)}
+
+								<div className="space-y-3">
+									<button
+										onClick={handleWalletAuth}
+										disabled={isProcessing}
+										className="w-full relative px-6 py-3 bg-gradient-to-r from-neonGreen to-neonOrange text-black font-semibold rounded-sm overflow-hidden group transition-all duration-200 hover:shadow-lg hover:shadow-neonGreen/25 disabled:opacity-50 disabled:cursor-not-allowed"
 									>
-										Learn More
-									</a>
-								</p>
-							</div>
-						</div>
-					)}
+										{isProcessing ? (
+											<div className="flex items-center justify-center">
+												<Loader2 className="w-5 h-5 animate-spin mr-2" />
+												{unifiedAuthFlowState.signatureRequired ? 'Waiting for signature...' : 'Processing...'}
+											</div>
+										) : (
+											'Sign Message'
+										)}
+									</button>
 
-					{/* Wallet Sign Step */}
-					{currentStep === 'wallet-sign' && (
-						<div className="text-center space-y-6">
-							<div className="w-16 h-16 bg-gradient-to-br from-neonGreen/20 to-neonOrange/20 rounded-full flex items-center justify-center mx-auto">
-								<Wallet className="w-8 h-8 text-neonGreen" />
+									<button
+										onClick={handleBack}
+										className="w-full px-6 py-3 bg-dark-200 hover:bg-dark-300 border border-gray-600 text-white font-medium rounded-sm transition-all duration-200"
+									>
+										Back
+									</button>
+								</div>
 							</div>
+						)}
 
-							<div>
-								<h3 className="text-xl font-bold text-white mb-2">Sign Authentication Message</h3>
-								<p className="text-gray-400 mb-4">
-									{loading && authFlowState.signatureRequired 
-										? 'Please check your wallet and sign the message to complete authentication.'
-										: 'Please sign the message in your wallet to verify your identity.'
-									}
-								</p>
+						{/* 成功ステップ */}
+						{authFlowState.currentStep === 'success' && (
+							<div className="text-center py-8 animate-slide-in">
+								<div className="w-16 h-16 bg-gradient-to-br from-neonGreen/20 to-neonOrange/20 rounded-full flex items-center justify-center mx-auto mb-4 border border-neonGreen animate-pulse-fast">
+									<CheckCircle className="w-8 h-8 text-neonGreen" />
+								</div>
+								<h3 className="text-xl font-bold text-white mb-2">Authentication Complete</h3>
+								<p className="text-gray-400 mb-4">You are now connected to the network</p>
 								{walletAddress && (
-									<div className="bg-neonGreen/10 border border-neonGreen/30 rounded-sm p-3 mb-4">
+									<CyberCard className="bg-neonGreen/10 border-neonGreen/30 inline-block">
 										<p className="text-xs text-gray-400">Connected Wallet</p>
-										<p className="text-sm text-neonGreen font-mono">{walletAddress.slice(0, 6)}...{walletAddress.slice(-4)}</p>
+										<p className="text-sm text-neonGreen font-mono">
+											{walletAddress.slice(0, 6)}...{walletAddress.slice(-4)}
+										</p>
+									</CyberCard>
+								)}
+								{getSelectedChain() && (
+									<div className="mt-3 text-xs text-gray-400">
+										Network: {getSelectedChain()?.displayName}
 									</div>
 								)}
 							</div>
+						)}
 
-							{/* Signature Required Indicator */}
-							{authFlowState.signatureRequired && (
-								<div className="bg-neonOrange/10 border border-neonOrange/30 rounded-sm p-3 mb-4">
-									<div className="flex items-center justify-center text-neonOrange">
-										<Settings className="w-4 h-4 mr-2" />
-										<span className="text-sm">Signature required in wallet</span>
-									</div>
+						{/* エラーステップ */}
+						{authFlowState.currentStep === 'error' && (
+							<div className="text-center space-y-6 animate-slide-in">
+								<div className="w-16 h-16 bg-red-500/20 rounded-full flex items-center justify-center mx-auto border border-red-500/50">
+									<AlertCircle className="w-8 h-8 text-red-400" />
 								</div>
-							)}
 
-							<div className="space-y-3">
-								<button
-									onClick={handleWalletAuth}
-									disabled={loading}
-									className="w-full relative px-6 py-3 bg-gradient-to-r from-neonGreen to-neonOrange text-black font-semibold rounded-sm overflow-hidden group transition-all duration-200 hover:shadow-lg hover:shadow-neonGreen/25 disabled:opacity-50 disabled:cursor-not-allowed"
-								>
-									{loading ? (
-										<div className="flex items-center justify-center">
-											<Loader2 className="w-5 h-5 animate-spin mr-2" />
-											{authFlowState.signatureRequired ? 'Waiting for signature...' : 'Processing...'}
-										</div>
-									) : (
-										'Sign Message'
-									)}
-								</button>
+								<div>
+									<h3 className="text-xl font-bold text-white mb-2">Connection Failed</h3>
+									<p className="text-gray-400 mb-4">
+										{localError || authError || 'An unexpected error occurred'}
+									</p>
+								</div>
 
-								<button
-									onClick={handleBack}
-									className="w-full px-6 py-3 bg-dark-200 hover:bg-dark-300 border border-gray-600 text-white font-medium rounded-sm transition-all duration-200"
-								>
-									Back
-								</button>
+								<div className="space-y-3">
+									<button
+										onClick={handleBack}
+										className="w-full px-6 py-3 bg-gradient-to-r from-neonGreen to-neonOrange text-black font-semibold rounded-sm transition-all duration-200 hover:shadow-lg hover:shadow-neonGreen/25"
+									>
+										Try Again
+									</button>
+
+									<button
+										onClick={onClose}
+										className="w-full px-6 py-3 bg-dark-200 hover:bg-dark-300 border border-gray-600 text-white font-medium rounded-sm transition-all duration-200"
+									>
+										Close
+									</button>
+								</div>
 							</div>
-						</div>
-					)}
-
-					{/* Error State with Retry */}
-					{currentStep === 'error' && (
-						<div className="text-center space-y-6">
-							<div className="w-16 h-16 bg-red-500/20 rounded-full flex items-center justify-center mx-auto">
-								<AlertCircle className="w-8 h-8 text-red-400" />
-							</div>
-
-							<div>
-								<h3 className="text-xl font-bold text-white mb-2">Connection Failed</h3>
-								<p className="text-gray-400 mb-4">
-									{localError || authError || 'An unexpected error occurred'}
-								</p>
-							</div>
-
-							<div className="space-y-3">
-								<button
-									onClick={handleBack}
-									className="w-full px-6 py-3 bg-gradient-to-r from-neonGreen to-neonOrange text-black font-semibold rounded-sm transition-all duration-200 hover:shadow-lg hover:shadow-neonGreen/25"
-								>
-									Try Again
-								</button>
-
-								<button
-									onClick={onClose}
-									className="w-full px-6 py-3 bg-dark-200 hover:bg-dark-300 border border-gray-600 text-white font-medium rounded-sm transition-all duration-200"
-								>
-									Close
-								</button>
-							</div>
-						</div>
-					)}
+						)}
+					</div>
 				</div>
-			</div>
+
+				{/* アニメーション定義 */}
+				<style jsx>{`
+					@keyframes fade-in {
+						from {
+							opacity: 0;
+							transform: scale(0.95);
+						}
+						to {
+							opacity: 1;
+							transform: scale(1);
+						}
+					}
+					
+					@keyframes slide-in {
+						from {
+							opacity: 0;
+							transform: translateY(20px);
+						}
+						to {
+							opacity: 1;
+							transform: translateY(0);
+						}
+					}
+					
+					.animate-fade-in {
+						animation: fade-in 0.3s ease-out;
+					}
+					
+					.animate-slide-in {
+						animation: slide-in 0.4s ease-out;
+					}
+					
+					@media (prefers-reduced-motion: reduce) {
+						.animate-fade-in,
+						.animate-slide-in {
+							animation: none;
+						}
+					}
+				`}</style>
+			</CyberCard>
 		</div>
 	);
 };-e 
@@ -6291,7 +6491,7 @@ export const ExtendedAuthModal = ({
 
 import React from 'react';
 import { ChainCardProps } from '@/types/chain-selection';
-import { testnetUtils } from '@/auth/config/testnet-chains';
+import CyberCard from '@/app/components/common/CyberCard';
 import {
 	Check,
 	Info,
@@ -6304,8 +6504,8 @@ import {
 } from 'lucide-react';
 
 /**
- * 個別チェーン選択カードコンポーネント
- * サイバーパンクテーマに合致したデザイン
+ * CyberCardベースの個別チェーン選択カード
+ * 既存のサイバーパンクテーマとの統一性を保持
  */
 export const ChainCard: React.FC<ChainCardProps> = ({
 	chain,
@@ -6332,82 +6532,69 @@ export const ChainCard: React.FC<ChainCardProps> = ({
 		}
 	};
 
-	// バリアント別のスタイリング
-	const getCardClasses = () => {
-		const baseClasses = `
-      relative cursor-pointer transition-all duration-300 rounded-sm border overflow-hidden
-      ${isDisabled ? 'opacity-50 cursor-not-allowed' : 'hover:shadow-lg'}
+	// バリアント別の設定
+	const getVariantConfig = () => {
+		switch (variant) {
+			case 'compact':
+				return {
+					cyberVariant: 'interactive' as const,
+					showMetadata: false,
+					minHeight: 'min-h-[100px]',
+					padding: 'p-4',
+				};
+			case 'detailed':
+				return {
+					cyberVariant: 'default' as const,
+					showMetadata: true,
+					minHeight: 'min-h-[200px]',
+					padding: 'p-6',
+				};
+			default:
+				return {
+					cyberVariant: 'interactive' as const,
+					showMetadata: showMetadata,
+					minHeight: 'min-h-[160px]',
+					padding: 'p-6',
+				};
+		}
+	};
+
+	const config = getVariantConfig();
+
+	// 選択状態とローディング状態のスタイル
+	const getCardClassName = () => {
+		let classes = `
+      ${config.minHeight} 
+      transition-all duration-300 ease-out
+      ${isDisabled ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}
       ${className}
     `;
 
-		const variantClasses = {
-			default: `
-        p-6 min-h-[160px]
-        ${isSelected
-					? 'bg-gradient-to-br from-neonGreen/10 to-neonOrange/10 border-neonGreen'
-					: 'bg-dark-200/50 border-dark-300 hover:border-neonGreen/50'
-				}
-      `,
-			compact: `
-        p-4 min-h-[100px]
-        ${isSelected
-					? 'bg-gradient-to-br from-neonGreen/10 to-neonOrange/10 border-neonGreen'
-					: 'bg-dark-200/50 border-dark-300 hover:border-neonGreen/50'
-				}
-      `,
-			detailed: `
-        p-8 min-h-[200px]
-        ${isSelected
-					? 'bg-gradient-to-br from-neonGreen/10 to-neonOrange/10 border-neonGreen'
-					: 'bg-dark-200/50 border-dark-300 hover:border-neonGreen/50'
-				}
-      `,
-		};
-
-		return `${baseClasses} ${variantClasses[variant]}`;
-	};
-
-	// チェーンの状態インジケーター
-	const renderStatusIndicator = () => {
-		if (isLoading) {
-			return (
-				<div className="absolute top-3 right-3">
-					<Loader2 className="w-4 h-4 text-neonGreen animate-spin" />
-				</div>
-			);
-		}
-
 		if (isSelected) {
-			return (
-				<div className="absolute top-3 right-3">
-					<div className="w-6 h-6 bg-neonGreen rounded-full flex items-center justify-center">
-						<Check className="w-4 h-4 text-black" />
-					</div>
-				</div>
-			);
+			classes += ` 
+        border-neonGreen 
+        bg-gradient-to-br from-neonGreen/10 to-neonOrange/10
+        shadow-lg shadow-neonGreen/25
+        scale-[1.02]
+      `;
+		} else if (!isDisabled) {
+			classes += ` hover:border-neonGreen/50 hover:scale-[1.01]`;
 		}
 
-		if (!chain.isSupported) {
-			return (
-				<div className="absolute top-3 right-3">
-					<AlertTriangle className="w-4 h-4 text-yellow-400" />
-				</div>
-			);
-		}
-
-		return null;
+		return classes;
 	};
 
-	// チェーンアイコンとタイトル
-	const renderHeader = () => (
-		<div className="flex items-start justify-between mb-3">
+	// チェーンアイコンとヘッダー情報
+	const renderChainHeader = () => (
+		<div className="flex items-start justify-between mb-4">
 			<div className="flex items-center space-x-3">
 				{/* チェーンアイコン */}
 				<div
-					className="w-10 h-10 rounded-sm flex items-center justify-center text-2xl"
+					className="w-10 h-10 rounded-sm flex items-center justify-center text-2xl border transition-all duration-300"
 					style={{
 						background: `linear-gradient(135deg, ${chain.colors.primary}20, ${chain.colors.secondary}20)`,
-						border: `1px solid ${chain.colors.primary}40`,
+						borderColor: isSelected ? chain.colors.primary : `${chain.colors.primary}40`,
+						boxShadow: isSelected ? `0 0 15px ${chain.colors.primary}40` : 'none',
 					}}
 				>
 					{chain.icon}
@@ -6425,18 +6612,58 @@ export const ChainCard: React.FC<ChainCardProps> = ({
 				</div>
 			</div>
 
-			{/* 情報ボタン */}
-			{onInfoClick && variant === 'detailed' && (
+			{/* 状態インジケーター */}
+			{renderStatusIndicator()}
+		</div>
+	);
+
+	// 状態インジケーター
+	const renderStatusIndicator = () => {
+		if (isLoading) {
+			return (
+				<div className="flex items-center space-x-1">
+					<Loader2 className="w-4 h-4 text-neonGreen animate-spin" />
+					{variant === 'detailed' && (
+						<span className="text-xs text-neonGreen">Connecting</span>
+					)}
+				</div>
+			);
+		}
+
+		if (isSelected) {
+			return (
+				<div className="w-6 h-6 bg-neonGreen rounded-full flex items-center justify-center animate-pulse-fast">
+					<Check className="w-4 h-4 text-black" />
+				</div>
+			);
+		}
+
+		if (!chain.isSupported) {
+			return (
+				<div className="flex items-center space-x-1">
+					<AlertTriangle className="w-4 h-4 text-yellow-400" />
+					{variant === 'detailed' && (
+						<span className="text-xs text-yellow-400">Unavailable</span>
+					)}
+				</div>
+			);
+		}
+
+		// 情報ボタン（詳細表示時のみ）
+		if (onInfoClick && variant === 'detailed') {
+			return (
 				<button
 					onClick={handleInfoClick}
-					className="p-1 text-gray-400 hover:text-neonGreen transition-colors"
+					className="p-1 text-gray-400 hover:text-neonGreen transition-colors rounded-sm hover:bg-dark-200"
 					title="More information"
 				>
 					<Info className="w-4 h-4" />
 				</button>
-			)}
-		</div>
-	);
+			);
+		}
+
+		return null;
+	};
 
 	// 説明文
 	const renderDescription = () => {
@@ -6451,35 +6678,37 @@ export const ChainCard: React.FC<ChainCardProps> = ({
 
 	// メタデータ（スペック情報）
 	const renderMetadata = () => {
-		if (!showMetadata || variant === 'compact') return null;
+		if (!config.showMetadata) return null;
 
 		return (
-			<div className="space-y-2 mb-4">
-				{/* ブロック時間 */}
-				<div className="flex items-center justify-between text-xs">
-					<div className="flex items-center space-x-1 text-gray-400">
-						<Clock className="w-3 h-3" />
-						<span>Block Time</span>
+			<div className="space-y-3 mb-4">
+				<div className="grid grid-cols-2 gap-3 text-xs">
+					{/* ブロック時間 */}
+					<div className="flex items-center justify-between p-2 bg-dark-200/50 rounded-sm border border-dark-300">
+						<div className="flex items-center space-x-1 text-gray-400">
+							<Clock className="w-3 h-3" />
+							<span>Block Time</span>
+						</div>
+						<span className="text-white font-mono">~{chain.metadata.averageBlockTime}s</span>
 					</div>
-					<span className="text-white">~{chain.metadata.averageBlockTime}s</span>
+
+					{/* ガストークン */}
+					<div className="flex items-center justify-between p-2 bg-dark-200/50 rounded-sm border border-dark-300">
+						<div className="flex items-center space-x-1 text-gray-400">
+							<Zap className="w-3 h-3" />
+							<span>Gas Token</span>
+						</div>
+						<span className="text-white font-mono">{chain.metadata.gasTokenSymbol}</span>
+					</div>
 				</div>
 
 				{/* 確認数 */}
-				<div className="flex items-center justify-between text-xs">
+				<div className="flex items-center justify-between text-xs p-2 bg-dark-200/30 rounded-sm">
 					<div className="flex items-center space-x-1 text-gray-400">
 						<Shield className="w-3 h-3" />
-						<span>Confirmations</span>
+						<span>Required Confirmations</span>
 					</div>
 					<span className="text-white">{chain.metadata.confirmations}</span>
-				</div>
-
-				{/* ガストークン */}
-				<div className="flex items-center justify-between text-xs">
-					<div className="flex items-center space-x-1 text-gray-400">
-						<Zap className="w-3 h-3" />
-						<span>Gas Token</span>
-					</div>
-					<span className="text-white">{chain.metadata.gasTokenSymbol}</span>
 				</div>
 			</div>
 		);
@@ -6490,13 +6719,13 @@ export const ChainCard: React.FC<ChainCardProps> = ({
 		if (variant !== 'detailed' || !chain.metadata.features.length) return null;
 
 		return (
-			<div className="space-y-2">
-				<div className="text-xs text-gray-400 font-medium">Features</div>
+			<div className="space-y-2 mb-4">
+				<div className="text-xs text-gray-400 font-medium">Key Features</div>
 				<div className="flex flex-wrap gap-1">
 					{chain.metadata.features.slice(0, 3).map((feature, index) => (
 						<span
 							key={index}
-							className="px-2 py-1 bg-dark-300 border border-gray-600 rounded-sm text-xs text-gray-300"
+							className="px-2 py-1 bg-gradient-to-r from-neonGreen/10 to-neonOrange/10 border border-neonGreen/30 rounded-sm text-xs text-neonGreen"
 						>
 							{feature}
 						</span>
@@ -6511,73 +6740,86 @@ export const ChainCard: React.FC<ChainCardProps> = ({
 		);
 	};
 
-	// ネットワーク状況インジケーター
-	const renderNetworkStatus = () => {
+	// フッター情報
+	const renderFooter = () => {
 		if (variant === 'compact') return null;
 
 		return (
-			<div className="absolute bottom-3 left-3">
-				<div className="flex items-center space-x-1">
+			<div className="flex items-center justify-between mt-auto pt-3 border-t border-dark-300">
+				{/* ネットワーク状況 */}
+				<div className="flex items-center space-x-2">
 					<div
-						className={`w-2 h-2 rounded-full ${chain.isSupported ? 'bg-neonGreen' : 'bg-red-400'
+						className={`w-2 h-2 rounded-full ${chain.isSupported ? 'bg-neonGreen animate-pulse' : 'bg-red-400'
 							}`}
 					/>
 					<span className="text-xs text-gray-400">
 						{chain.isSupported ? 'Available' : 'Unavailable'}
 					</span>
 				</div>
+
+				{/* エクスプローラーリンク */}
+				{variant === 'detailed' && chain.network.blockExplorer && (
+					<a
+						href={chain.network.blockExplorer}
+						target="_blank"
+						rel="noopener noreferrer"
+						onClick={(e) => e.stopPropagation()}
+						className="flex items-center space-x-1 text-gray-400 hover:text-neonGreen transition-colors text-xs"
+						title="View on explorer"
+					>
+						<ExternalLink className="w-3 h-3" />
+						<span>Explorer</span>
+					</a>
+				)}
 			</div>
 		);
 	};
 
-	// エクスプローラーリンク（詳細表示時のみ）
-	const renderExplorerLink = () => {
-		if (variant !== 'detailed' || !chain.network.blockExplorer) return null;
+	// メインコンテンツ
+	const cardContent = (
+		<div className="h-full flex flex-col relative">
+			{/* ヘッダー */}
+			{renderChainHeader()}
 
-		return (
-			<div className="absolute bottom-3 right-3">
-				<a
-					href={chain.network.blockExplorer}
-					target="_blank"
-					rel="noopener noreferrer"
-					onClick={(e) => e.stopPropagation()}
-					className="text-gray-400 hover:text-neonGreen transition-colors"
-					title="View on explorer"
-				>
-					<ExternalLink className="w-4 h-4" />
-				</a>
-			</div>
-		);
-	};
+			{/* 説明文 */}
+			{renderDescription()}
 
-	// ホバーエフェクト
-	const renderHoverEffects = () => {
-		if (isDisabled || isLoading) return null;
+			{/* メタデータ */}
+			{renderMetadata()}
 
-		return (
-			<>
-				{/* グロー効果 */}
-				<div
-					className={`absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-300 rounded-sm blur-sm ${isSelected ? 'bg-neonGreen/20' : 'bg-neonGreen/10'
-						}`}
-				/>
+			{/* 機能バッジ */}
+			{renderFeatures()}
 
-				{/* スキャンライン効果 */}
+			{/* フッター */}
+			{renderFooter()}
+
+			{/* ローディングオーバーレイ */}
+			{isLoading && (
+				<div className="absolute inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center rounded-sm">
+					<div className="flex flex-col items-center space-y-2 text-neonGreen">
+						<Loader2 className="w-6 h-6 animate-spin" />
+						<span className="text-sm font-medium">Connecting...</span>
+					</div>
+				</div>
+			)}
+
+			{/* 選択時のパルス効果 */}
+			{isSelected && (
+				<div className="absolute inset-0 bg-neonGreen/5 animate-pulse rounded-sm pointer-events-none" />
+			)}
+
+			{/* ホバー時のスキャンライン効果 */}
+			{!isDisabled && !isLoading && (
 				<div className="absolute inset-0 overflow-hidden pointer-events-none opacity-0 group-hover:opacity-30 transition-opacity duration-300">
 					<div className="absolute w-full h-px bg-gradient-to-r from-transparent via-neonGreen to-transparent animate-scanline top-1/2" />
 				</div>
-
-				{/* パルス効果（選択時） */}
-				{isSelected && (
-					<div className="absolute inset-0 bg-neonGreen/5 animate-pulse rounded-sm" />
-				)}
-			</>
-		);
-	};
+			)}
+		</div>
+	);
 
 	return (
 		<div
-			className={`group ${getCardClasses()}`}
+			className="group"
 			onClick={handleClick}
 			role="button"
 			tabIndex={isDisabled ? -1 : 0}
@@ -6590,50 +6832,14 @@ export const ChainCard: React.FC<ChainCardProps> = ({
 			aria-selected={isSelected}
 			aria-disabled={isDisabled}
 		>
-			{/* 背景エフェクト */}
-			{renderHoverEffects()}
-
-			{/* ステータスインジケーター */}
-			{renderStatusIndicator()}
-
-			{/* メインコンテンツ */}
-			<div className="relative z-10">
-				{/* ヘッダー */}
-				{renderHeader()}
-
-				{/* 説明文 */}
-				{renderDescription()}
-
-				{/* メタデータ */}
-				{renderMetadata()}
-
-				{/* 機能バッジ */}
-				{renderFeatures()}
-			</div>
-
-			{/* フッター要素 */}
-			{renderNetworkStatus()}
-			{renderExplorerLink()}
-
-			{/* ローディングオーバーレイ */}
-			{isLoading && (
-				<div className="absolute inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center rounded-sm">
-					<div className="flex items-center space-x-2 text-neonGreen">
-						<Loader2 className="w-5 h-5 animate-spin" />
-						<span className="text-sm">Connecting...</span>
-					</div>
-				</div>
-			)}
-
-			{/* 選択時のボーダー強調 */}
-			{isSelected && (
-				<div
-					className="absolute inset-0 rounded-sm pointer-events-none"
-					style={{
-						boxShadow: `0 0 0 2px ${chain.colors.primary}40, 0 0 20px ${chain.colors.primary}20`,
-					}}
-				/>
-			)}
+			<CyberCard
+				variant={config.cyberVariant}
+				className={getCardClassName()}
+				showEffects={!isLoading}
+				glowIntensity={isSelected ? 'high' : 'medium'}
+			>
+				{cardContent}
+			</CyberCard>
 		</div>
 	);
 };
@@ -6649,6 +6855,8 @@ import { ChainSelectorProps, SelectableChain, SelectableChainId } from '@/types/
 import { testnetUtils, SUPPORTED_TESTNETS } from '@/auth/config/testnet-chains';
 import { ChainSelectionUtils } from '@/auth/utils/chain-utils';
 import ChainCard from './ChainCard';
+import CyberCard from '@/app/components/common/CyberCard';
+import GridPattern from '@/app/components/common/GridPattern';
 import {
 	ArrowLeft,
 	AlertCircle,
@@ -6662,8 +6870,8 @@ import {
 } from 'lucide-react';
 
 /**
- * チェーン選択メイン画面コンポーネント
- * 複数チェーンの選択UIとメタデータ表示
+ * Tailwindベースのチェーン選択メイン画面
+ * 既存のサイバーパンクテーマとの完全統一
  */
 export const ChainSelector: React.FC<ChainSelectorProps> = ({
 	onChainSelect,
@@ -6682,14 +6890,13 @@ export const ChainSelector: React.FC<ChainSelectorProps> = ({
 	// ローカル状態
 	const [selectedChain, setSelectedChain] = useState<SelectableChainId | null>(null);
 	const [loadingChain, setLoadingChain] = useState<SelectableChainId | null>(null);
-	const [chainErrors, setChainErrors] = useState<Record<SelectableChainId, string>>();
+	const [chainErrors, setChainErrors] = useState<Record<SelectableChainId, string>>({} as Record<SelectableChainId, string>);
 	const [showComparison, setShowComparison] = useState(false);
 
 	// 利用可能なチェーンをフィルタリング
 	const availableChains = useMemo(() => {
 		let chains = SUPPORTED_TESTNETS;
 
-		// allowedChainsが指定されている場合はフィルタリング
 		if (allowedChains && allowedChains.length > 0) {
 			chains = chains.filter(chain => allowedChains.includes(chain.id));
 		}
@@ -6739,13 +6946,11 @@ export const ChainSelector: React.FC<ChainSelectorProps> = ({
 
 	// グリッドレイアウトのクラス
 	const getGridClasses = () => {
-		const baseClasses = 'grid gap-4';
-
 		if (variant === 'compact') {
-			return `${baseClasses} grid-cols-1`;
+			return 'grid grid-cols-1 gap-4';
 		}
 
-		return `${baseClasses} ${columns === 1 ? 'grid-cols-1' : 'grid-cols-1 md:grid-cols-2'}`;
+		return `grid gap-4 ${columns === 1 ? 'grid-cols-1' : 'grid-cols-1 md:grid-cols-2'}`;
 	};
 
 	// 比較データの生成
@@ -6761,22 +6966,22 @@ export const ChainSelector: React.FC<ChainSelectorProps> = ({
 	const renderHeader = () => (
 		<div className="mb-8">
 			{/* タイトル行 */}
-			<div className="flex items-center justify-between mb-4">
-				<div className="flex items-center space-x-3">
+			<div className="flex items-center justify-between mb-6">
+				<div className="flex items-center space-x-4">
 					{showBackButton && onBack && (
 						<button
 							onClick={onBack}
-							className="p-2 text-gray-400 hover:text-neonGreen transition-colors rounded-sm hover:bg-dark-200"
+							className="p-2 text-gray-400 hover:text-neonGreen transition-colors rounded-sm hover:bg-dark-200 border border-dark-300 hover:border-neonGreen/50"
 							aria-label="Go back"
 						>
 							<ArrowLeft className="w-5 h-5" />
 						</button>
 					)}
 					<div>
-						<h2 className="text-2xl font-heading font-bold text-white">
+						<h2 className="text-3xl font-heading font-bold text-white mb-2 bg-gradient-to-r from-white to-neonGreen bg-clip-text text-transparent animate-glitch-slow">
 							{title}
 						</h2>
-						<p className="text-gray-400 text-sm mt-1">
+						<p className="text-gray-400 text-sm leading-relaxed">
 							{description}
 						</p>
 					</div>
@@ -6786,20 +6991,23 @@ export const ChainSelector: React.FC<ChainSelectorProps> = ({
 				{availableChains.length > 1 && variant !== 'compact' && (
 					<button
 						onClick={() => setShowComparison(!showComparison)}
-						className="flex items-center space-x-2 px-3 py-2 bg-dark-200 hover:bg-dark-300 border border-gray-600 rounded-sm text-sm text-gray-300 transition-colors"
+						className="flex items-center space-x-2 px-4 py-2 bg-dark-200 hover:bg-dark-300 border border-gray-600 hover:border-neonGreen/50 rounded-sm text-sm text-gray-300 hover:text-white transition-all duration-200"
 					>
 						<Info className="w-4 h-4" />
-						<span>{showComparison ? 'Hide' : 'Compare'}</span>
+						<span>{showComparison ? 'Hide Comparison' : 'Compare Networks'}</span>
 					</button>
 				)}
 			</div>
 
 			{/* エラー表示 */}
 			{error && (
-				<div className="mb-6 p-4 bg-red-900/30 border border-red-500/50 text-red-300 rounded-sm">
-					<div className="flex items-center space-x-2">
-						<AlertCircle className="w-4 h-4 flex-shrink-0" />
-						<span className="text-sm">{error}</span>
+				<div className="mb-6 p-4 bg-gradient-to-r from-red-900/30 to-red-800/30 border border-red-500/50 text-red-300 rounded-sm backdrop-blur-sm">
+					<div className="flex items-center space-x-3">
+						<AlertCircle className="w-5 h-5 flex-shrink-0" />
+						<div>
+							<div className="font-medium text-sm">Connection Error</div>
+							<div className="text-xs text-red-200 mt-1">{error}</div>
+						</div>
 					</div>
 				</div>
 			)}
@@ -6814,45 +7022,60 @@ export const ChainSelector: React.FC<ChainSelectorProps> = ({
 		if (!comparisonData) return null;
 
 		return (
-			<div className="mb-6 bg-dark-200/50 border border-dark-300 rounded-sm overflow-hidden">
-				<div className="p-4 border-b border-dark-300">
-					<h3 className="text-white font-semibold flex items-center space-x-2">
-						<Zap className="w-4 h-4 text-neonGreen" />
-						<span>Network Comparison</span>
-					</h3>
-				</div>
-
+			<CyberCard
+				title="Network Comparison"
+				className="mb-6 animate-fade-in"
+				showEffects={true}
+			>
 				<div className="overflow-x-auto">
 					<table className="w-full text-sm">
-						<thead className="bg-dark-300">
-							<tr>
-								<th className="text-left p-3 text-gray-300">Network</th>
-								<th className="text-left p-3 text-gray-300">Block Time</th>
-								<th className="text-left p-3 text-gray-300">Confirmations</th>
-								<th className="text-left p-3 text-gray-300">Features</th>
+						<thead>
+							<tr className="border-b border-dark-300">
+								<th className="text-left py-3 text-gray-300 font-heading">Network</th>
+								<th className="text-left py-3 text-gray-300 font-heading">Block Time</th>
+								<th className="text-left py-3 text-gray-300 font-heading">Confirmations</th>
+								<th className="text-left py-3 text-gray-300 font-heading">Features</th>
 							</tr>
 						</thead>
 						<tbody>
 							{comparisonData.map((stat, index) => {
 								const chain = testnetUtils.getChainById(stat.chainId);
 								return (
-									<tr key={stat.chainId} className={index % 2 === 0 ? 'bg-dark-100/30' : 'bg-transparent'}>
-										<td className="p-3">
-											<div className="flex items-center space-x-2">
-												<span className="text-lg">{chain?.icon}</span>
-												<span className="text-white">{stat.name}</span>
+									<tr
+										key={stat.chainId}
+										className={`
+                      border-b border-dark-300/50 hover:bg-neonGreen/5 transition-colors duration-200
+                      ${index % 2 === 0 ? 'bg-dark-100/30' : 'bg-transparent'}
+                    `}
+									>
+										<td className="py-3">
+											<div className="flex items-center space-x-3">
+												<span className="text-xl">{chain?.icon}</span>
+												<span className="text-white font-medium">{stat.name}</span>
 											</div>
 										</td>
-										<td className="p-3 text-gray-300">~{stat.blockTime}s</td>
-										<td className="p-3 text-gray-300">{stat.confirmations}</td>
-										<td className="p-3 text-gray-300">{stat.features}</td>
+										<td className="py-3">
+											<div className="flex items-center space-x-1 text-gray-300">
+												<Clock className="w-3 h-3" />
+												<span>~{stat.blockTime}s</span>
+											</div>
+										</td>
+										<td className="py-3">
+											<div className="flex items-center space-x-1 text-gray-300">
+												<Shield className="w-3 h-3" />
+												<span>{stat.confirmations}</span>
+											</div>
+										</td>
+										<td className="py-3">
+											<span className="text-neonGreen font-mono">{stat.features}</span>
+										</td>
 									</tr>
 								);
 							})}
 						</tbody>
 					</table>
 				</div>
-			</div>
+			</CyberCard>
 		);
 	};
 
@@ -6860,10 +7083,16 @@ export const ChainSelector: React.FC<ChainSelectorProps> = ({
 	const renderChainList = () => {
 		if (loading) {
 			return (
-				<div className="flex items-center justify-center py-12">
-					<div className="flex items-center space-x-2 text-neonGreen">
-						<Loader2 className="w-6 h-6 animate-spin" />
-						<span>Loading networks...</span>
+				<div className="flex items-center justify-center py-16">
+					<div className="flex flex-col items-center space-y-4">
+						<div className="relative">
+							<Loader2 className="w-8 h-8 text-neonGreen animate-spin" />
+							<div className="absolute inset-0 w-8 h-8 border-2 border-neonGreen/20 rounded-full animate-pulse" />
+						</div>
+						<div className="text-center">
+							<div className="text-white font-medium">Loading Networks</div>
+							<div className="text-gray-400 text-sm">Scanning available chains...</div>
+						</div>
 					</div>
 				</div>
 			);
@@ -6871,26 +7100,31 @@ export const ChainSelector: React.FC<ChainSelectorProps> = ({
 
 		if (availableChains.length === 0) {
 			return (
-				<div className="text-center py-12">
-					<AlertCircle className="w-12 h-12 text-gray-400 mx-auto mb-4" />
-					<h3 className="text-lg font-semibold text-white mb-2">No Networks Available</h3>
-					<p className="text-gray-400 text-sm">
-						No supported networks found for your configuration.
+				<CyberCard className="text-center py-12">
+					<AlertCircle className="w-16 h-16 text-gray-400 mx-auto mb-4" />
+					<h3 className="text-xl font-heading font-semibold text-white mb-2">No Networks Available</h3>
+					<p className="text-gray-400 text-sm max-w-md mx-auto leading-relaxed">
+						No supported networks found for your current configuration.
+						Please check your settings or try again later.
 					</p>
-				</div>
+				</CyberCard>
 			);
 		}
 
 		return (
-			<div className={getGridClasses()}>
-				{availableChains.map((chain) => {
+			<div className={`${getGridClasses()} animate-fade-in`}>
+				{availableChains.map((chain, index) => {
 					const isDisabled = disabledChains.includes(chain.id);
 					const isLoading = loadingChain === chain.id;
 					const isSelected = selectedChain === chain.id;
 					const hasError = chainErrors[chain.id];
 
 					return (
-						<div key={chain.id} className="relative">
+						<div
+							key={chain.id}
+							className="relative"
+							style={{ animationDelay: `${index * 100}ms` }}
+						>
 							<ChainCard
 								chain={chain}
 								isSelected={isSelected}
@@ -6904,13 +7138,16 @@ export const ChainSelector: React.FC<ChainSelectorProps> = ({
 
 							{/* チェーン固有のエラー表示 */}
 							{hasError && (
-								<div className="absolute inset-x-0 -bottom-1 mx-2">
-									<div className="bg-red-900/90 border border-red-500/50 text-red-300 text-xs p-2 rounded-sm backdrop-blur-sm">
+								<div className="absolute inset-x-0 -bottom-2 mx-2 animate-slide-up">
+									<div className="bg-red-900/90 border border-red-500/50 text-red-300 text-xs p-3 rounded-sm backdrop-blur-sm">
 										<div className="flex items-center justify-between">
-											<span>{hasError}</span>
+											<div className="flex items-center space-x-2">
+											
+												<span>{hasError}</span>
+											</div>
 											<button
 												onClick={() => clearChainError(chain.id)}
-												className="text-red-400 hover:text-red-300 ml-2"
+												className="text-red-400 hover:text-red-300 ml-2 transition-colors"
 											>
 												×
 											</button>
@@ -6936,24 +7173,27 @@ export const ChainSelector: React.FC<ChainSelectorProps> = ({
 		if (!recommended) return null;
 
 		return (
-			<div className="mt-8 p-4 bg-gradient-to-r from-neonGreen/10 to-neonOrange/10 border border-neonGreen/30 rounded-sm">
-				<div className="flex items-start space-x-3">
-					<div className="w-8 h-8 bg-neonGreen/20 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5">
-						<Zap className="w-4 h-4 text-neonGreen" />
+			<CyberCard
+				className="mt-8 bg-gradient-to-r from-neonGreen/10 to-neonOrange/10 border-neonGreen/30 animate-glow"
+				showEffects={false}
+			>
+				<div className="flex items-start space-x-4">
+					<div className="w-10 h-10 bg-gradient-to-br from-neonGreen/20 to-neonOrange/20 rounded-full flex items-center justify-center flex-shrink-0 border border-neonGreen/30">
+						<Zap className="w-5 h-5 text-neonGreen" />
 					</div>
-					<div>
-						<h4 className="text-white font-semibold text-sm mb-1">
+					<div className="flex-1">
+						<h4 className="text-white font-heading font-semibold mb-2">
 							Recommended for {isDevelopment ? 'Development' : 'Testing'}
 						</h4>
-						<p className="text-gray-300 text-xs leading-relaxed">
+						<p className="text-gray-300 text-sm leading-relaxed">
 							<span className="text-neonGreen font-medium">{recommended.displayName}</span>
 							{' '}is recommended for {isDevelopment ? 'fast development with low fees' : 'stable testing environment'}.
-							{' '}{recommended.metadata.averageBlockTime < 5 && 'Features quick block times '}
-							and {recommended.metadata.gasTokenSymbol} for gas fees.
+							{' '}Features {recommended.metadata.averageBlockTime < 5 && 'quick block times and '}
+							{recommended.metadata.gasTokenSymbol} for gas fees.
 						</p>
 					</div>
 				</div>
-			</div>
+			</CyberCard>
 		);
 	};
 
@@ -6963,17 +7203,23 @@ export const ChainSelector: React.FC<ChainSelectorProps> = ({
 
 		return (
 			<div className="mt-8 pt-6 border-t border-dark-300">
-				<div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-xs text-gray-400">
-					<div className="flex items-center space-x-2">
-						<Shield className="w-4 h-4 text-neonGreen" />
+				<div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+					<div className="flex items-center space-x-3 text-sm text-gray-400 hover:text-gray-300 transition-colors">
+						<div className="w-8 h-8 bg-neonGreen/10 rounded-full flex items-center justify-center border border-neonGreen/30">
+							<Shield className="w-4 h-4 text-neonGreen" />
+						</div>
 						<span>All networks are testnets</span>
 					</div>
-					<div className="flex items-center space-x-2">
-						<Clock className="w-4 h-4 text-neonBlue" />
+					<div className="flex items-center space-x-3 text-sm text-gray-400 hover:text-gray-300 transition-colors">
+						<div className="w-8 h-8 bg-blue-500/10 rounded-full flex items-center justify-center border border-blue-500/30">
+							<Clock className="w-4 h-4 text-blue-400" />
+						</div>
 						<span>No real funds required</span>
 					</div>
-					<div className="flex items-center space-x-2">
-						<Zap className="w-4 h-4 text-neonOrange" />
+					<div className="flex items-center space-x-3 text-sm text-gray-400 hover:text-gray-300 transition-colors">
+						<div className="w-8 h-8 bg-neonOrange/10 rounded-full flex items-center justify-center border border-neonOrange/30">
+							<Zap className="w-4 h-4 text-neonOrange" />
+						</div>
 						<span>Free testnet tokens available</span>
 					</div>
 				</div>
@@ -6982,9 +7228,12 @@ export const ChainSelector: React.FC<ChainSelectorProps> = ({
 	};
 
 	return (
-		<div className={`chain-selector ${className}`}>
+		<div className={`relative w-full ${className}`}>
+			{/* 背景グリッドパターン */}
+			<GridPattern size={40} opacity={0.02} animated={true} />
+
 			{/* メインコンテンツ */}
-			<div className="relative">
+			<div className="relative z-10">
 				{/* ヘッダー */}
 				{renderHeader()}
 
@@ -7000,25 +7249,79 @@ export const ChainSelector: React.FC<ChainSelectorProps> = ({
 
 			{/* グローバルローディングオーバーレイ */}
 			{loading && (
-				<div className="absolute inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center rounded-sm">
-					<div className="bg-dark-200 border border-neonGreen/30 rounded-sm p-6">
-						<div className="flex items-center space-x-3">
-							<Loader2 className="w-6 h-6 text-neonGreen animate-spin" />
+				<div className="absolute inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center rounded-sm z-20">
+					<CyberCard className="bg-dark-200 border-neonGreen/30 animate-pulse-fast">
+						<div className="flex items-center space-x-4 p-2">
+							<Loader2 className="w-8 h-8 text-neonGreen animate-spin" />
 							<div>
-								<div className="text-white font-medium">Loading Networks</div>
+								<div className="text-white font-heading font-medium">Loading Networks</div>
 								<div className="text-gray-400 text-sm">Please wait...</div>
 							</div>
 						</div>
-					</div>
+					</CyberCard>
 				</div>
 			)}
 
 			{/* 選択アニメーション効果 */}
 			{selectedChain && (
-				<div className="fixed inset-0 pointer-events-none z-50">
+				<div className="fixed inset-0 pointer-events-none z-30">
 					<div className="absolute inset-0 bg-neonGreen/5 animate-pulse" />
 				</div>
 			)}
+
+			{/* カスタムアニメーション定義 */}
+			<style jsx>{`
+        @keyframes fade-in {
+          from {
+            opacity: 0;
+            transform: translateY(20px);
+          }
+          to {
+            opacity: 1;
+            transform: translateY(0);
+          }
+        }
+        
+        @keyframes slide-up {
+          from {
+            opacity: 0;
+            transform: translateY(10px);
+          }
+          to {
+            opacity: 1;
+            transform: translateY(0);
+          }
+        }
+        
+        @keyframes glow {
+          0%, 100% {
+            box-shadow: 0 0 20px rgba(0, 255, 127, 0.2);
+          }
+          50% {
+            box-shadow: 0 0 30px rgba(0, 255, 127, 0.4);
+          }
+        }
+        
+        .animate-fade-in {
+          animation: fade-in 0.6s ease-out;
+        }
+        
+        .animate-slide-up {
+          animation: slide-up 0.3s ease-out;
+        }
+        
+        .animate-glow {
+          animation: glow 3s ease-in-out infinite;
+        }
+        
+        @media (prefers-reduced-motion: reduce) {
+          .animate-fade-in,
+          .animate-slide-up,
+          .animate-glow {
+            animation: none;
+          }
+        }
+      `}</style>
 		</div>
 	);
 };
@@ -7449,11 +7752,14 @@ import React, { createContext, useContext, useState, useCallback, useEffect } fr
 import { ChainType } from '@/types/wallet';
 import { ExtendedFirestoreUser } from '@/types/user-extended';
 import { AppError } from '@/utils/errorHandling';
+import { SelectableChainId, SelectableChain } from '@/types/chain-selection';
+import { testnetUtils } from '@/auth/config/testnet-chains';
 
 /**
- * 認証モーダルのオプション設定
+ * 認証モーダルの拡張オプション設定（既存との完全互換性）
  */
 export interface AuthModalOptions {
+	// 既存のオプション（完全互換性）
 	preferredChain?: ChainType;
 	onSuccess?: (user: ExtendedFirestoreUser) => void;
 	onError?: (error: AppError) => void;
@@ -7461,37 +7767,141 @@ export interface AuthModalOptions {
 	redirectAfterSuccess?: string;
 	autoClose?: boolean; // 成功時の自動クローズ
 	showChainSelector?: boolean; // チェーン選択の表示
+
+	// ★ 新規追加: チェーン選択の詳細設定（オプショナル）
+	chainSelection?: {
+		availableChains?: SelectableChainId[];
+		defaultChain?: SelectableChainId;
+		variant?: 'default' | 'compact' | 'detailed';
+		columns?: 1 | 2;
+		allowChainSwitch?: boolean;
+		requireChainSwitch?: boolean;
+		preset?: string;
+		customTitle?: string;
+		customDescription?: string;
+		onChainSelect?: (chainId: SelectableChainId) => void;
+		onChainSwitchStart?: (chainId: SelectableChainId) => void;
+		onChainSwitchComplete?: (chainId: SelectableChainId) => void;
+		onChainSwitchError?: (error: string, chainId: SelectableChainId) => void;
+	};
+
+	// ★ 新規追加: ステップ管理（オプショナル）
+	step?: {
+		initialStep?: 'chain-select' | 'wallet-connect' | 'wallet-sign';
+		skipChainSelection?: boolean;
+		skipWalletConnection?: boolean;
+		allowStepBack?: boolean;
+		showStepProgress?: boolean;
+		stepTitles?: {
+			chainSelect?: string;
+			walletConnect?: string;
+			walletSign?: string;
+			success?: string;
+			error?: string;
+		};
+	};
 }
 
 /**
- * 認証モーダルのコンテキスト型
+ * ★ 新規追加: 認証フロー状態
+ */
+export type AuthStep = 'chain-select' | 'wallet-connect' | 'wallet-sign' | 'success' | 'error';
+
+export interface AuthFlowState {
+	currentStep: AuthStep;
+	progress: number;
+	signatureRequired: boolean;
+	verificationRequired: boolean;
+
+	chainSelection?: {
+		selectedChain: SelectableChainId | null;
+		availableChains: SelectableChainId[];
+		isSwitching: boolean;
+		switchProgress: number;
+		switchError: string | null;
+		selectionHistory: Array<{
+			chainId: SelectableChainId;
+			timestamp: Date;
+			success: boolean;
+		}>;
+	};
+
+	stepManagement?: {
+		visitedSteps: AuthStep[];
+		canGoBack: boolean;
+		canSkipStep: boolean;
+		autoAdvance: boolean;
+		autoAdvanceDelay: number;
+	};
+}
+
+/**
+ * 拡張された認証モーダルのコンテキスト型（既存との完全互換性）
  */
 export interface AuthModalContextType {
-	// 基本状態
+	// 既存のインターフェース（完全互換性）
 	isOpen: boolean;
 	modalOptions: AuthModalOptions;
-
-	// 操作
 	openAuthModal: (options?: AuthModalOptions) => void;
 	closeAuthModal: () => void;
 	updateModalOptions: (options: Partial<AuthModalOptions>) => void;
-
-	// 内部状態（デバッグ用）
 	_debug: {
 		openCount: number;
 		lastOpened: Date | null;
 		lastClosed: Date | null;
 	};
+
+	// ★ 新規追加: 拡張機能（オプショナル）
+	authFlowState?: AuthFlowState;
+	setAuthStep?: (step: AuthStep) => void;
+	goBackStep?: () => boolean;
+	resetAuthFlow?: () => void;
+	selectChain?: (chainId: SelectableChainId) => Promise<boolean>;
+	switchChain?: (chainId: SelectableChainId) => Promise<boolean>;
+	resetChainSelection?: () => void;
+	getSelectedChain?: () => SelectableChain | null;
+	updateProgress?: (progress: number) => void;
+	setStepStatus?: (status: {
+		signatureRequired?: boolean;
+		verificationRequired?: boolean;
+	}) => void;
 }
 
 /**
- * デフォルトのモーダルオプション
+ * デフォルトのモーダルオプション（既存と同じ）
  */
 const DEFAULT_MODAL_OPTIONS: AuthModalOptions = {
 	preferredChain: 'evm',
 	autoClose: true,
 	showChainSelector: true,
 	title: 'Connect Wallet',
+};
+
+/**
+ * ★ 新規追加: デフォルトのフロー状態
+ */
+const DEFAULT_FLOW_STATE: AuthFlowState = {
+	currentStep: 'chain-select',
+	progress: 0,
+	signatureRequired: false,
+	verificationRequired: false,
+
+	chainSelection: {
+		selectedChain: null,
+		availableChains: ['sepolia', 'avalanche-fuji'],
+		isSwitching: false,
+		switchProgress: 0,
+		switchError: null,
+		selectionHistory: [],
+	},
+
+	stepManagement: {
+		visitedSteps: [],
+		canGoBack: false,
+		canSkipStep: false,
+		autoAdvance: false,
+		autoAdvanceDelay: 2000,
+	},
 };
 
 /**
@@ -7508,27 +7918,36 @@ interface AuthModalProviderProps {
 }
 
 /**
- * グローバル認証モーダル管理プロバイダー
+ * 拡張されたグローバル認証モーダル管理プロバイダー（既存との完全互換性）
  */
 export const AuthModalProvider = ({
 	children,
 	defaultOptions = {}
 }: AuthModalProviderProps) => {
-	// 基本状態
+	// 既存の基本状態（完全互換性）
 	const [isOpen, setIsOpen] = useState(false);
 	const [modalOptions, setModalOptions] = useState<AuthModalOptions>({
 		...DEFAULT_MODAL_OPTIONS,
 		...defaultOptions
 	});
 
-	// デバッグ情報
+	// 既存のデバッグ情報（完全互換性）
 	const [debugInfo, setDebugInfo] = useState({
 		openCount: 0,
 		lastOpened: null as Date | null,
 		lastClosed: null as Date | null,
 	});
 
-	// モーダルを開く
+	// ★ 新規追加: フロー状態（既存機能に影響なし）
+	const [authFlowState, setAuthFlowState] = useState<AuthFlowState>(DEFAULT_FLOW_STATE);
+
+	// ★ 新規追加: フロー履歴追加
+	const addFlowHistory = useCallback((step: AuthStep, data?: any) => {
+		// デバッグ用の拡張（既存に影響なし）
+		console.log('📍 Auth flow:', step, data);
+	}, []);
+
+	// 既存のモーダルを開く機能（完全互換性 + 拡張）
 	const openAuthModal = useCallback((options: AuthModalOptions = {}) => {
 		const mergedOptions = {
 			...DEFAULT_MODAL_OPTIONS,
@@ -7539,7 +7958,26 @@ export const AuthModalProvider = ({
 		setModalOptions(mergedOptions);
 		setIsOpen(true);
 
-		// デバッグ情報更新
+		// ★ 新規追加: フロー状態の初期化（既存に影響なし）
+		if (mergedOptions.showChainSelector && mergedOptions.chainSelection) {
+			const initialStep = mergedOptions.step?.skipChainSelection
+				? 'wallet-connect'
+				: 'chain-select';
+
+			setAuthFlowState(prev => ({
+				...DEFAULT_FLOW_STATE,
+				currentStep: initialStep,
+				chainSelection: {
+					...DEFAULT_FLOW_STATE.chainSelection!,
+					selectedChain: mergedOptions.chainSelection?.defaultChain || null,
+					availableChains: mergedOptions.chainSelection?.availableChains || ['sepolia', 'avalanche-fuji'],
+				},
+			}));
+
+			addFlowHistory(initialStep, { options: mergedOptions });
+		}
+
+		// 既存のデバッグ情報更新（完全互換性）
 		setDebugInfo(prev => ({
 			...prev,
 			openCount: prev.openCount + 1,
@@ -7547,13 +7985,13 @@ export const AuthModalProvider = ({
 		}));
 
 		console.log('🔓 AuthModal opened with options:', mergedOptions);
-	}, [defaultOptions]);
+	}, [defaultOptions, addFlowHistory]);
 
-	// モーダルを閉じる
+	// 既存のモーダルを閉じる機能（完全互換性）
 	const closeAuthModal = useCallback(() => {
 		setIsOpen(false);
 
-		// デバッグ情報更新
+		// 既存のデバッグ情報更新（完全互換性）
 		setDebugInfo(prev => ({
 			...prev,
 			lastClosed: new Date()
@@ -7561,16 +7999,18 @@ export const AuthModalProvider = ({
 
 		console.log('🔒 AuthModal closed');
 
-		// クローズ後のクリーンアップ（オプションリセット）
+		// 既存のクリーンアップ（完全互換性）
 		setTimeout(() => {
 			setModalOptions({
 				...DEFAULT_MODAL_OPTIONS,
 				...defaultOptions
 			});
+			// ★ 新規追加: フロー状態もリセット（既存に影響なし）
+			setAuthFlowState(DEFAULT_FLOW_STATE);
 		}, 300); // アニメーション完了後
 	}, [defaultOptions]);
 
-	// モーダルオプションを更新
+	// 既存のモーダルオプション更新（完全互換性）
 	const updateModalOptions = useCallback((options: Partial<AuthModalOptions>) => {
 		setModalOptions(prev => ({
 			...prev,
@@ -7580,7 +8020,163 @@ export const AuthModalProvider = ({
 		console.log('⚙️ AuthModal options updated:', options);
 	}, []);
 
-	// 外部からのイベントリスニング（後方互換性）
+	// ★ 新規追加: ステップ管理（既存に影響なし）
+	const setAuthStep = useCallback((step: AuthStep) => {
+		setAuthFlowState(prev => {
+			const newVisitedSteps = prev.stepManagement?.visitedSteps.includes(step)
+				? prev.stepManagement.visitedSteps
+				: [...(prev.stepManagement?.visitedSteps || []), step];
+
+			return {
+				...prev,
+				currentStep: step,
+				stepManagement: {
+					...prev.stepManagement,
+					visitedSteps: newVisitedSteps,
+					canGoBack: newVisitedSteps.length > 1,
+				} as AuthFlowState['stepManagement'],
+			};
+		});
+
+		addFlowHistory(step);
+		console.log('📍 Auth step changed:', step);
+	}, [addFlowHistory]);
+
+	// ★ 新規追加: 戻るボタン（既存に影響なし）
+	const goBackStep = useCallback((): boolean => {
+		const { stepManagement, currentStep } = authFlowState;
+
+		if (!stepManagement?.canGoBack || !stepManagement.visitedSteps.length) {
+			return false;
+		}
+
+		const currentIndex = stepManagement.visitedSteps.indexOf(currentStep);
+		if (currentIndex > 0) {
+			const previousStep = stepManagement.visitedSteps[currentIndex - 1];
+			setAuthStep(previousStep);
+			return true;
+		}
+
+		return false;
+	}, [authFlowState, setAuthStep]);
+
+	// ★ 新規追加: フロー状態リセット（既存に影響なし）
+	const resetAuthFlow = useCallback(() => {
+		setAuthFlowState(DEFAULT_FLOW_STATE);
+		addFlowHistory('chain-select', { action: 'flow-reset' });
+		console.log('🔄 Auth flow reset');
+	}, [addFlowHistory]);
+
+	// ★ 新規追加: チェーン選択（既存に影響なし）
+	const selectChain = useCallback(async (chainId: SelectableChainId): Promise<boolean> => {
+		try {
+			setAuthFlowState(prev => ({
+				...prev,
+				chainSelection: {
+					...prev.chainSelection!,
+					selectedChain: chainId,
+					selectionHistory: [
+						...prev.chainSelection!.selectionHistory,
+						{
+							chainId,
+							timestamp: new Date(),
+							success: true,
+						}
+					],
+				},
+			}));
+
+			// コールバック実行
+			if (modalOptions.chainSelection?.onChainSelect) {
+				modalOptions.chainSelection.onChainSelect(chainId);
+			}
+
+			addFlowHistory(authFlowState.currentStep, { action: 'chain-selected', chainId });
+			console.log('⛓️ Chain selected:', chainId);
+
+			return true;
+		} catch (error) {
+			console.error('Chain selection failed:', error);
+			return false;
+		}
+	}, [modalOptions, authFlowState.currentStep, addFlowHistory]);
+
+	// ★ 新規追加: チェーン切り替え（既存に影響なし）
+	const switchChain = useCallback(async (chainId: SelectableChainId): Promise<boolean> => {
+		try {
+			setAuthFlowState(prev => ({
+				...prev,
+				chainSelection: {
+					...prev.chainSelection!,
+					isSwitching: true,
+					switchProgress: 0,
+					switchError: null,
+				},
+			}));
+
+			// TODO: 実際のチェーン切り替えロジック
+			await new Promise(resolve => setTimeout(resolve, 1000));
+
+			setAuthFlowState(prev => ({
+				...prev,
+				chainSelection: {
+					...prev.chainSelection!,
+					isSwitching: false,
+					switchProgress: 100,
+					selectedChain: chainId,
+				},
+			}));
+
+			addFlowHistory(authFlowState.currentStep, { action: 'chain-switched', chainId });
+			console.log('🔄 Chain switched:', chainId);
+
+			return true;
+		} catch (error) {
+			console.error('Chain switch failed:', error);
+			return false;
+		}
+	}, [authFlowState.currentStep, addFlowHistory]);
+
+	// ★ 新規追加: チェーン選択リセット（既存に影響なし）
+	const resetChainSelection = useCallback(() => {
+		setAuthFlowState(prev => ({
+			...prev,
+			chainSelection: {
+				...DEFAULT_FLOW_STATE.chainSelection!,
+				availableChains: prev.chainSelection?.availableChains || ['sepolia', 'avalanche-fuji'],
+			},
+		}));
+
+		addFlowHistory(authFlowState.currentStep, { action: 'chain-selection-reset' });
+		console.log('🔄 Chain selection reset');
+	}, [authFlowState.currentStep, addFlowHistory]);
+
+	// ★ 新規追加: 選択されたチェーンの取得（既存に影響なし）
+	const getSelectedChain = useCallback((): SelectableChain | null => {
+		const selectedChainId = authFlowState.chainSelection?.selectedChain;
+		return selectedChainId ? testnetUtils.getChainById(selectedChainId) : null;
+	}, [authFlowState.chainSelection?.selectedChain]);
+
+	// ★ 新規追加: 進捗更新（既存に影響なし）
+	const updateProgress = useCallback((progress: number) => {
+		setAuthFlowState(prev => ({
+			...prev,
+			progress: Math.max(0, Math.min(100, progress)),
+		}));
+	}, []);
+
+	// ★ 新規追加: ステップ状態更新（既存に影響なし）
+	const setStepStatus = useCallback((status: {
+		signatureRequired?: boolean;
+		verificationRequired?: boolean;
+	}) => {
+		setAuthFlowState(prev => ({
+			...prev,
+			...status,
+		}));
+	}, []);
+
+	// 既存の外部イベントリスニング（完全互換性）
 	useEffect(() => {
 		const handleOpenAuthModal = (event: Event) => {
 			const customEvent = event as CustomEvent;
@@ -7605,7 +8201,7 @@ export const AuthModalProvider = ({
 		};
 	}, [openAuthModal, closeAuthModal]);
 
-	// ESCキーでモーダルを閉じる
+	// 既存のESCキー処理（完全互換性）
 	useEffect(() => {
 		const handleEscKey = (event: KeyboardEvent) => {
 			if (event.key === 'Escape' && isOpen) {
@@ -7628,7 +8224,7 @@ export const AuthModalProvider = ({
 		};
 	}, [isOpen, closeAuthModal]);
 
-	// 成功/エラー時のコールバックハンドラー
+	// 既存の成功/エラー時のコールバックハンドラー（完全互換性）
 	const handleSuccess = useCallback((user: ExtendedFirestoreUser) => {
 		console.log('✅ AuthModal success:', user.walletAddress);
 
@@ -7663,22 +8259,30 @@ export const AuthModalProvider = ({
 		// エラー時は自動クローズしない（ユーザーがリトライできるように）
 	}, [modalOptions]);
 
-	// コンテキスト値
+	// 既存のコンテキスト値（完全互換性 + 拡張）
 	const contextValue: AuthModalContextType = {
-		// 基本状態
+		// 既存のインターフェース（完全互換性）
 		isOpen,
 		modalOptions,
-
-		// 操作
 		openAuthModal,
 		closeAuthModal,
 		updateModalOptions,
-
-		// デバッグ情報
 		_debug: debugInfo,
+
+		// ★ 新規追加: 拡張機能（既存に影響なし）
+		authFlowState,
+		setAuthStep,
+		goBackStep,
+		resetAuthFlow,
+		selectChain,
+		switchChain,
+		resetChainSelection,
+		getSelectedChain,
+		updateProgress,
+		setStepStatus,
 	};
 
-	// 成功/エラーハンドラーをコンテキストに注入
+	// 既存の成功/エラーハンドラーをコンテキストに注入（完全互換性）
 	const extendedContextValue = {
 		...contextValue,
 		_internal: {
@@ -7695,7 +8299,7 @@ export const AuthModalProvider = ({
 };
 
 /**
- * AuthModalContextを使用するhook
+ * 既存のAuthModalContextを使用するhook（完全互換性）
  */
 export const useAuthModal = (): AuthModalContextType => {
 	const context = useContext(AuthModalContext);
@@ -7706,7 +8310,7 @@ export const useAuthModal = (): AuthModalContextType => {
 };
 
 /**
- * モーダル状態のみを取得する軽量hook
+ * 既存のモーダル状態のみを取得する軽量hook（完全互換性）
  */
 export const useAuthModalState = () => {
 	const { isOpen, modalOptions } = useAuthModal();
@@ -7714,7 +8318,7 @@ export const useAuthModalState = () => {
 };
 
 /**
- * モーダル操作のみを取得するhook
+ * 既存のモーダル操作のみを取得するhook（完全互換性）
  */
 export const useAuthModalActions = () => {
 	const { openAuthModal, closeAuthModal, updateModalOptions } = useAuthModal();
@@ -7722,7 +8326,7 @@ export const useAuthModalActions = () => {
 };
 
 /**
- * 特定の設定でモーダルを開くヘルパーhook
+ * 既存の特定の設定でモーダルを開くヘルパーhook（完全互換性）
  */
 export const useAuthModalHelpers = () => {
 	const { openAuthModal } = useAuthModal();
@@ -7762,10 +8366,10 @@ export const useAuthModalHelpers = () => {
 };
 
 /**
- * デバッグ情報を表示するコンポーネント（開発環境のみ）
+ * 既存のデバッグ情報を表示するコンポーネント（完全互換性 + 拡張）
  */
 export const AuthModalDebugInfo = () => {
-	const { isOpen, modalOptions, _debug } = useAuthModal();
+	const { isOpen, modalOptions, _debug, authFlowState } = useAuthModal();
 
 	if (process.env.NODE_ENV !== 'development') {
 		return null;
@@ -7796,6 +8400,25 @@ export const AuthModalDebugInfo = () => {
 						{modalOptions.autoClose ? 'Yes' : 'No'}
 					</span>
 				</div>
+				{/* ★ 新規追加: フロー状態デバッグ（既存に影響なし） */}
+				{authFlowState && (
+					<>
+						<div className="flex justify-between">
+							<span>Step:</span>
+							<span className="text-cyan-300">{authFlowState.currentStep}</span>
+						</div>
+						<div className="flex justify-between">
+							<span>Progress:</span>
+							<span className="text-cyan-300">{authFlowState.progress}%</span>
+						</div>
+						{authFlowState.chainSelection?.selectedChain && (
+							<div className="flex justify-between">
+								<span>Chain:</span>
+								<span className="text-cyan-300">{authFlowState.chainSelection.selectedChain}</span>
+							</div>
+						)}
+					</>
+				)}
 			</div>
 
 			{modalOptions.title && (

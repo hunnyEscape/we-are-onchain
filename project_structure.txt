@@ -135,7 +135,6 @@
 │   │   ├── components
 │   │   │   ├── AuthModal.tsx
 │   │   │   ├── ChainCard.tsx
-│   │   │   ├── ChainSelector.module.css
 │   │   │   └── ChainSelector.tsx
 │   │   ├── config
 │   │   │   ├── chain-config.ts
@@ -186,4 +185,4 @@
 ├── tailwind.config.js
 └── tsconfig.json
 
-50 directories, 136 files
+50 directories, 135 files

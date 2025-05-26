@@ -2,10 +2,8 @@
 'use client';
 
 import React, { createContext, useContext, useEffect, useState, useCallback, useRef } from 'react';
-import { User as FirebaseUser, onAuthStateChanged, signOut } from 'firebase/auth';
-import { auth } from '@/lib/firebase';
-import { AuthMethod, ChainType } from '../../types/wallet';
-import { ExtendedFirestoreUser, AuthIntegrationResult, WalletOperationResult, AuthFlowState } from '../../types/user-extended';
+import { ChainType } from '../../types/wallet';
+import { ExtendedFirestoreUser, WalletOperationResult, AuthFlowState } from '../../types/user-extended';
 import { UnifiedAuthState, AuthConfig, AuthActions, AuthEvent, AuthEventType, UseAuthReturn } from '../../types/auth';
 
 // EVMWalletProviderはオプショナルにする
@@ -17,10 +15,10 @@ try {
 	console.warn('EVMWallet not available:', error);
 }
 
-// デフォルト設定
+// デフォルト設定（Wallet専用）
 const DEFAULT_CONFIG: AuthConfig = {
-	preferredMethod: 'hybrid',
-	enableFirebase: true,
+	preferredMethod: 'wallet', // wallet固定
+	enableFirebase: false,     // Firebase無効
 	enableWallet: true,
 	autoConnect: true,
 	sessionTimeout: 24 * 60, // 24時間
@@ -55,59 +53,37 @@ interface UnifiedAuthProviderProps {
 export const UnifiedAuthProvider = ({ children, config: userConfig = {} }: UnifiedAuthProviderProps) => {
 	const config = { ...DEFAULT_CONFIG, ...userConfig };
 
-	// Firebase状態
-	const [firebaseUser, setFirebaseUser] = useState<FirebaseUser | null>(null);
-	const [firebaseLoading, setFirebaseLoading] = useState(true);
-
-	// Firestore状態
+	// Firestore状態（Wallet基準）
 	const [firestoreUser, setFirestoreUser] = useState<ExtendedFirestoreUser | null>(null);
 	const [firestoreLoading, setFirestoreLoading] = useState(false);
 
 	// Wallet状態（EVMのみ現在対応）
-	// UnifiedAuthContext.tsx の evmWallet フォールバックオブジェクトを修正
-
-	// Wallet状態（EVMのみ現在対応）
 	const evmWallet = useEVMWallet ? useEVMWallet() : {
-		// 基本状態
+		// フォールバックオブジェクト
 		walletState: {
 			isConnecting: false,
 			isConnected: false,
 			isAuthenticated: false,
 			chainType: 'evm' as ChainType,
 		},
-
-		// 接続管理
 		connectWallet: async () => { throw new Error('EVM Wallet not available'); },
 		disconnectWallet: async () => { throw new Error('EVM Wallet not available'); },
 		isConnecting: false,
 		isConnected: false,
-
-		// ウォレット情報
 		address: null,
 		chainId: null,
 		chainName: null,
-
-		// 認証
 		authenticate: async () => ({ success: false, error: 'EVM Wallet not available' }),
 		isAuthenticated: false,
-
-		// 署名
 		signMessage: async () => { throw new Error('EVM Wallet not available'); },
 		signAuthMessage: async () => { throw new Error('EVM Wallet not available'); },
-
-		// チェーン操作
 		switchChain: async () => { throw new Error('EVM Wallet not available'); },
-
-		// UI操作
 		openConnectModal: undefined,
 		openAccountModal: undefined,
-
-		// エラー
 		error: null,
 	};
 
-	// 統合状態
-	const [authMethod, setAuthMethod] = useState<AuthMethod>('firebase');
+	// 統合状態（Wallet専用）
 	const [isAuthenticated, setIsAuthenticated] = useState(false);
 	const [error, setError] = useState<string | null>(null);
 
@@ -125,7 +101,7 @@ export const UnifiedAuthProvider = ({ children, config: userConfig = {} }: Unifi
 
 	// デバッグ情報
 	const [debugInfo, setDebugInfo] = useState({
-		firebaseReady: false,
+		firebaseReady: false,  // 常にfalse
 		walletReady: false,
 		lastError: null as string | null,
 	});
@@ -160,41 +136,6 @@ export const UnifiedAuthProvider = ({ children, config: userConfig = {} }: Unifi
 		}
 	}, [eventListeners]);
 
-	// Firebase認証の監視
-	useEffect(() => {
-		const unsubscribe = onAuthStateChanged(auth, async (user) => {
-			console.log('🔄 Firebase auth state changed:', user?.uid || 'null');
-
-			setFirebaseUser(user);
-			setFirebaseLoading(false);
-			setDebugInfo(prev => ({ ...prev, firebaseReady: true }));
-
-			if (user) {
-				emitEvent('firebase-login', { uid: user.uid, email: user.email });
-
-				// Firestoreとの同期（既存の実装を利用）
-				try {
-					setFirestoreLoading(true);
-					// TODO: ExtendedFirestoreUserとの同期ロジック
-					// 既存のsyncAuthWithFirestoreを拡張使用
-
-					setFirestoreLoading(false);
-				} catch (error) {
-					handleError(error, 'Firebase sync');
-					setFirestoreLoading(false);
-				}
-			} else {
-				emitEvent('firebase-logout');
-				setFirestoreUser(null);
-			}
-
-			// 認証状態の更新
-			updateAuthenticationState();
-		});
-
-		return unsubscribe;
-	}, [handleError, emitEvent]);
-
 	// Wallet認証の監視
 	useEffect(() => {
 		setDebugInfo(prev => ({ ...prev, walletReady: true }));
@@ -218,70 +159,29 @@ export const UnifiedAuthProvider = ({ children, config: userConfig = {} }: Unifi
 		updateAuthenticationState();
 	}, [evmWallet.isConnected, evmWallet.isAuthenticated, evmWallet.address, emitEvent]);
 
-	// 統合認証状態の更新
+	// 統合認証状態の更新（Wallet専用）
 	const updateAuthenticationState = useCallback(() => {
-		const hasFirebaseAuth = !!firebaseUser;
 		const hasWalletAuth = evmWallet.isAuthenticated;
+		setIsAuthenticated(hasWalletAuth);
 
-		let newAuthMethod: AuthMethod = 'firebase';
-		let newIsAuthenticated = false;
-
-		if (hasFirebaseAuth && hasWalletAuth) {
-			newAuthMethod = 'hybrid';
-			newIsAuthenticated = true;
-		} else if (hasFirebaseAuth) {
-			newAuthMethod = 'firebase';
-			newIsAuthenticated = true;
-		} else if (hasWalletAuth) {
-			newAuthMethod = 'wallet';
-			newIsAuthenticated = true;
+		if (hasWalletAuth) {
+			emitEvent('unified-login', { authMethod: 'wallet' });
 		}
+	}, [evmWallet.isAuthenticated, emitEvent]);
 
-		setAuthMethod(newAuthMethod);
-		setIsAuthenticated(newIsAuthenticated);
-
-		if (newIsAuthenticated) {
-			emitEvent('unified-login', { authMethod: newAuthMethod });
-		}
-	}, [firebaseUser, evmWallet.isAuthenticated, emitEvent]);
-
-	// 認証アクション実装
+	// 認証アクション実装（Wallet専用）
 	const authActions: AuthActions = {
-		// Firebase認証（既存実装を利用）
+		// Firebase認証（削除済み - エラーを投げる）
 		signInWithEmail: async (email: string, password: string) => {
-			try {
-				setAuthFlowState(prev => ({ ...prev, currentStep: 'connecting', progress: 25 }));
-				// TODO: 既存のsignIn実装を呼び出し
-				setAuthFlowState(prev => ({ ...prev, currentStep: 'idle', progress: 100 }));
-			} catch (error) {
-				handleError(error, 'Email sign in');
-				setAuthFlowState(prev => ({ ...prev, currentStep: 'error' }));
-				throw error;
-			}
+			throw new Error('Firebase authentication is disabled. Please use wallet authentication.');
 		},
 
 		signUpWithEmail: async (email: string, password: string) => {
-			try {
-				setAuthFlowState(prev => ({ ...prev, currentStep: 'connecting', progress: 25 }));
-				// TODO: 既存のsignUp実装を呼び出し
-				setAuthFlowState(prev => ({ ...prev, currentStep: 'idle', progress: 100 }));
-			} catch (error) {
-				handleError(error, 'Email sign up');
-				setAuthFlowState(prev => ({ ...prev, currentStep: 'error' }));
-				throw error;
-			}
+			throw new Error('Firebase authentication is disabled. Please use wallet authentication.');
 		},
 
 		signInWithGoogle: async () => {
-			try {
-				setAuthFlowState(prev => ({ ...prev, currentStep: 'connecting', progress: 25 }));
-				// TODO: 既存のsignInWithGoogle実装を呼び出し
-				setAuthFlowState(prev => ({ ...prev, currentStep: 'idle', progress: 100 }));
-			} catch (error) {
-				handleError(error, 'Google sign in');
-				setAuthFlowState(prev => ({ ...prev, currentStep: 'error' }));
-				throw error;
-			}
+			throw new Error('Firebase authentication is disabled. Please use wallet authentication.');
 		},
 
 		// Wallet認証
@@ -296,7 +196,6 @@ export const UnifiedAuthProvider = ({ children, config: userConfig = {} }: Unifi
 				}));
 
 				if (chainType === 'evm') {
-					// connect ではなく connectWallet を使用
 					const connection = await evmWallet.connectWallet(walletType);
 					setAuthFlowState(prev => ({ ...prev, currentStep: 'idle', progress: 100 }));
 					return connection;
@@ -355,28 +254,19 @@ export const UnifiedAuthProvider = ({ children, config: userConfig = {} }: Unifi
 			}
 		},
 
-		// 統合ログアウト
-		// UnifiedAuthContext.tsx の logout 関数を修正
-
-		// 統合ログアウト
+		// 統合ログアウト（Wallet専用）
 		logout: async () => {
 			try {
 				setAuthFlowState(prev => ({ ...prev, currentStep: 'connecting', progress: 25 }));
 
-				// Firebase ログアウト
-				if (firebaseUser) {
-					await signOut(auth);
-				}
-
 				// Wallet ログアウト
 				if (evmWallet.isConnected) {
-					await evmWallet.disconnectWallet(); // disconnect → disconnectWallet に変更
+					await evmWallet.disconnectWallet();
 				}
 
 				// 状態リセット
 				setFirestoreUser(null);
 				setIsAuthenticated(false);
-				setAuthMethod('firebase');
 				setError(null);
 
 				setAuthFlowState(prev => ({ ...prev, currentStep: 'idle', progress: 100 }));
@@ -427,11 +317,11 @@ export const UnifiedAuthProvider = ({ children, config: userConfig = {} }: Unifi
 		};
 	}, [eventListeners]);
 
-	// 統合状態の構築
+	// 統合状態の構築（Wallet専用）
 	const unifiedState: UnifiedAuthState = {
-		authMethod,
-		firebaseUser,
-		firebaseLoading,
+		authMethod: 'wallet', // 常にwallet
+		firebaseUser: null,   // 常にnull
+		firebaseLoading: false, // 常にfalse
 		walletConnection: evmWallet.isConnected ? {
 			address: evmWallet.address!,
 			chainType: 'evm',
@@ -444,25 +334,25 @@ export const UnifiedAuthProvider = ({ children, config: userConfig = {} }: Unifi
 		firestoreUser,
 		firestoreLoading,
 		isAuthenticated,
-		isLoading: firebaseLoading || evmWallet.isConnecting || firestoreLoading,
+		isLoading: evmWallet.isConnecting || firestoreLoading,
 		error,
 	};
 
-	// 便利なゲッター
+	// コンテキスト値
 	const contextValue: UnifiedAuthContextType = {
 		...unifiedState,
 		...authActions,
 
 		// 便利なゲッター
-		primaryUserId: firebaseUser?.uid || evmWallet.address || null,
-		displayName: firestoreUser?.displayName || firebaseUser?.displayName || null,
-		emailAddress: firestoreUser?.email || firebaseUser?.email || null,
+		primaryUserId: evmWallet.address || null,
+		displayName: firestoreUser?.displayName || null,
+		emailAddress: null, // Firebase無効のためnull
 		walletAddress: evmWallet.address || null,
 
-		// 状態チェック
-		isFirebaseAuth: authMethod === 'firebase' || authMethod === 'hybrid',
-		isWalletAuth: authMethod === 'wallet' || authMethod === 'hybrid',
-		hasMultipleAuth: authMethod === 'hybrid',
+		// 状態チェック（Wallet専用）
+		isFirebaseAuth: false,    // 常にfalse
+		isWalletAuth: isAuthenticated,
+		hasMultipleAuth: false,   // 常にfalse
 
 		// イベント管理
 		addEventListener,
@@ -481,7 +371,7 @@ export const UnifiedAuthProvider = ({ children, config: userConfig = {} }: Unifi
 };
 
 /**
- * 統合認証を使用するhook
+ * 統合認証を使用するhook（Wallet専用）
  */
 export const useUnifiedAuth = (): UnifiedAuthContextType => {
 	const context = useContext(UnifiedAuthContext);
@@ -492,16 +382,14 @@ export const useUnifiedAuth = (): UnifiedAuthContextType => {
 };
 
 /**
- * 認証状態のみを取得するhook
+ * 認証状態のみを取得するhook（Wallet専用）
  */
 export const useAuthState = () => {
 	const {
 		isAuthenticated,
 		isLoading,
-		authMethod,
 		primaryUserId,
 		displayName,
-		emailAddress,
 		walletAddress,
 		error
 	} = useUnifiedAuth();
@@ -509,23 +397,20 @@ export const useAuthState = () => {
 	return {
 		isAuthenticated,
 		isLoading,
-		authMethod,
+		authMethod: 'wallet' as const,
 		primaryUserId,
 		displayName,
-		emailAddress,
+		emailAddress: null, // Firebase無効
 		walletAddress,
 		error,
 	};
 };
 
 /**
- * 認証アクションのみを取得するhook
+ * 認証アクションのみを取得するhook（Wallet専用）
  */
 export const useAuthActions = () => {
 	const {
-		signInWithEmail,
-		signUpWithEmail,
-		signInWithGoogle,
 		connectWallet,
 		authenticateWallet,
 		switchWalletChain,
@@ -534,9 +419,7 @@ export const useAuthActions = () => {
 	} = useUnifiedAuth();
 
 	return {
-		signInWithEmail,
-		signUpWithEmail,
-		signInWithGoogle,
+		// Firebase認証は削除
 		connectWallet,
 		authenticateWallet,
 		switchWalletChain,

@@ -2,11 +2,11 @@
 
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { useAuth } from '@/contexts/AuthContext';
-import { AuthModal } from '../auth/AuthModal';
+import { useUnifiedAuth } from '@/contexts/UnifiedAuthContext';
+import { ExtendedAuthModal } from '../auth/ExtendedAuthModal';
 import { ShoppingCart } from 'lucide-react';
 
-// ダッシュボードページでのみカート機能を使用するためのhoo
+// ダッシュボードページでのみカート機能を使用するためのhook
 const useCartInDashboard = () => {
 	const [cartItemCount, setCartItemCount] = useState(0);
 	const [onCartClick, setOnCartClick] = useState<(() => void) | null>(null);
@@ -44,7 +44,15 @@ const Header = () => {
 	const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 	const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
 
-	const { user, logout, loading } = useAuth();
+	// Wallet認証のみ使用
+	const { 
+		isAuthenticated, 
+		isLoading, 
+		walletAddress, 
+		displayName,
+		logout 
+	} = useUnifiedAuth();
+	
 	const { cartItemCount, onCartClick } = useCartInDashboard();
 
 	useEffect(() => {
@@ -94,6 +102,20 @@ const Header = () => {
 			onCartClick();
 		}
 		setIsMobileMenuOpen(false);
+	};
+
+	// ユーザー表示名の取得（Wallet専用）
+	const getUserDisplayName = () => {
+		if (displayName) return displayName;
+		if (walletAddress) return walletAddress.slice(0, 6) + '...' + walletAddress.slice(-4);
+		return 'User';
+	};
+
+	// ユーザーイニシャルの取得（Wallet専用）
+	const getUserInitials = () => {
+		if (displayName) return displayName[0].toUpperCase();
+		if (walletAddress) return walletAddress[2].toUpperCase(); // 0x の次の文字
+		return 'U';
 	};
 
 	const navLinks = [
@@ -177,21 +199,21 @@ const Header = () => {
 								<div className="absolute inset-0 bg-gradient-to-r from-neonGreen/20 to-neonOrange/20 rounded-sm transform scale-0 group-hover:scale-100 transition-transform duration-200"></div>
 							</button>
 
-							{/* Authentication Section */}
-							{loading ? (
+							{/* Authentication Section - Wallet Only */}
+							{isLoading ? (
 								<div className="px-6 py-2">
 									<div className="w-6 h-6 border-2 border-neonGreen border-t-transparent rounded-full animate-spin"></div>
 								</div>
-							) : user ? (
+							) : isAuthenticated ? (
 								<div className="flex items-center space-x-4">
 									{/* User Info - クリック可能にしてプロフィールページへ */}
 									<button
 										onClick={() => window.location.href = '/profile'}
 										className="hidden lg:flex flex-col text-right hover:bg-dark-200/50 px-2 py-1 rounded-sm transition-colors group"
 									>
-										<span className="text-xs text-gray-400 group-hover:text-gray-300">Welcome back</span>
+										<span className="text-xs text-gray-400 group-hover:text-gray-300">Connected</span>
 										<span className="text-sm text-white font-medium truncate max-w-32 group-hover:text-neonGreen">
-											{user.displayName || user.email?.split('@')[0]}
+											{getUserDisplayName()}
 										</span>
 									</button>
 
@@ -203,7 +225,7 @@ const Header = () => {
 									>
 										<div className="w-8 h-8 bg-gradient-to-br from-neonGreen to-neonOrange rounded-full flex items-center justify-center group-hover:scale-110 transition-transform duration-200">
 											<span className="text-black font-bold text-sm">
-												{(user.displayName || user.email || 'U')[0].toUpperCase()}
+												{getUserInitials()}
 											</span>
 										</div>
 										<div className="absolute inset-0 w-8 h-8 bg-gradient-to-br from-neonGreen to-neonOrange rounded-full blur-sm opacity-50 group-hover:opacity-75 transition-opacity duration-200"></div>
@@ -214,7 +236,7 @@ const Header = () => {
 										onClick={handleLogout}
 										className="relative px-4 py-2 bg-red-600/80 hover:bg-red-600 text-white text-sm font-medium rounded-sm transition-all duration-200 hover:shadow-lg hover:shadow-red-500/25 group"
 									>
-										<span className="relative z-10">Logout</span>
+										<span className="relative z-10">Disconnect</span>
 										<div className="absolute inset-0 bg-red-500 transform scale-x-0 group-hover:scale-x-100 transition-transform duration-200 origin-left rounded-sm"></div>
 									</button>
 								</div>
@@ -223,7 +245,7 @@ const Header = () => {
 									onClick={handleLoginClick}
 									className="relative px-6 py-2 bg-gradient-to-r from-neonGreen to-neonOrange text-black font-semibold rounded-sm overflow-hidden group transition-all duration-200 hover:shadow-lg hover:shadow-neonGreen/25"
 								>
-									<span className="relative z-10 text-sm">Login</span>
+									<span className="relative z-10 text-sm">Connect Wallet</span>
 									<div className="absolute inset-0 bg-gradient-to-r from-neonOrange to-neonGreen transform scale-x-0 group-hover:scale-x-100 transition-transform duration-200 origin-left"></div>
 									<div className="absolute inset-0 animate-pulse bg-white/10 opacity-0 group-hover:opacity-100 transition-opacity duration-200"></div>
 								</button>
@@ -279,12 +301,12 @@ const Header = () => {
 								)}
 							</button>
 
-							{/* Mobile Authentication Section */}
-							{loading ? (
+							{/* Mobile Authentication Section - Wallet Only */}
+							{isLoading ? (
 								<div className="flex justify-center py-4">
 									<div className="w-6 h-6 border-2 border-neonGreen border-t-transparent rounded-full animate-spin"></div>
 								</div>
-							) : user ? (
+							) : isAuthenticated ? (
 								<div className="space-y-3 pt-4 border-t border-dark-300">
 									{/* Profile Link - Mobile */}
 									<button
@@ -297,7 +319,7 @@ const Header = () => {
 										<div className="flex items-center space-x-3">
 											<div className="w-8 h-8 bg-gradient-to-br from-neonGreen to-neonOrange rounded-full flex items-center justify-center">
 												<span className="text-black font-bold text-sm">
-													{(user.displayName || user.email || 'U')[0].toUpperCase()}
+													{getUserInitials()}
 												</span>
 											</div>
 											<span>Profile</span>
@@ -306,18 +328,23 @@ const Header = () => {
 
 									{/* User Info */}
 									<div className="px-4 py-2 bg-neonGreen/5 rounded-sm border border-neonGreen/20">
-										<div className="text-xs text-gray-400">Logged in as</div>
+										<div className="text-xs text-gray-400">Connected as</div>
 										<div className="text-sm text-white font-medium">
-											{user.displayName || user.email}
+											{getUserDisplayName()}
 										</div>
+										{walletAddress && (
+											<div className="text-xs text-neonGreen font-mono mt-1">
+												{walletAddress.slice(0, 10)}...{walletAddress.slice(-8)}
+											</div>
+										)}
 									</div>
 
-									{/* Logout Button */}
+									{/* Disconnect Button */}
 									<button
 										onClick={handleLogout}
 										className="w-full px-6 py-3 bg-red-600/80 hover:bg-red-600 text-white font-semibold rounded-sm transition-all duration-200 hover:shadow-lg hover:shadow-red-500/25"
 									>
-										Logout
+										Disconnect Wallet
 									</button>
 								</div>
 							) : (
@@ -325,7 +352,7 @@ const Header = () => {
 									onClick={handleLoginClick}
 									className="w-full mt-4 px-6 py-3 bg-gradient-to-r from-neonGreen to-neonOrange text-black font-semibold rounded-sm transition-all duration-200 hover:shadow-lg hover:shadow-neonGreen/25"
 								>
-									Login
+									Connect Wallet
 								</button>
 							)}
 						</div>
@@ -333,10 +360,11 @@ const Header = () => {
 				</nav>
 			</header>
 
-			{/* Auth Modal */}
-			<AuthModal
+			{/* Extended Auth Modal - Wallet Only */}
+			<ExtendedAuthModal
 				isOpen={isAuthModalOpen}
 				onClose={() => setIsAuthModalOpen(false)}
+				preferredChain="evm"
 			/>
 		</>
 	);

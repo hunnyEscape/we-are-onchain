@@ -1,6 +1,6 @@
 // src/app/api/auth/wallet/route.ts (Extended版に更新)
 import { NextRequest, NextResponse } from 'next/server';
-import { EVMAuthService } from '@/wallet-auth/adapters/evm/EVMAuthService';
+import { EVMAuthService } from '@/auth/services/EVMAuthService';
 import {
 	syncExtendedWalletAuthWithFirestore,
 	checkExtendedWalletUserExists,

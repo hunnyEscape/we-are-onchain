@@ -1,7 +1,7 @@
 // src/wallet-auth/adapters/evm/chain-config.ts
 import { type Chain } from 'viem'; // wagmiではなくviemからインポート
 import { mainnet, sepolia, polygon, bsc, avalanche, avalancheFuji } from 'wagmi/chains';
-import { EVMChainConfig } from '../../../../types/wallet';
+import { EVMChainConfig } from '@/auth/types/wallet';
 
 /**
  * サポートするEVMチェーンの設定

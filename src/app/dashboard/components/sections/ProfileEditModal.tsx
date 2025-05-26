@@ -2,7 +2,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { useUnifiedAuth } from '@/contexts/UnifiedAuthContext';
+import { useUnifiedAuth } from '@/auth/contexts/UnifiedAuthContext';
 import CyberButton from '../../../components/common/CyberButton';
 import { FirestoreUser, UpdateUserProfile } from '../../../../../types/user';
 import {

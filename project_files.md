@@ -1,18 +1,2305 @@
 -e 
-### FILE: ./src/contexts/UnifiedAuthContext.tsx
+### FILE: ./src/types/demo-payment.ts
+
+// types/demo-payment.ts
+import { Timestamp } from 'firebase/firestore';
+
+/**
+ * デモInvoiceの状態
+ */
+export type DemoInvoiceStatus = 
+  | 'pending'     // 支払い待機中
+  | 'confirming'  // ブロック確認中（1-3 confirmations）
+  | 'completed'   // 支払い完了
+  | 'expired'     // 期限切れ
+  | 'error';      // エラー状態
+
+/**
+ * サポートされるブロックチェーン
+ */
+export type SupportedChain = 'avalanche-fuji';
+
+/**
+ * Avalanche FUJI ネットワーク設定
+ */
+export interface AvalancheConfig {
+  chainId: number;
+  name: string;
+  rpcUrl: string;
+  blockExplorer: string;
+  nativeCurrency: {
+    name: string;
+    symbol: string;
+    decimals: number;
+  };
+  faucetUrl: string;
+  averageBlockTime: number; // milliseconds
+  confirmationBlocks: number;
+}
+
+/**
+ * デモInvoice作成リクエスト
+ */
+export interface CreateDemoInvoiceRequest {
+  chainId?: number; // デフォルト: 43113 (FUJI)
+  userAgent?: string;
+  ipAddress?: string;
+}
+
+/**
+ * デモInvoice作成レスポンス
+ */
+export interface CreateDemoInvoiceResponse {
+  success: boolean;
+  data?: {
+    invoiceId: string;
+    paymentAddress: string;
+    amount: string; // AVAX amount
+    amountWei: string; // Wei amount  
+    chainId: number;
+    qrCodeDataURL: string; // Base64 QR code image
+    paymentURI: string; // EIP-681 URI
+    expiresAt: string; // ISO string
+    estimatedGasFee: string; // AVAX amount
+  };
+  error?: {
+    code: string;
+    message: string;
+    details?: any;
+  };
+}
+
+/**
+ * デモInvoiceステータスレスポンス
+ */
+export interface DemoInvoiceStatusResponse {
+  success: boolean;
+  data?: {
+    invoiceId: string;
+    status: DemoInvoiceStatus;
+    paymentAddress: string;
+    amount: string;
+    chainId: number;
+    createdAt: string;
+    expiresAt: string;
+    transactionHash?: string;
+    blockNumber?: number;
+    confirmations?: number;
+    paidAt?: string;
+    timeRemaining?: number; // seconds
+  };
+  error?: {
+    code: string;
+    message: string;
+  };
+}
+
+/**
+ * Firestore保存用のデモInvoiceデータ
+ */
+export interface DemoInvoiceDocument {
+  invoiceId: string;
+  paymentAddress: string;
+  privateKey: string; // 暗号化して保存予定
+  amount: string; // AVAX amount
+  amountWei: string; // Wei amount
+  chainId: number;
+  status: DemoInvoiceStatus;
+  
+  // リクエスト情報
+  userAgent?: string;
+  ipAddress?: string;
+  
+  // タイムスタンプ
+  createdAt: Timestamp;
+  expiresAt: Timestamp;
+  
+  // 支払い完了後の情報
+  transactionHash?: string;
+  blockNumber?: number;
+  confirmations?: number;
+  paidAt?: Timestamp;
+  paidAmount?: string; // 実際に支払われた金額
+}
+
+/**
+ * ウォレット生成結果
+ */
+export interface GeneratedWallet {
+  address: string;
+  privateKey: string;
+  publicKey: string;
+  index: number; // HD wallet index
+  derivationPath: string;
+}
+
+/**
+ * 決済監視設定
+ */
+export interface PaymentMonitorConfig {
+  pollInterval: number; // milliseconds
+  maxPollDuration: number; // milliseconds  
+  confirmationBlocks: number;
+  retryAttempts: number;
+  backoffMultiplier: number;
+}
+
+/**
+ * QRコード生成設定
+ */
+export interface QRCodeConfig {
+  size: number;
+  margin: number;
+  colorDark: string;
+  colorLight: string;
+  errorCorrectionLevel: 'L' | 'M' | 'Q' | 'H';
+}
+
+/**
+ * Rate limiting設定
+ */
+export interface RateLimitConfig {
+  maxInvoicesPerIP: number;
+  windowMinutes: number;
+  maxInvoicesPerHour: number;
+  cleanupIntervalMinutes: number;
+}
+
+/**
+ * デモ決済エラーコード
+ */
+export type DemoPaymentErrorCode = 
+  | 'RATE_LIMIT_EXCEEDED'
+  | 'INVALID_CHAIN_ID'
+  | 'WALLET_GENERATION_FAILED'
+  | 'FIRESTORE_ERROR'
+  | 'QR_GENERATION_FAILED'
+  | 'INVOICE_NOT_FOUND'
+  | 'INVOICE_EXPIRED'
+  | 'RPC_CONNECTION_FAILED'
+  | 'PAYMENT_MONITORING_FAILED'
+  | 'INVALID_TRANSACTION'
+  | 'INSUFFICIENT_CONFIRMATIONS';
+
+/**
+ * デモ決済エラー
+ */
+export interface DemoPaymentError {
+  code: DemoPaymentErrorCode;
+  message: string;
+  details?: any;
+  timestamp: Date;
+  invoiceId?: string;
+}
+
+/**
+ * 統計データ（analytics用）
+ */
+export interface DemoAnalytics {
+  date: string; // YYYY-MM-DD
+  invoicesGenerated: number;
+  invoicesCompleted: number;
+  invoicesExpired: number;
+  averageCompletionTime: number; // seconds
+  totalAmountPaid: string; // AVAX
+  uniqueIPs: number;
+  popularTimeSlots: Record<string, number>; // hour -> count
+}
+
+/**
+ * フロントエンド用のUI状態
+ */
+export interface DemoPaymentUIState {
+  status: 'idle' | 'generating' | 'waiting' | 'confirming' | 'completed' | 'expired' | 'error';
+  invoiceId?: string;
+  paymentAddress?: string;
+  qrCodeDataURL?: string;
+  paymentURI?: string;
+  timeRemaining?: number; // seconds
+  confirmations?: number;
+  transactionHash?: string;
+  errorMessage?: string;
+  isPolling: boolean;
+}-e 
+### FILE: ./src/types/product.ts
+
+// types/product.ts
+import { Timestamp } from 'firebase/firestore';
+
+// Firestoreで管理する商品データの型
+export interface FirestoreProduct {
+  id: string;
+  name: string;
+  description: string;
+  
+  // 価格情報
+  price: {
+    usd: number;
+    eth?: number; // ETH価格（自動計算可能）
+  };
+  
+  // 在庫管理
+  inventory: {
+    totalStock: number;      // 総在庫数
+    availableStock: number;  // 利用可能在庫数
+    reservedStock: number;   // 予約済み在庫数（カート内商品）
+  };
+  
+  // メタデータ
+  metadata: {
+    rating: number;
+    reviewCount: number;
+    features: string[];
+    nutritionFacts: Record<string, string>;
+    images: string[];
+    tags: string[];
+  };
+  
+  // 設定
+  settings: {
+    maxOrderQuantity: number;
+    minOrderQuantity: number;
+    isActive: boolean;
+    category: string;
+    sku: string;
+  };
+  
+  // タイムスタンプ
+  timestamps: {
+    createdAt: Timestamp;
+    updatedAt: Timestamp;
+  };
+}
+
+// 商品作成用の型
+export interface CreateProductData {
+  name: string;
+  description: string;
+  price: {
+    usd: number;
+  };
+  inventory: {
+    totalStock: number;
+    availableStock: number;
+    reservedStock: 0;
+  };
+  metadata: {
+    rating: number;              // 0 から number に変更
+    reviewCount: number;         // 0 から number に変更
+    features: string[];
+    nutritionFacts: Record<string, string>;
+    images: string[];
+    tags: string[];
+  };
+  settings: {
+    maxOrderQuantity: number;
+    minOrderQuantity: 1;
+    isActive: boolean;
+    category: string;
+    sku: string;
+  };
+}
+
+// 商品更新用の部分型
+export interface UpdateProductData {
+  name?: string;
+  description?: string;
+  price?: Partial<FirestoreProduct['price']>;
+  metadata?: Partial<FirestoreProduct['metadata']>;
+  settings?: Partial<FirestoreProduct['settings']>;
+}
+
+// 在庫更新用の型
+export interface UpdateInventoryData {
+  totalStock?: number;
+  availableStock?: number;
+  reservedStock?: number;
+}
+
+// カート予約の型
+export interface CartReservation {
+  id: string;                    // 予約ID（ユニーク）
+  userId?: string;               // ユーザーID（ログイン済みの場合）
+  sessionId: string;             // セッションID（匿名ユーザー用）
+  productId: string;
+  quantity: number;
+  
+  // タイムスタンプ
+  createdAt: Timestamp;
+  expiresAt: Timestamp;          // 予約期限（15分後）
+  
+  // 状態
+  status: 'active' | 'expired' | 'confirmed' | 'cancelled';
+}
+
+// 在庫チェック結果の型
+export interface StockCheckResult {
+  productId: string;
+  requestedQuantity: number;
+  
+  // 在庫状況
+  totalStock: number;
+  availableStock: number;
+  reservedStock: number;
+  
+  // チェック結果
+  canReserve: boolean;
+  maxCanReserve: number;
+  
+  // 制限理由
+  limitReasons: {
+    exceedsStock: boolean;
+    exceedsOrderLimit: boolean;
+    productInactive: boolean;
+  };
+  
+  // 既存予約情報
+  existingReservation?: {
+    quantity: number;
+    expiresAt: Timestamp;
+  };
+}
+
+// 商品フィルター・検索用の型
+export interface ProductFilters {
+  category?: string;
+  isActive?: boolean;
+  minPrice?: number;
+  maxPrice?: number;
+  inStock?: boolean;
+  tags?: string[];
+  searchQuery?: string;
+}
+
+// 商品ソート用の型
+export interface ProductSortOptions {
+  field: 'name' | 'price.usd' | 'metadata.rating' | 'timestamps.createdAt' | 'inventory.availableStock';
+  direction: 'asc' | 'desc';
+}
+
+// 商品リスト取得のオプション
+export interface GetProductsOptions {
+  filters?: ProductFilters;
+  sort?: ProductSortOptions;
+  limit?: number;
+  offset?: number;
+}
+
+// ダッシュボード表示用に簡略化された商品型
+export interface ProductSummary {
+  id: string;
+  name: string;
+  price: number;
+  availableStock: number;
+  isActive: boolean;
+  category: string;
+  rating: number;
+  image?: string;
+}
+
+// 商品詳細表示用の型（FirestoreProductの表示用ラッパー）
+export interface ProductDetails {
+  id: string;
+  name: string;
+  description: string;
+  price: {
+    usd: number;
+    formatted: string;
+  };
+  inventory: {
+    inStock: number;
+    isAvailable: boolean;
+    stockLevel: 'high' | 'medium' | 'low' | 'out';
+  };
+  metadata: {
+    rating: number;
+    reviewCount: number;
+    features: string[];
+    nutritionFacts: Record<string, string>;
+    images: string[];
+    tags: string[];
+  };
+  settings: {
+    maxOrderQuantity: number;
+    minOrderQuantity: number;
+  };
+  timestamps: {
+    createdAt: Date;
+    updatedAt: Date;
+  };
+}
+
+// バッチ処理用の型
+export interface BatchInventoryUpdate {
+  productId: string;
+  updates: UpdateInventoryData;
+}
+
+// 統計・分析用の型
+export interface ProductAnalytics {
+  productId: string;
+  views: number;
+  cartAdditions: number;
+  purchases: number;
+  conversionRate: number;
+  averageRating: number;
+  totalRevenue: number;
+  period: {
+    from: Date;
+    to: Date;
+  };
+}
+
+// エラー型
+export interface ProductError {
+  code: 'not-found' | 'insufficient-stock' | 'reservation-expired' | 'product-inactive' | 'validation-error';
+  message: string;
+  productId?: string;
+  requestedQuantity?: number;
+  availableStock?: number;
+}-e 
+### FILE: ./src/types/react-three-fiber.d.ts
+
+// types/react-three-fiber.d.ts
+import { ReactThreeFiber } from '@react-three/fiber'
+import * as THREE from 'three'
+
+declare global {
+  namespace JSX {
+    interface IntrinsicElements {
+      mesh: ReactThreeFiber.Object3DNode<THREE.Mesh, typeof THREE.Mesh>
+      group: ReactThreeFiber.Object3DNode<THREE.Group, typeof THREE.Group>
+      planeGeometry: ReactThreeFiber.Node<THREE.PlaneGeometry, typeof THREE.PlaneGeometry>
+      boxGeometry: ReactThreeFiber.Node<THREE.BoxGeometry, typeof THREE.BoxGeometry>
+      sphereGeometry: ReactThreeFiber.Node<THREE.SphereGeometry, typeof THREE.SphereGeometry>
+      meshBasicMaterial: ReactThreeFiber.Node<THREE.MeshBasicMaterial, typeof THREE.MeshBasicMaterial>
+      meshStandardMaterial: ReactThreeFiber.Node<THREE.MeshStandardMaterial, typeof THREE.MeshStandardMaterial>
+      ambientLight: ReactThreeFiber.Object3DNode<THREE.AmbientLight, typeof THREE.AmbientLight>
+      directionalLight: ReactThreeFiber.Object3DNode<THREE.DirectionalLight, typeof THREE.DirectionalLight>
+      spotLight: ReactThreeFiber.Object3DNode<THREE.SpotLight, typeof THREE.SpotLight>
+      pointLight: ReactThreeFiber.Object3DNode<THREE.PointLight, typeof THREE.PointLight>
+    }
+  }
+}
+
+export {}-e 
+### FILE: ./src/types/crypto.ts
+
+// types/crypto.ts
+import { Timestamp } from 'firebase/firestore';
+
+// Firestore crypto_prices コレクションの型定義
+export interface FirestoreCryptoPriceData {
+	id: string;
+	symbol: string;
+	name: string;
+	price_usd: number;
+	price_change_24h: number;
+	price_change_percentage_24h: number;
+	market_cap_usd: number;
+	volume_24h_usd: number;
+	last_updated: Timestamp;
+	source: 'coingecko';
+}
+
+// フロントエンド用に変換された価格データ
+export interface CryptoPriceData {
+	id: string;
+	symbol: string;
+	name: string;
+	price_usd: number;
+	price_change_24h: number;
+	price_change_percentage_24h: number;
+	market_cap_usd: number;
+	volume_24h_usd: number;
+	last_updated: Date;
+	source: string;
+}
+
+// 価格データのマップ型
+export interface CryptoPricesMap {
+	[symbol: string]: CryptoPriceData;
+}
+
+// 暗号通貨メタデータ
+export interface CryptoMetadata {
+	supported_currencies: string[];
+	update_frequency_minutes: number;
+	last_sync_timestamp: Timestamp;
+	sync_status: 'success' | 'error' | 'in_progress';
+	error_message?: string;
+	coingecko_rate_limit_remaining?: number;
+	total_api_calls_today?: number;
+}
+
+// サポートされている暗号通貨の設定
+export const SUPPORTED_CRYPTOS = {
+	BTC: {
+		id: 'bitcoin',
+		symbol: 'BTC',
+		name: 'Bitcoin',
+		icon: '₿',
+		decimals: 6,
+		color: '#F7931A'
+	},
+	ETH: {
+		id: 'ethereum',
+		symbol: 'ETH',
+		name: 'Ethereum',
+		icon: 'Ξ',
+		decimals: 4,
+		color: '#627EEA'
+	},
+	SOL: {
+		id: 'solana',
+		symbol: 'SOL',
+		name: 'Solana',
+		icon: '◎',
+		decimals: 4,
+		color: '#14F195'
+	},
+	AVAX: {
+		id: 'avalanche-2',
+		symbol: 'AVAX',
+		name: 'Avalanche',
+		icon: '🔺',
+		decimals: 4,
+		color: '#E84142'
+	},
+	SUI: {
+		id: 'sui',
+		symbol: 'SUI',
+		name: 'Sui Network',
+		icon: '💧',
+		decimals: 4,
+		color: '#4DA2FF'
+	}
+} as const;
+
+export type SupportedCryptoSymbol = keyof typeof SUPPORTED_CRYPTOS;
+
+// Firestore操作の結果型
+export interface CryptoFetchResult {
+	success: boolean;
+	data?: CryptoPricesMap;
+	error?: string;
+	lastUpdated?: Date;
+}
+
+// 価格変換の結果型
+export interface PriceConversionResult {
+	originalAmount: number;
+	originalCurrency: 'USD';
+	convertedAmount: number;
+	targetCurrency: string;
+	exchangeRate: number;
+	lastUpdated: Date;
+}
+
+// エラーハンドリング用の型
+export interface CryptoError {
+	code: 'fetch-failed' | 'conversion-failed' | 'unsupported-currency' | 'stale-data' | 'network-error';
+	message: string;
+	details?: any;
+	timestamp: Date;
+}
+
+// ローディング状態の管理
+export interface CryptoLoadingState {
+	isLoading: boolean;
+	isRefreshing: boolean;
+	lastFetch: Date | null;
+	retryCount: number;
+	maxRetries: number;
+}
+
+// リアルタイム購読の設定
+export interface CryptoSubscriptionOptions {
+	enableRealtime: boolean;
+	refreshInterval?: number; // milliseconds
+	staleDataThreshold?: number; // milliseconds
+	autoRetry: boolean;
+	maxRetries?: number;
+}
+
+// デフォルトの設定値
+export const CRYPTO_DEFAULTS = {
+	REFRESH_INTERVAL: 30000, // 30秒
+	STALE_DATA_THRESHOLD: 300000, // 5分
+	MAX_RETRIES: 3,
+	DECIMAL_PLACES: {
+		BTC: 6,
+		ETH: 4,
+		SOL: 4,
+		AVAX: 4,
+		SUI: 4,
+		USD: 2
+	}
+} as const;-e 
+### FILE: ./src/types/dashboard.ts
+
+// types/dashboard.ts
+export type SectionType = 'shop' | 'how-to-buy' | 'whitepaper' | 'profile' | 'cart';
+
+export interface DashboardState {
+	activeSection: SectionType | null;
+	isSlideOpen: boolean;
+	cartItems: CartItem[];
+	userProfile: UserProfile | null;
+	walletConnected: boolean;
+}
+
+export interface DashboardCardProps {
+	id: SectionType;
+	title: string;
+	description: string;
+	icon: React.ReactNode;
+	stats?: string;
+	badge?: string;
+	onClick: (section: SectionType) => void;
+	className?: string;
+}
+
+export interface CartItem {
+	id: string;
+	name: string;
+	price: number;
+	quantity: number;
+	currency: 'BTC' | 'ETH' | 'SOL' | 'AVAX' | 'SUI'; // 更新: 新しい暗号通貨に対応
+	image?: string;
+}
+
+export interface UserProfile {
+	walletAddress: string;
+	displayName?: string;
+	totalSpent: number;
+	totalOrders: number;
+	rank: number;
+	badges: string[];
+	joinDate: Date;
+}
+
+export interface SlideInPanelProps {
+	isOpen: boolean;
+	onClose: () => void;
+	title: string;
+	children: React.ReactNode;
+	className?: string;
+}
+
+export interface PurchaseRecord {
+	rank: number;
+	walletAddress: string;
+	displayAddress: string; // 部分匿名化されたアドレス
+	totalSpent: number;
+	totalSpentUSD: number;
+	purchaseCount: number;
+	lastPurchase: Date;
+	txHashes: string[];
+	badges?: string[];
+	isCurrentUser?: boolean;
+}
+
+export interface FilterOptions {
+	period: 'today' | 'week' | 'month' | 'all';
+	minAmount?: number;
+	maxAmount?: number;
+	sortBy: 'amount' | 'count' | 'date';
+	sortOrder: 'asc' | 'desc';
+}
+
+// 新規追加: 暗号通貨価格関連の型定義
+export interface CryptoPriceData {
+	id: string;
+	symbol: string;
+	name: string;
+	price_usd: number;
+	price_change_24h: number;
+	price_change_percentage_24h: number;
+	market_cap_usd: number;
+	volume_24h_usd: number;
+	last_updated: Date;
+	source: string;
+}
+
+export interface CryptoPricesMap {
+	[symbol: string]: CryptoPriceData;
+}
+
+export interface UseCryptoPricesReturn {
+	prices: CryptoPricesMap;
+	loading: boolean;
+	error: string | null;
+	lastUpdated: Date | null;
+	refreshPrices: () => void;
+}
+
+export interface UsePriceConverterReturn {
+	convertUSDTo: (usdAmount: number, targetCurrency: string) => number;
+	formatCryptoPrice: (amount: number, currency: string) => string;
+	formatUSDPrice: (amount: number) => string;
+	isSupported: (currency: string) => boolean;
+	isLoading: boolean;
+	error: string | null;
+}
+
+export interface PriceDisplayProps {
+	usdAmount: number;
+	selectedCurrency: string;
+	showBoth?: boolean;
+	showChange?: boolean;
+	size?: 'sm' | 'md' | 'lg';
+	className?: string;
+}
+
+// 支払い方法のマッピング
+export const PAYMENT_METHODS = {
+	SOL: { name: 'Solana', symbol: 'SOL', icon: '◎' },
+	BTC: { name: 'Lightning', symbol: 'BTC', icon: '₿' },
+	AVAX: { name: 'Avalanche c-chain', symbol: 'AVAX', icon: '🔺' },
+	SUI: { name: 'Sui', symbol: 'SUI', icon: '💧' },
+	ETH: { name: 'Ethereum mainnet', symbol: 'ETH', icon: 'Ξ' },
+} as const;
+
+export type PaymentMethodKey = keyof typeof PAYMENT_METHODS;
+
+// ★ 新規追加: Demo Payment関連の型定義
+export interface DemoPaymentSettings {
+	enabled: boolean;
+	defaultChain: 'avalanche-fuji';
+	maxConcurrentInvoices: number;
+	pollingInterval: number; // milliseconds
+	demoTimeout: number; // milliseconds
+}
+
+// How to Buy セクション設定
+export interface HowToBuyConfig {
+	enableLiveDemo: boolean;
+	demoSettings: DemoPaymentSettings;
+	supportedChains: string[];
+	faucetLinks: Record<string, string>;
+}-e 
+### FILE: ./src/types/api-wallet.ts
+
+// types/api-wallet.ts
+import { ChainType } from './wallet';
+import { WalletFirestoreUser } from '../src/lib/firestore/users-wallet';
+import { ExtendedFirestoreUser } from './user-extended'; // 追加
+
+/**
+ * Wallet認証API用の型定義
+ */
+
+// Wallet認証リクエスト
+export interface WalletAuthRequest {
+  // 署名データ
+  signature: string;
+  message: string;
+  address: string;
+  chainType: ChainType;
+  chainId?: number | string;
+  nonce: string;
+  timestamp: number;
+  
+  // リクエスト情報（セキュリティ用）
+  ipAddress?: string;
+  userAgent?: string;
+}
+
+// Wallet認証レスポンス
+export interface WalletAuthResponse {
+  success: boolean;
+  data?: {
+    user: ExtendedFirestoreUser; // ExtendedFirestoreUserに変更
+    sessionToken?: string;
+    isNewUser: boolean;
+    message: string;
+  };
+  error?: {
+    code: string;
+    message: string;
+    details?: any;
+  };
+}
+
+// プロフィール更新リクエスト
+export interface UpdateWalletProfileRequest {
+  address: string;
+  signature: string; // 本人確認用署名
+  
+  profileData: {
+    displayName?: string;
+    nickname?: string;
+    profileImage?: string;
+    address?: {
+      country?: string;
+      prefecture?: string;
+      city?: string;
+      addressLine1?: string;
+      addressLine2?: string;
+      postalCode?: string;
+      phone?: string;
+    };
+  };
+}
+
+// プロフィール更新レスポンス
+export interface UpdateWalletProfileResponse {
+  success: boolean;
+  data?: {
+    user: ExtendedFirestoreUser; // ExtendedFirestoreUserに変更
+    message: string;
+  };
+  error?: {
+    code: string;
+    message: string;
+    details?: any;
+  };
+}
+
+// ユーザー情報取得レスポンス
+export interface GetWalletUserResponse {
+  success: boolean;
+  data?: {
+    user: ExtendedFirestoreUser; // ExtendedFirestoreUserに変更
+    exists: boolean;
+  };
+  error?: {
+    code: string;
+    message: string;
+  };
+}
+
+// 統計更新リクエスト
+export interface UpdateWalletStatsRequest {
+  address: string;
+  signature: string; // 本人確認用署名
+  
+  statsData: {
+    totalSpent?: number;
+    totalSpentUSD?: number;
+    totalOrders?: number;
+    rank?: number;
+    badges?: string[];
+  };
+}
+
+// エラーコード定義
+export type WalletApiErrorCode = 
+  | 'INVALID_SIGNATURE'
+  | 'EXPIRED_NONCE'
+  | 'ADDRESS_MISMATCH'
+  | 'INVALID_CHAIN'
+  | 'USER_NOT_FOUND'
+  | 'VALIDATION_ERROR'
+  | 'FIRESTORE_ERROR'
+  | 'PERMISSION_DENIED'
+  | 'RATE_LIMITED'
+  | 'INTERNAL_ERROR';
+
+// API エラー型
+export interface WalletApiError {
+  code: WalletApiErrorCode;
+  message: string;
+  details?: any;
+  timestamp: string;
+  requestId?: string;
+}
+
+// セッション情報
+export interface WalletSession {
+  address: string;
+  chainType: ChainType;
+  chainId?: number | string;
+  token: string;
+  expiresAt: number;
+  createdAt: number;
+}
+
+// バッチ操作用
+export interface BatchWalletUsersRequest {
+  addresses: string[];
+}
+
+export interface BatchWalletUsersResponse {
+  success: boolean;
+  data?: {
+    users: ExtendedFirestoreUser[]; // ExtendedFirestoreUserに変更
+    found: number;
+    total: number;
+  };
+  error?: WalletApiError;
+}-e 
+### FILE: ./src/types/wallet.ts
+
+// types/wallet.ts
+export type ChainType = 'evm' | 'solana' | 'sui';
+export type WalletType = 'metamask' | 'walletconnect' | 'coinbase' | 'phantom' | 'solflare' | 'sui-wallet' | 'ethos';
+export type AuthMethod = 'firebase' | 'wallet' | 'hybrid';
+
+// 基本的なウォレット接続情報
+export interface WalletConnection {
+	address: string;
+	chainType: ChainType;
+	chainId?: number | string;
+	walletType: string;
+	isConnected: boolean;
+	connectedAt?: Date;
+	lastUsedAt?: Date;
+	isVerified?: boolean; // 署名検証済みかどうか
+	isPrimary?: boolean;  // プライマリウォレットかどうか
+}
+
+// ウォレット認証で使用する署名データ
+export interface WalletSignatureData {
+	message: string;
+	signature: string;
+	address: string;
+	chainType: ChainType;
+	chainId?: number | string;
+	nonce: string;
+	timestamp: number;
+}
+
+// 認証結果
+export interface WalletAuthResult {
+	success: boolean;
+	user?: {
+		address: string;
+		chainType: ChainType;
+		chainId?: number | string;
+	};
+	error?: string;
+	signature?: WalletSignatureData;
+}
+
+// ウォレット状態
+export interface WalletState {
+	isConnecting: boolean;
+	isConnected: boolean;
+	isAuthenticated: boolean;
+	address?: string;
+	chainType?: ChainType;
+	chainId?: number | string;
+	walletType?: string;
+	error?: string;
+}
+
+// チェーン設定
+export interface ChainConfig {
+	chainId: number | string;
+	name: string;
+	nativeCurrency: {
+		name: string;
+		symbol: string;
+		decimals: number;
+	};
+	rpcUrls: string[];
+	blockExplorerUrls?: string[];
+	iconUrls?: string[];
+	isTestnet?: boolean;
+}
+
+// EVM固有の設定
+export interface EVMChainConfig extends ChainConfig {
+	chainId: number;
+}
+
+// Solana固有の設定
+export interface SolanaChainConfig extends ChainConfig {
+	chainId: string;
+	cluster: 'mainnet-beta' | 'testnet' | 'devnet';
+}
+
+// SUI固有の設定
+export interface SUIChainConfig extends ChainConfig {
+	chainId: string;
+	network: 'mainnet' | 'testnet' | 'devnet';
+}
+
+// サポートされているチェーンの設定
+export interface SupportedChains {
+	evm: EVMChainConfig[];
+	solana: SolanaChainConfig[];
+	sui: SUIChainConfig[];
+}
+
+// ウォレット機能
+export interface WalletCapabilities {
+	canSwitchChain: boolean;
+	canAddChain: boolean;
+	canSignMessage: boolean;
+	canSignTransaction: boolean;
+	supportsEIP1559: boolean; // EVM固有
+}
+
+// ウォレットプロバイダー情報
+export interface WalletProvider {
+	id: string;
+	name: string;
+	chainType: ChainType;
+	icon?: string;
+	downloadUrl?: string;
+	isInstalled: boolean;
+	capabilities: WalletCapabilities;
+}
+
+// 複数ウォレット管理用
+export interface ConnectedWallet extends WalletConnection {
+	id: string;
+	isVerified: boolean;
+	isPrimary: boolean;
+	nickname?: string;
+}
+
+// ウォレット切り替え用
+export interface WalletSwitchRequest {
+	fromAddress: string;
+	toAddress: string;
+	chainType: ChainType;
+	reason: string;
+}
+
+// 認証設定
+export interface WalletAuthConfig {
+	enabledChains: ChainType[];
+	preferredChain: ChainType;
+	authMessage: string;
+	nonceExpiry: number; // seconds
+	enableMultiWallet: boolean;
+	autoConnect: boolean;
+}
+
+// エラー型
+export interface WalletError {
+	code: string;
+	message: string;
+	details?: any;
+	chainType?: ChainType;
+}
+
+// ウォレット統計
+export interface WalletStats {
+	totalConnections: number;
+	lastConnected: Date;
+	connectionHistory: Array<{
+		address: string;
+		chainType: ChainType;
+		connectedAt: Date;
+		disconnectedAt?: Date;
+	}>;
+}-e 
+### FILE: ./src/types/user.ts
+
+// types/user.ts
+import { Timestamp } from 'firebase-admin/firestore'; // Admin SDK版に変更
+import { UserProfile } from './dashboard';
+
+// Firestoreで管理するユーザーデータの型
+export interface FirestoreUser {
+	id: string;                    // Firebase Auth UID
+	email: string;
+	displayName: string;
+	nickname?: string;             // ユーザーが設定可能なニックネーム
+	profileImage?: string;
+	walletAddress?: string;        // 将来のウォレット連携用
+
+	// 住所情報（初期値：空）
+	address?: {
+		country?: string;
+		prefecture?: string;          // 都道府県
+		city?: string;               // 市区町村
+		addressLine1?: string;       // 番地・建物名
+		addressLine2?: string;      // アパート・部屋番号等
+		postalCode?: string;         // 郵便番号
+		phone?: string;
+	};
+
+	// アカウント情報
+	createdAt: Timestamp;
+	updatedAt: Timestamp;
+	lastLoginAt: Timestamp;
+
+	// ユーザーステータス
+	isEmailVerified: boolean;
+	isActive: boolean;
+	membershipTier: 'bronze' | 'silver' | 'gold' | 'platinum';
+	isProfileComplete: boolean;     // 住所等必須情報が入力済みか
+
+	// 統計情報
+	stats: {
+		totalSpent: number;         // ETH（初期値：0）
+		totalSpentUSD: number;      // USD（初期値：0）
+		totalOrders: number;        // 初期値：0
+		rank: number;               // 初期値：999999
+		badges: string[];           // 初期値：['New Member']
+	};
+}
+
+// 初期ユーザー作成用の型
+export interface CreateUserData {
+	id: string;
+	email: string;
+	displayName: string;
+	nickname?: string;
+	profileImage?: string;
+	address?: {};
+	isEmailVerified: boolean;
+	isActive: true;
+	membershipTier: 'bronze';
+	isProfileComplete: false;
+	stats: {
+		totalSpent: 0;
+		totalSpentUSD: 0;
+		totalOrders: 0;
+		rank: 999999;
+		badges: ['New Member'];
+	};
+}
+
+// プロフィール更新用の部分型
+export interface UpdateUserProfile {
+	displayName?: string;
+	nickname?: string;
+	profileImage?: string;
+	address?: Partial<FirestoreUser['address']>;
+	isProfileComplete?: boolean;
+}
+
+// ユーザー統計更新用の型
+export interface UpdateUserStats {
+	totalSpent?: number;
+	totalSpentUSD?: number;
+	totalOrders?: number;
+	rank?: number;
+	badges?: string[];
+}
+
+// 注文データの型
+export interface Order {
+	id: string;                   // 注文ID
+	userId: string;               // ユーザーID（Firebase Auth UID）
+
+	// 注文情報
+	products: OrderItem[];
+	totalAmount: number;          // ETH
+	totalAmountUSD: number;
+	status: 'pending' | 'confirmed' | 'shipped' | 'delivered' | 'cancelled';
+
+	// ブロックチェーン情報
+	transactionHash?: string;     // トランザクションハッシュ
+	blockNumber?: number;
+	networkId: number;            // 1 (Ethereum), 137 (Polygon) etc.
+
+	// 配送情報
+	shippingAddress: FirestoreUser['address'];
+	trackingNumber?: string;
+
+	// タイムスタンプ
+	createdAt: Timestamp;
+	updatedAt: Timestamp;
+	shippedAt?: Timestamp;
+	deliveredAt?: Timestamp;
+}
+
+export interface OrderItem {
+	productId: string;
+	productName: string;
+	quantity: number;
+	priceETH: number;
+	priceUSD: number;
+}
+
+// 既存のUserProfileとFirestoreUserの変換用ヘルパー型
+export interface UserProfileAdapter {
+	fromFirestoreUser: (firestoreUser: FirestoreUser) => UserProfile;
+	toFirestoreUser: (userProfile: UserProfile, userId: string, email: string) => Partial<FirestoreUser>;
+}
+
+// プロフィール完成度チェック用
+export interface ProfileCompleteness {
+	isComplete: boolean;
+	completionPercentage: number;
+	missingFields: string[];
+	requiredFields: (keyof FirestoreUser)[];
+}-e 
+### FILE: ./src/types/user-extended.ts
+
+// types/user-extended.ts
+import { Timestamp } from 'firebase-admin/firestore'; // Admin SDK版を使用
+import { FirestoreUser } from './user';
+import { ChainType, WalletConnection } from './wallet';
+
+/**
+ * Wallet認証対応の拡張ユーザーデータ型
+ * 既存のFirestoreUserにWallet機能を追加
+ */
+export interface ExtendedFirestoreUser extends Omit<FirestoreUser, 'id' | 'walletAddress'> {
+  id: string; // walletAddress または firebaseUID
+  
+  // 認証方式の識別
+  authMethod: 'firebase' | 'wallet' | 'hybrid';
+  
+  // Firebase認証情報（オプション）
+  firebaseUid?: string;
+  
+  // Wallet認証情報
+  walletAddress: string; // 必須（Wallet認証では主キー）
+  connectedWallets: WalletConnection[];
+  primaryWallet?: WalletConnection;
+  isWalletVerified: boolean;
+  
+  // 最終認証時刻（既存のlastLoginAtも保持）
+  lastAuthAt: Timestamp;
+  
+  // 認証履歴
+  authHistory: WalletAuthHistoryEntry[];
+  
+  // セキュリティ設定
+  securitySettings: {
+    requireSignatureForUpdates: boolean;
+    allowedChains: ChainType[];
+    maxSessionDuration: number; // minutes
+  };
+  
+  // 通知設定
+  notificationSettings: {
+    email: boolean;
+    push: boolean;
+    sms: boolean;
+    newOrders: boolean;
+    priceAlerts: boolean;
+    securityAlerts: boolean;
+  };
+}
+
+/**
+ * 認証履歴エントリ
+ */
+export interface WalletAuthHistoryEntry {
+  chainType: ChainType;
+  chainId?: number | string;
+  walletAddress: string;
+  timestamp: Timestamp;
+  success: boolean;
+  ipAddress?: string;
+  userAgent?: string;
+  location?: {
+    country?: string;
+    city?: string;
+  };
+  failureReason?: string;
+}
+
+/**
+ * Wallet操作結果
+ */
+export interface WalletOperationResult<T = any> {
+  success: boolean;
+  data?: T;
+  error?: {
+    code: string;
+    message: string;
+    details?: any;
+  };
+  metadata?: {
+    transactionHash?: string;
+    blockNumber?: number;
+    gasUsed?: string;
+    timestamp: Date;
+  };
+}
+
+/**
+ * 認証フロー状態
+ */
+export interface AuthFlowState {
+  currentStep: 'idle' | 'connecting' | 'signing' | 'verifying' | 'success' | 'error';
+  signatureRequired: boolean;
+  verificationRequired: boolean;
+  progress: number; // 0-100
+  selectedChain?: ChainType;
+  selectedWallet?: string;
+  errorMessage?: string;
+  retryCount?: number;
+}
+
+/**
+ * ユーザー設定
+ */
+export interface UserSettings {
+  // 表示設定
+  theme: 'light' | 'dark' | 'system';
+  language: 'en' | 'ja' | 'zh' | 'ko';
+  currency: 'USD' | 'JPY' | 'ETH' | 'BTC';
+  
+  // プライバシー設定
+  showProfileToPublic: boolean;
+  showStatsToPublic: boolean;
+  showBadgesToPublic: boolean;
+  
+  // 取引設定
+  defaultChain: ChainType;
+  slippageTolerance: number; // %
+  gasSettings: 'slow' | 'standard' | 'fast' | 'custom';
+  
+  // セキュリティ設定
+  requireConfirmationForLargeOrders: boolean;
+  largeOrderThreshold: number; // USD
+  sessionTimeout: number; // minutes
+}
+
+/**
+ * ExtendedFirestoreUser作成用のデータ
+ */
+export interface CreateExtendedUserData {
+  // 必須フィールド
+  authMethod: 'wallet';
+  walletAddress: string;
+  chainType: ChainType;
+  chainId?: number | string;
+  
+  // オプションフィールド
+  displayName?: string;
+  nickname?: string;
+  profileImage?: string;
+  
+  // リクエスト情報
+  ipAddress?: string;
+  userAgent?: string;
+  
+  // 初期設定
+  initialSettings?: Partial<UserSettings>;
+}
+
+/**
+ * プロフィール更新データ
+ */
+export interface UpdateExtendedUserProfile {
+  displayName?: string;
+  nickname?: string;
+  profileImage?: string;
+  address?: ExtendedFirestoreUser['address'];
+  notificationSettings?: Partial<ExtendedFirestoreUser['notificationSettings']>;
+  securitySettings?: Partial<ExtendedFirestoreUser['securitySettings']>;
+  userSettings?: Partial<UserSettings>;
+}
+
+/**
+ * 統計情報更新データ
+ */
+export interface UpdateExtendedUserStats {
+  totalSpent?: number;
+  totalSpentUSD?: number;
+  totalOrders?: number;
+  rank?: number;
+  badges?: string[];
+  newAchievements?: string[];
+}
+
+/**
+ * Wallet接続情報（拡張版）
+ */
+export interface ExtendedWalletConnection extends WalletConnection {
+  // 追加情報
+  nickname?: string;
+  isHardwareWallet: boolean;
+  securityLevel: 'low' | 'medium' | 'high';
+  
+  // 使用統計
+  totalTransactions: number;
+  totalValue: number; // ETH
+  firstUsed: Date;
+  lastUsed: Date;
+  
+  // 設定
+  isDefault: boolean;
+  notifications: boolean;
+  autoConnect: boolean;
+}
+
+/**
+ * ユーザーアクティビティ
+ */
+export interface UserActivity {
+  id: string;
+  userId: string;
+  type: 'login' | 'logout' | 'purchase' | 'profile_update' | 'wallet_connect' | 'wallet_disconnect';
+  description: string;
+  metadata?: any;
+  timestamp: Timestamp;
+  chainType?: ChainType;
+  walletAddress?: string;
+  ipAddress?: string;
+}
+
+/**
+ * ユーザー通知
+ */
+export interface UserNotification {
+  id: string;
+  userId: string;
+  type: 'info' | 'success' | 'warning' | 'error';
+  title: string;
+  message: string;
+  isRead: boolean;
+  actionUrl?: string;
+  actionText?: string;
+  metadata?: any;
+  createdAt: Timestamp;
+  expiresAt?: Timestamp;
+}
+
+/**
+ * バッチ操作用
+ */
+export interface BatchExtendedUserOperation {
+  operation: 'create' | 'update' | 'delete';
+  userId: string;
+  data?: Partial<ExtendedFirestoreUser>;
+}
+
+export interface BatchExtendedUserResult {
+  success: boolean;
+  results: Array<{
+    userId: string;
+    success: boolean;
+    error?: string;
+  }>;
+  summary: {
+    total: number;
+    successful: number;
+    failed: number;
+  };
+}
+
+/**
+ * 検索・フィルタ用
+ */
+export interface ExtendedUserQuery {
+  walletAddresses?: string[];
+  chainTypes?: ChainType[];
+  authMethods?: ('firebase' | 'wallet' | 'hybrid')[];
+  membershipTiers?: ('bronze' | 'silver' | 'gold' | 'platinum')[];
+  isActive?: boolean;
+  isWalletVerified?: boolean;
+  createdAfter?: Date;
+  createdBefore?: Date;
+  lastAuthAfter?: Date;
+  lastAuthBefore?: Date;
+  minTotalSpent?: number;
+  maxTotalSpent?: number;
+  hasBadges?: string[];
+  limit?: number;
+  offset?: number;
+  sortBy?: 'createdAt' | 'lastAuthAt' | 'totalSpent' | 'rank';
+  sortOrder?: 'asc' | 'desc';
+}
+
+export interface ExtendedUserQueryResult {
+  users: ExtendedFirestoreUser[];
+  total: number;
+  hasMore: boolean;
+  nextOffset?: number;
+}-e 
+### FILE: ./src/types/auth.ts
+
+// types/auth.ts (Extended対応版)
+import { User as FirebaseUser } from 'firebase/auth';
+import { FirestoreUser } from './user';
+import { ExtendedFirestoreUser, WalletOperationResult } from './user-extended';
+import { WalletConnection, WalletAuthResult, ChainType } from './wallet';
+
+// 統合認証方式
+export type AuthMethod = 'firebase' | 'wallet' | 'hybrid';
+
+// 統合認証状態（Extended対応）
+export interface UnifiedAuthState {
+	// 認証方式
+	authMethod: AuthMethod;
+
+	// Firebase認証
+	firebaseUser: FirebaseUser | null;
+	firebaseLoading: boolean;
+
+	// Wallet認証
+	walletConnection: WalletConnection | null;
+	walletLoading: boolean;
+
+	// Firestore統合（Extended対応）
+	firestoreUser: ExtendedFirestoreUser | null; // ExtendedFirestoreUserに変更
+	firestoreLoading: boolean;
+
+	// 全体の状態
+	isAuthenticated: boolean;
+	isLoading: boolean;
+
+	// エラー
+	error: string | null;
+}
+
+// 認証設定
+export interface AuthConfig {
+	// 認証方式の優先順位
+	preferredMethod: AuthMethod;
+
+	// 各認証方式の有効/無効
+	enableFirebase: boolean;
+	enableWallet: boolean;
+
+	// 自動ログイン
+	autoConnect: boolean;
+
+	// セッション管理
+	sessionTimeout: number; // minutes
+
+	// ウォレット設定
+	walletConfig?: {
+		enabledChains: ChainType[];
+		preferredChain: ChainType;
+	};
+}
+
+// Extended認証アクション
+export interface AuthActions {
+	// Firebase認証
+	signInWithEmail: (email: string, password: string) => Promise<void>;
+	signUpWithEmail: (email: string, password: string) => Promise<void>;
+	signInWithGoogle: () => Promise<void>;
+
+	// Wallet認証
+	connectWallet: (chainType?: ChainType, walletType?: string) => Promise<WalletConnection>;
+	authenticateWallet: (chainType?: ChainType,address?: string) => Promise<WalletAuthResult>;
+	switchWalletChain: (chainType: ChainType, chainId: number | string) => Promise<void>;
+
+	// 統合ログアウト
+	logout: () => Promise<void>;
+
+	// Extended プロフィール更新（戻り値型を変更）
+	updateProfile: (data: Partial<ExtendedFirestoreUser>) => Promise<WalletOperationResult>;
+
+	// Extended セッション管理
+	refreshSession: () => Promise<void>;
+}
+
+// 認証イベント
+export type AuthEventType =
+	| 'firebase-login'
+	| 'firebase-logout'
+	| 'wallet-connect'
+	| 'wallet-disconnect'
+	| 'wallet-authenticate'
+	| 'unified-login'
+	| 'unified-logout'
+	| 'profile-update'
+	| 'error';
+
+export interface AuthEvent {
+	type: AuthEventType;
+	timestamp: Date;
+	data?: any;
+	error?: string;
+}
+
+// Extended認証フック用の戻り値
+export interface UseAuthReturn extends UnifiedAuthState, AuthActions {
+	// 便利なゲッター
+	primaryUserId: string | null;
+	displayName: string | null;
+	emailAddress: string | null;
+	walletAddress: string | null;
+
+	// 状態チェック
+	isFirebaseAuth: boolean;
+	isWalletAuth: boolean;
+	hasMultipleAuth: boolean;
+
+	// イベント
+	addEventListener: (type: AuthEventType, callback: (event: AuthEvent) => void) => () => void;
+}
+
+// ウォレット接続結果
+export interface WalletConnectionResult {
+	success: boolean;
+	connection?: WalletConnection;
+	error?: string;
+}
+
+// 認証統合結果（Extended対応）
+export interface AuthIntegrationResult {
+	success: boolean;
+	authMethod: AuthMethod;
+	firebaseUser?: FirebaseUser;
+	walletConnection?: WalletConnection;
+	firestoreUser?: ExtendedFirestoreUser; // ExtendedFirestoreUserに変更
+	error?: string;
+}
+
+// Firebase + Wallet統合データ（Extended対応）
+export interface IntegratedUserData {
+	// Firebase認証データ
+	firebaseUid?: string;
+	email?: string;
+	emailVerified?: boolean;
+
+	// Extended Wallet認証データ
+	connectedWallets: WalletConnection[];
+	primaryWallet?: WalletConnection;
+
+	// Extended認証履歴
+	authHistory: Array<{
+		method: AuthMethod;
+		timestamp: Date;
+		chainType?: ChainType;
+		success: boolean;
+		ipAddress?: string;
+		userAgent?: string;
+	}>;
+
+	// Extended設定
+	preferences: {
+		preferredAuthMethod: AuthMethod;
+		autoConnect: boolean;
+		preferredChain?: ChainType;
+	};
+
+	// Extended セキュリティ設定
+	securitySettings: {
+		requireSignatureForUpdates: boolean;
+		allowedChains: ChainType[];
+		maxSessionDuration: number;
+	};
+
+	// Extended 通知設定
+	notificationSettings: {
+		email: boolean;
+		push: boolean;
+		sms: boolean;
+		newOrders: boolean;
+		priceAlerts: boolean;
+		securityAlerts: boolean;
+	};
+}
+
+// Extended認証プロバイダーのProps
+export interface UnifiedAuthProviderProps {
+	children: React.ReactNode;
+	config?: Partial<AuthConfig>;
+}
+
+// Extended認証コンテキストの型
+export interface UnifiedAuthContextType extends UseAuthReturn {
+	// 設定
+	config: AuthConfig;
+
+	// Extended状態
+	extendedUser: ExtendedFirestoreUser | null;
+	authFlowState: any; // AuthFlowState
+
+	// Extended操作
+	refreshExtendedUser: () => Promise<void>;
+	getAuthHistory: () => any[] | null;
+	getConnectedWallets: () => WalletConnection[] | null;
+	updateUserProfile: (profileData: any) => Promise<WalletOperationResult>;
+
+	// 内部状態
+	_internal?: {
+		eventEmitter: EventTarget;
+		sessionStorage: Map<string, any>;
+	};
+
+	// デバッグ情報
+	_debug: {
+		firebaseReady: boolean;
+		walletReady: boolean;
+		lastError: string | null;
+		apiCalls: number;
+		lastApiCall: Date | null;
+	};
+}
+
+// 後方互換性のための従来の型（非推奨）
+export interface LegacyAuthActions {
+	updateProfile: (data: Partial<FirestoreUser>) => Promise<void>;
+}
+
+// Extended専用のヘルパー型
+export interface ExtendedAuthHelpers {
+	// Extended ユーザー操作
+	getExtendedUserStats: () => ExtendedFirestoreUser['stats'] | null;
+	getExtendedUserSecurity: () => ExtendedFirestoreUser['securitySettings'] | null;
+	getExtendedUserNotifications: () => ExtendedFirestoreUser['notificationSettings'] | null;
+	
+	// Extended Wallet操作
+	addWalletConnection: (connection: WalletConnection) => Promise<WalletOperationResult>;
+	removeWalletConnection: (address: string) => Promise<WalletOperationResult>;
+	setPrimaryWallet: (address: string) => Promise<WalletOperationResult>;
+	
+	// Extended 設定操作
+	updateSecuritySettings: (settings: Partial<ExtendedFirestoreUser['securitySettings']>) => Promise<WalletOperationResult>;
+	updateNotificationSettings: (settings: Partial<ExtendedFirestoreUser['notificationSettings']>) => Promise<WalletOperationResult>;
+}-e 
+### FILE: ./src/auth/types/api-wallet.ts
+
+// types/api-wallet.ts
+import { ChainType } from './wallet';
+import { WalletFirestoreUser } from '../src/lib/firestore/users-wallet';
+import { ExtendedFirestoreUser } from './user-extended'; // 追加
+
+/**
+ * Wallet認証API用の型定義
+ */
+
+// Wallet認証リクエスト
+export interface WalletAuthRequest {
+  // 署名データ
+  signature: string;
+  message: string;
+  address: string;
+  chainType: ChainType;
+  chainId?: number | string;
+  nonce: string;
+  timestamp: number;
+  
+  // リクエスト情報（セキュリティ用）
+  ipAddress?: string;
+  userAgent?: string;
+}
+
+// Wallet認証レスポンス
+export interface WalletAuthResponse {
+  success: boolean;
+  data?: {
+    user: ExtendedFirestoreUser; // ExtendedFirestoreUserに変更
+    sessionToken?: string;
+    isNewUser: boolean;
+    message: string;
+  };
+  error?: {
+    code: string;
+    message: string;
+    details?: any;
+  };
+}
+
+// プロフィール更新リクエスト
+export interface UpdateWalletProfileRequest {
+  address: string;
+  signature: string; // 本人確認用署名
+  
+  profileData: {
+    displayName?: string;
+    nickname?: string;
+    profileImage?: string;
+    address?: {
+      country?: string;
+      prefecture?: string;
+      city?: string;
+      addressLine1?: string;
+      addressLine2?: string;
+      postalCode?: string;
+      phone?: string;
+    };
+  };
+}
+
+// プロフィール更新レスポンス
+export interface UpdateWalletProfileResponse {
+  success: boolean;
+  data?: {
+    user: ExtendedFirestoreUser; // ExtendedFirestoreUserに変更
+    message: string;
+  };
+  error?: {
+    code: string;
+    message: string;
+    details?: any;
+  };
+}
+
+// ユーザー情報取得レスポンス
+export interface GetWalletUserResponse {
+  success: boolean;
+  data?: {
+    user: ExtendedFirestoreUser; // ExtendedFirestoreUserに変更
+    exists: boolean;
+  };
+  error?: {
+    code: string;
+    message: string;
+  };
+}
+
+// 統計更新リクエスト
+export interface UpdateWalletStatsRequest {
+  address: string;
+  signature: string; // 本人確認用署名
+  
+  statsData: {
+    totalSpent?: number;
+    totalSpentUSD?: number;
+    totalOrders?: number;
+    rank?: number;
+    badges?: string[];
+  };
+}
+
+// エラーコード定義
+export type WalletApiErrorCode = 
+  | 'INVALID_SIGNATURE'
+  | 'EXPIRED_NONCE'
+  | 'ADDRESS_MISMATCH'
+  | 'INVALID_CHAIN'
+  | 'USER_NOT_FOUND'
+  | 'VALIDATION_ERROR'
+  | 'FIRESTORE_ERROR'
+  | 'PERMISSION_DENIED'
+  | 'RATE_LIMITED'
+  | 'INTERNAL_ERROR';
+
+// API エラー型
+export interface WalletApiError {
+  code: WalletApiErrorCode;
+  message: string;
+  details?: any;
+  timestamp: string;
+  requestId?: string;
+}
+
+// セッション情報
+export interface WalletSession {
+  address: string;
+  chainType: ChainType;
+  chainId?: number | string;
+  token: string;
+  expiresAt: number;
+  createdAt: number;
+}
+
+// バッチ操作用
+export interface BatchWalletUsersRequest {
+  addresses: string[];
+}
+
+export interface BatchWalletUsersResponse {
+  success: boolean;
+  data?: {
+    users: ExtendedFirestoreUser[]; // ExtendedFirestoreUserに変更
+    found: number;
+    total: number;
+  };
+  error?: WalletApiError;
+}-e 
+### FILE: ./src/auth/types/wallet.ts
+
+// types/wallet.ts
+export type ChainType = 'evm' | 'solana' | 'sui';
+export type WalletType = 'metamask' | 'walletconnect' | 'coinbase' | 'phantom' | 'solflare' | 'sui-wallet' | 'ethos';
+export type AuthMethod = 'firebase' | 'wallet' | 'hybrid';
+
+// 基本的なウォレット接続情報
+export interface WalletConnection {
+	address: string;
+	chainType: ChainType;
+	chainId?: number | string;
+	walletType: string;
+	isConnected: boolean;
+	connectedAt?: Date;
+	lastUsedAt?: Date;
+	isVerified?: boolean; // 署名検証済みかどうか
+	isPrimary?: boolean;  // プライマリウォレットかどうか
+}
+
+// ウォレット認証で使用する署名データ
+export interface WalletSignatureData {
+	message: string;
+	signature: string;
+	address: string;
+	chainType: ChainType;
+	chainId?: number | string;
+	nonce: string;
+	timestamp: number;
+}
+
+// 認証結果
+export interface WalletAuthResult {
+	success: boolean;
+	user?: {
+		address: string;
+		chainType: ChainType;
+		chainId?: number | string;
+	};
+	error?: string;
+	signature?: WalletSignatureData;
+}
+
+// ウォレット状態
+export interface WalletState {
+	isConnecting: boolean;
+	isConnected: boolean;
+	isAuthenticated: boolean;
+	address?: string;
+	chainType?: ChainType;
+	chainId?: number | string;
+	walletType?: string;
+	error?: string;
+}
+
+// チェーン設定
+export interface ChainConfig {
+	chainId: number | string;
+	name: string;
+	nativeCurrency: {
+		name: string;
+		symbol: string;
+		decimals: number;
+	};
+	rpcUrls: string[];
+	blockExplorerUrls?: string[];
+	iconUrls?: string[];
+	isTestnet?: boolean;
+}
+
+// EVM固有の設定
+export interface EVMChainConfig extends ChainConfig {
+	chainId: number;
+}
+
+// Solana固有の設定
+export interface SolanaChainConfig extends ChainConfig {
+	chainId: string;
+	cluster: 'mainnet-beta' | 'testnet' | 'devnet';
+}
+
+// SUI固有の設定
+export interface SUIChainConfig extends ChainConfig {
+	chainId: string;
+	network: 'mainnet' | 'testnet' | 'devnet';
+}
+
+// サポートされているチェーンの設定
+export interface SupportedChains {
+	evm: EVMChainConfig[];
+	solana: SolanaChainConfig[];
+	sui: SUIChainConfig[];
+}
+
+// ウォレット機能
+export interface WalletCapabilities {
+	canSwitchChain: boolean;
+	canAddChain: boolean;
+	canSignMessage: boolean;
+	canSignTransaction: boolean;
+	supportsEIP1559: boolean; // EVM固有
+}
+
+// ウォレットプロバイダー情報
+export interface WalletProvider {
+	id: string;
+	name: string;
+	chainType: ChainType;
+	icon?: string;
+	downloadUrl?: string;
+	isInstalled: boolean;
+	capabilities: WalletCapabilities;
+}
+
+// 複数ウォレット管理用
+export interface ConnectedWallet extends WalletConnection {
+	id: string;
+	isVerified: boolean;
+	isPrimary: boolean;
+	nickname?: string;
+}
+
+// ウォレット切り替え用
+export interface WalletSwitchRequest {
+	fromAddress: string;
+	toAddress: string;
+	chainType: ChainType;
+	reason: string;
+}
+
+// 認証設定
+export interface WalletAuthConfig {
+	enabledChains: ChainType[];
+	preferredChain: ChainType;
+	authMessage: string;
+	nonceExpiry: number; // seconds
+	enableMultiWallet: boolean;
+	autoConnect: boolean;
+}
+
+// エラー型
+export interface WalletError {
+	code: string;
+	message: string;
+	details?: any;
+	chainType?: ChainType;
+}
+
+// ウォレット統計
+export interface WalletStats {
+	totalConnections: number;
+	lastConnected: Date;
+	connectionHistory: Array<{
+		address: string;
+		chainType: ChainType;
+		connectedAt: Date;
+		disconnectedAt?: Date;
+	}>;
+}-e 
+### FILE: ./src/auth/types/auth.ts
+
+// types/auth.ts (Extended対応版)
+import { User as FirebaseUser } from 'firebase/auth';
+import { FirestoreUser } from './user';
+import { ExtendedFirestoreUser, WalletOperationResult } from './user-extended';
+import { WalletConnection, WalletAuthResult, ChainType } from './wallet';
+
+// 統合認証方式
+export type AuthMethod = 'firebase' | 'wallet' | 'hybrid';
+
+// 統合認証状態（Extended対応）
+export interface UnifiedAuthState {
+	// 認証方式
+	authMethod: AuthMethod;
+
+	// Firebase認証
+	firebaseUser: FirebaseUser | null;
+	firebaseLoading: boolean;
+
+	// Wallet認証
+	walletConnection: WalletConnection | null;
+	walletLoading: boolean;
+
+	// Firestore統合（Extended対応）
+	firestoreUser: ExtendedFirestoreUser | null; // ExtendedFirestoreUserに変更
+	firestoreLoading: boolean;
+
+	// 全体の状態
+	isAuthenticated: boolean;
+	isLoading: boolean;
+
+	// エラー
+	error: string | null;
+}
+
+// 認証設定
+export interface AuthConfig {
+	// 認証方式の優先順位
+	preferredMethod: AuthMethod;
+
+	// 各認証方式の有効/無効
+	enableFirebase: boolean;
+	enableWallet: boolean;
+
+	// 自動ログイン
+	autoConnect: boolean;
+
+	// セッション管理
+	sessionTimeout: number; // minutes
+
+	// ウォレット設定
+	walletConfig?: {
+		enabledChains: ChainType[];
+		preferredChain: ChainType;
+	};
+}
+
+// Extended認証アクション
+export interface AuthActions {
+	// Firebase認証
+	signInWithEmail: (email: string, password: string) => Promise<void>;
+	signUpWithEmail: (email: string, password: string) => Promise<void>;
+	signInWithGoogle: () => Promise<void>;
+
+	// Wallet認証
+	connectWallet: (chainType?: ChainType, walletType?: string) => Promise<WalletConnection>;
+	authenticateWallet: (chainType?: ChainType,address?: string) => Promise<WalletAuthResult>;
+	switchWalletChain: (chainType: ChainType, chainId: number | string) => Promise<void>;
+
+	// 統合ログアウト
+	logout: () => Promise<void>;
+
+	// Extended プロフィール更新（戻り値型を変更）
+	updateProfile: (data: Partial<ExtendedFirestoreUser>) => Promise<WalletOperationResult>;
+
+	// Extended セッション管理
+	refreshSession: () => Promise<void>;
+}
+
+// 認証イベント
+export type AuthEventType =
+	| 'firebase-login'
+	| 'firebase-logout'
+	| 'wallet-connect'
+	| 'wallet-disconnect'
+	| 'wallet-authenticate'
+	| 'unified-login'
+	| 'unified-logout'
+	| 'profile-update'
+	| 'error';
+
+export interface AuthEvent {
+	type: AuthEventType;
+	timestamp: Date;
+	data?: any;
+	error?: string;
+}
+
+// Extended認証フック用の戻り値
+export interface UseAuthReturn extends UnifiedAuthState, AuthActions {
+	// 便利なゲッター
+	primaryUserId: string | null;
+	displayName: string | null;
+	emailAddress: string | null;
+	walletAddress: string | null;
+
+	// 状態チェック
+	isFirebaseAuth: boolean;
+	isWalletAuth: boolean;
+	hasMultipleAuth: boolean;
+
+	// イベント
+	addEventListener: (type: AuthEventType, callback: (event: AuthEvent) => void) => () => void;
+}
+
+// ウォレット接続結果
+export interface WalletConnectionResult {
+	success: boolean;
+	connection?: WalletConnection;
+	error?: string;
+}
+
+// 認証統合結果（Extended対応）
+export interface AuthIntegrationResult {
+	success: boolean;
+	authMethod: AuthMethod;
+	firebaseUser?: FirebaseUser;
+	walletConnection?: WalletConnection;
+	firestoreUser?: ExtendedFirestoreUser; // ExtendedFirestoreUserに変更
+	error?: string;
+}
+
+// Firebase + Wallet統合データ（Extended対応）
+export interface IntegratedUserData {
+	// Firebase認証データ
+	firebaseUid?: string;
+	email?: string;
+	emailVerified?: boolean;
+
+	// Extended Wallet認証データ
+	connectedWallets: WalletConnection[];
+	primaryWallet?: WalletConnection;
+
+	// Extended認証履歴
+	authHistory: Array<{
+		method: AuthMethod;
+		timestamp: Date;
+		chainType?: ChainType;
+		success: boolean;
+		ipAddress?: string;
+		userAgent?: string;
+	}>;
+
+	// Extended設定
+	preferences: {
+		preferredAuthMethod: AuthMethod;
+		autoConnect: boolean;
+		preferredChain?: ChainType;
+	};
+
+	// Extended セキュリティ設定
+	securitySettings: {
+		requireSignatureForUpdates: boolean;
+		allowedChains: ChainType[];
+		maxSessionDuration: number;
+	};
+
+	// Extended 通知設定
+	notificationSettings: {
+		email: boolean;
+		push: boolean;
+		sms: boolean;
+		newOrders: boolean;
+		priceAlerts: boolean;
+		securityAlerts: boolean;
+	};
+}
+
+// Extended認証プロバイダーのProps
+export interface UnifiedAuthProviderProps {
+	children: React.ReactNode;
+	config?: Partial<AuthConfig>;
+}
+
+// Extended認証コンテキストの型
+export interface UnifiedAuthContextType extends UseAuthReturn {
+	// 設定
+	config: AuthConfig;
+
+	// Extended状態
+	extendedUser: ExtendedFirestoreUser | null;
+	authFlowState: any; // AuthFlowState
+
+	// Extended操作
+	refreshExtendedUser: () => Promise<void>;
+	getAuthHistory: () => any[] | null;
+	getConnectedWallets: () => WalletConnection[] | null;
+	updateUserProfile: (profileData: any) => Promise<WalletOperationResult>;
+
+	// 内部状態
+	_internal?: {
+		eventEmitter: EventTarget;
+		sessionStorage: Map<string, any>;
+	};
+
+	// デバッグ情報
+	_debug: {
+		firebaseReady: boolean;
+		walletReady: boolean;
+		lastError: string | null;
+		apiCalls: number;
+		lastApiCall: Date | null;
+	};
+}
+
+// 後方互換性のための従来の型（非推奨）
+export interface LegacyAuthActions {
+	updateProfile: (data: Partial<FirestoreUser>) => Promise<void>;
+}
+
+// Extended専用のヘルパー型
+export interface ExtendedAuthHelpers {
+	// Extended ユーザー操作
+	getExtendedUserStats: () => ExtendedFirestoreUser['stats'] | null;
+	getExtendedUserSecurity: () => ExtendedFirestoreUser['securitySettings'] | null;
+	getExtendedUserNotifications: () => ExtendedFirestoreUser['notificationSettings'] | null;
+	
+	// Extended Wallet操作
+	addWalletConnection: (connection: WalletConnection) => Promise<WalletOperationResult>;
+	removeWalletConnection: (address: string) => Promise<WalletOperationResult>;
+	setPrimaryWallet: (address: string) => Promise<WalletOperationResult>;
+	
+	// Extended 設定操作
+	updateSecuritySettings: (settings: Partial<ExtendedFirestoreUser['securitySettings']>) => Promise<WalletOperationResult>;
+	updateNotificationSettings: (settings: Partial<ExtendedFirestoreUser['notificationSettings']>) => Promise<WalletOperationResult>;
+}-e 
+### FILE: ./src/auth/contexts/UnifiedAuthContext.tsx
 
 // src/contexts/UnifiedAuthContext.tsx (Extended統合版)
 'use client';
 
 import React, { createContext, useContext, useEffect, useState, useCallback, useRef } from 'react';
-import { ChainType } from '../../types/wallet';
+import { ChainType } from '@/types/wallet';
 import {
 	ExtendedFirestoreUser,
 	WalletOperationResult,
 	AuthFlowState
-} from '../../types/user-extended';
-import { UnifiedAuthState, AuthConfig, AuthActions, AuthEvent, AuthEventType, UseAuthReturn } from '../../types/auth';
-import { WalletAuthRequest, WalletAuthResponse } from '../../types/api-wallet';
+} from '@/types/user-extended';
+import { UnifiedAuthState, AuthConfig, AuthActions, AuthEvent, AuthEventType, UseAuthReturn } from '@/types/auth';
+import { WalletAuthRequest, WalletAuthResponse } from '@/types/api-wallet';
 
 // EVMWalletProviderはオプショナルにする
 let useEVMWallet: any = null;
@@ -672,6 +2959,422 @@ export const useAuthActions = () => {
 		refreshExtendedUser,
 	};
 };-e 
+### FILE: ./src/contexts/DashboardContext.tsx
+
+// src/app/dashboard/context/DashboardContext.tsx
+'use client';
+
+import React, { createContext, useContext, useReducer, useEffect } from 'react';
+import { DashboardState, CartItem, UserProfile, SectionType } from '../../../../types/dashboard';
+import { useUnifiedAuth } from '@/auth/contexts/UnifiedAuthContext';
+
+// カート有効期限（30日）
+const CART_EXPIRY_DAYS = 30;
+const CART_EXPIRY_MS = CART_EXPIRY_DAYS * 24 * 60 * 60 * 1000;
+
+// 簡素化されたCartItemの型（有効期限のみ）
+interface CartItemWithExpiry extends CartItem {
+	addedAt: string; // ISO string
+}
+
+// Actions
+type DashboardAction =
+	| { type: 'SET_USER_PROFILE'; payload: UserProfile | null }
+	| { type: 'ADD_TO_CART'; payload: CartItem & { maxStock?: number } }
+	| { type: 'REMOVE_FROM_CART'; payload: string }
+	| { type: 'UPDATE_CART_QUANTITY'; payload: { id: string; quantity: number; maxStock?: number } }
+	| { type: 'CLEAR_CART' }
+	| { type: 'CLEAR_EXPIRED_ITEMS' }
+	| { type: 'LOAD_FROM_STORAGE'; payload: Partial<DashboardState> }
+	| { type: 'SET_HYDRATED'; payload: boolean }
+	| { type: 'SET_ACTIVE_SECTION'; payload: SectionType | null }
+	| { type: 'SET_SLIDE_OPEN'; payload: boolean };
+
+// Helper functions for cart management
+const isItemExpired = (addedAt: string): boolean => {
+	const addedTime = new Date(addedAt).getTime();
+	const currentTime = Date.now();
+	return currentTime - addedTime > CART_EXPIRY_MS;
+};
+
+const validateQuantity = (quantity: number, maxStock?: number): number => {
+	const validQuantity = Math.max(1, Math.min(quantity, 10)); // 最低1個、最大10個
+	return maxStock ? Math.min(validQuantity, maxStock) : validQuantity;
+};
+
+const removeExpiredItems = (items: CartItemWithExpiry[]): CartItemWithExpiry[] => {
+	return items.filter(item => !isItemExpired(item.addedAt));
+};
+
+// 拡張されたDashboardStateの型
+interface ExtendedDashboardState extends DashboardState {
+	isHydrated: boolean; // ハイドレーション完了フラグ
+}
+
+// Initial state
+const initialState: ExtendedDashboardState = {
+	activeSection: null,
+	isSlideOpen: false,
+	cartItems: [],
+	userProfile: null,
+	walletConnected: false,
+	isHydrated: false, // 初期状態では false
+};
+
+// Reducer
+function dashboardReducer(state: ExtendedDashboardState, action: DashboardAction): ExtendedDashboardState {
+	switch (action.type) {
+		case 'SET_USER_PROFILE':
+			return { ...state, userProfile: action.payload };
+
+		case 'ADD_TO_CART': {
+			const { maxStock, ...itemData } = action.payload;
+			const newItem: CartItemWithExpiry = {
+				...itemData,
+				addedAt: new Date().toISOString()
+			};
+
+			// 期限切れアイテムを除去
+			const validItems = removeExpiredItems(state.cartItems as CartItemWithExpiry[]);
+
+			const existingItem = validItems.find(item => item.id === newItem.id);
+
+			if (existingItem) {
+				const newQuantity = validateQuantity(existingItem.quantity + newItem.quantity, maxStock);
+				return {
+					...state,
+					cartItems: validItems.map(item =>
+						item.id === newItem.id
+							? { ...item, quantity: newQuantity }
+							: item
+					),
+				};
+			}
+
+			// 新しいアイテムの数量検証
+			const validatedQuantity = validateQuantity(newItem.quantity, maxStock);
+
+			return {
+				...state,
+				cartItems: [...validItems, { ...newItem, quantity: validatedQuantity }],
+			};
+		}
+
+		case 'REMOVE_FROM_CART': {
+			const validItems = removeExpiredItems(state.cartItems as CartItemWithExpiry[]);
+
+			return {
+				...state,
+				cartItems: validItems.filter(item => item.id !== action.payload),
+			};
+		}
+
+		case 'UPDATE_CART_QUANTITY': {
+			const { id, quantity, maxStock } = action.payload;
+			const validItems = removeExpiredItems(state.cartItems as CartItemWithExpiry[]);
+
+			if (quantity <= 0) {
+				return {
+					...state,
+					cartItems: validItems.filter(item => item.id !== id),
+				};
+			}
+
+			const validatedQuantity = validateQuantity(quantity, maxStock);
+
+			return {
+				...state,
+				cartItems: validItems.map(item =>
+					item.id === id
+						? { ...item, quantity: validatedQuantity }
+						: item
+				),
+			};
+		}
+
+		case 'CLEAR_CART': {
+			return { ...state, cartItems: [] };
+		}
+
+		case 'CLEAR_EXPIRED_ITEMS': {
+			const validItems = removeExpiredItems(state.cartItems as CartItemWithExpiry[]);
+			return { ...state, cartItems: validItems };
+		}
+
+		case 'LOAD_FROM_STORAGE': {
+			// ストレージからロード時も期限チェック
+			const loadedData = { ...action.payload };
+			if (loadedData.cartItems) {
+				loadedData.cartItems = removeExpiredItems(loadedData.cartItems as CartItemWithExpiry[]);
+			}
+			return { ...state, ...loadedData };
+		}
+
+		case 'SET_HYDRATED':
+			return { ...state, isHydrated: action.payload };
+
+		case 'SET_ACTIVE_SECTION':
+			return { ...state, activeSection: action.payload };
+
+		case 'SET_SLIDE_OPEN':
+			return { ...state, isSlideOpen: action.payload };
+
+		default:
+			return state;
+	}
+}
+
+// Context
+const DashboardContext = createContext<{
+	state: ExtendedDashboardState;
+	dispatch: React.Dispatch<DashboardAction>;
+} | null>(null);
+
+// Provider
+export function DashboardProvider({ children }: { children: React.ReactNode }) {
+	const [state, dispatch] = useReducer(dashboardReducer, initialState);
+	const { isAuthenticated, walletAddress } = useUnifiedAuth()
+
+	// Load from localStorage on mount (クライアントサイドのみ)
+	useEffect(() => {
+		// ブラウザ環境でのみ実行
+		if (typeof window === 'undefined') return;
+
+		try {
+			const savedState = localStorage.getItem('dashboard-state');
+			if (savedState) {
+				const parsed = JSON.parse(savedState);
+				console.log('📦 Loading from localStorage:', parsed);
+				dispatch({ type: 'LOAD_FROM_STORAGE', payload: parsed });
+			}
+		} catch (error) {
+			console.error('Failed to load dashboard state from localStorage:', error);
+		} finally {
+			// ハイドレーション完了をマーク
+			dispatch({ type: 'SET_HYDRATED', payload: true });
+		}
+	}, []);
+
+	// 期限切れアイテムの定期クリーンアップ（1時間ごと）
+	useEffect(() => {
+		const cleanup = () => {
+			dispatch({ type: 'CLEAR_EXPIRED_ITEMS' });
+		};
+
+		// 初回クリーンアップ
+		cleanup();
+
+		// 1時間ごとにクリーンアップ
+		const interval = setInterval(cleanup, 60 * 60 * 1000);
+
+		return () => clearInterval(interval);
+	}, []);
+
+	// Save to localStorage when state changes (ハイドレーション完了後のみ)
+	useEffect(() => {
+		// ハイドレーション完了前は保存しない
+		if (!state.isHydrated) return;
+
+		try {
+			const stateToSave = {
+				cartItems: state.cartItems,
+				userProfile: state.userProfile,
+				lastUpdated: new Date().toISOString(),
+			};
+			console.log('💾 Saving to localStorage:', stateToSave);
+			localStorage.setItem('dashboard-state', JSON.stringify(stateToSave));
+		} catch (error) {
+			console.error('Failed to save dashboard state to localStorage:', error);
+		}
+	}, [state.cartItems, state.userProfile, state.isHydrated]);
+
+	// Notify header about cart changes (ハイドレーション完了後のみ)
+	useEffect(() => {
+		// ハイドレーション完了前は通知しない
+		if (!state.isHydrated) return;
+
+		const itemCount = state.cartItems.reduce((count, item) => count + item.quantity, 0);
+
+		// カスタムイベントでヘッダーにカート数を通知
+		const cartUpdateEvent = new CustomEvent('cartUpdated', {
+			detail: { itemCount }
+		});
+		window.dispatchEvent(cartUpdateEvent);
+		console.log('🔔 Cart updated notification sent:', itemCount);
+	}, [state.cartItems, state.isHydrated]);
+
+	// Set up cart click handler for header
+	useEffect(() => {
+		const cartClickHandler = () => {
+			dispatch({ type: 'SET_ACTIVE_SECTION', payload: 'cart' });
+			dispatch({ type: 'SET_SLIDE_OPEN', payload: true });
+		};
+
+		// カスタムイベントでヘッダーにクリックハンドラーを登録
+		const handlerEvent = new CustomEvent('cartClickHandlerSet', {
+			detail: { clickHandler: cartClickHandler }
+		});
+		window.dispatchEvent(handlerEvent);
+	}, []);
+
+	return (
+		<DashboardContext.Provider value={{ state, dispatch }}>
+			{children}
+		</DashboardContext.Provider>
+	);
+}
+
+// Hook
+export function useDashboard() {
+	const context = useContext(DashboardContext);
+	if (!context) {
+		throw new Error('useDashboard must be used within a DashboardProvider');
+	}
+	return context;
+}
+
+// Panel management hook
+export function usePanel() {
+	const { state, dispatch } = useDashboard();
+
+	const openPanel = (section: SectionType) => {
+		dispatch({ type: 'SET_ACTIVE_SECTION', payload: section });
+		dispatch({ type: 'SET_SLIDE_OPEN', payload: true });
+	};
+
+	const closePanel = () => {
+		dispatch({ type: 'SET_SLIDE_OPEN', payload: false });
+		// アニメーション完了後にactiveSectionをクリア
+		setTimeout(() => {
+			dispatch({ type: 'SET_ACTIVE_SECTION', payload: null });
+		}, 300);
+	};
+
+	return {
+		activeSection: state.activeSection,
+		isSlideOpen: state.isSlideOpen,
+		openPanel,
+		closePanel,
+	};
+}
+
+// Cart management hook
+export function useCart() {
+	const { state, dispatch } = useDashboard();
+
+	const addToCart = (item: CartItem, maxStock?: number) => {
+		dispatch({ type: 'ADD_TO_CART', payload: { ...item, maxStock } });
+	};
+
+	const removeFromCart = (id: string) => {
+		dispatch({ type: 'REMOVE_FROM_CART', payload: id });
+	};
+
+	const updateQuantity = (id: string, quantity: number, maxStock?: number) => {
+		dispatch({ type: 'UPDATE_CART_QUANTITY', payload: { id, quantity, maxStock } });
+	};
+
+	const clearCart = () => {
+		dispatch({ type: 'CLEAR_CART' });
+	};
+
+	const getCartTotal = () => {
+		return state.cartItems.reduce((total, item) => total + (item.price * item.quantity), 0);
+	};
+
+	const getCartItemCount = () => {
+		return state.cartItems.reduce((count, item) => count + item.quantity, 0);
+	};
+
+	// カート内のアイテムの残り有効期限を取得
+	const getItemTimeLeft = (addedAt: string) => {
+		const addedTime = new Date(addedAt).getTime();
+		const currentTime = Date.now();
+		const timeLeft = CART_EXPIRY_MS - (currentTime - addedTime);
+
+		if (timeLeft <= 0) return null;
+
+		const daysLeft = Math.floor(timeLeft / (24 * 60 * 60 * 1000));
+		const hoursLeft = Math.floor((timeLeft % (24 * 60 * 60 * 1000)) / (60 * 60 * 1000));
+
+		if (daysLeft > 0) return `${daysLeft} day${daysLeft > 1 ? 's' : ''} left`;
+		if (hoursLeft > 0) return `${hoursLeft} hour${hoursLeft > 1 ? 's' : ''} left`;
+		return 'Expires soon';
+	};
+
+	// 在庫チェック機能（ローカル版）
+	const checkStock = (id: string, requestedQuantity: number, availableStock: number) => {
+		const currentItem = state.cartItems.find(item => item.id === id);
+		const currentQuantity = currentItem ? currentItem.quantity : 0;
+		const totalRequested = currentQuantity + requestedQuantity;
+
+		return {
+			canAdd: totalRequested <= availableStock && totalRequested <= 10,
+			maxCanAdd: Math.min(availableStock - currentQuantity, 10 - currentQuantity),
+			willExceedStock: totalRequested > availableStock,
+			willExceedLimit: totalRequested > 10
+		};
+	};
+
+	// カートアイテムの詳細情報を取得（期限情報付き）
+	const getCartItemsWithDetails = () => {
+		return state.cartItems.map(item => {
+			const itemWithExpiry = item as CartItemWithExpiry;
+			return {
+				...item,
+				addedAt: itemWithExpiry.addedAt,
+				timeLeft: getItemTimeLeft(itemWithExpiry.addedAt)
+			};
+		});
+	};
+
+	return {
+		cartItems: state.cartItems,
+		addToCart,
+		removeFromCart,
+		updateQuantity,
+		clearCart,
+		getCartTotal,
+		getCartItemCount,
+		getItemTimeLeft,
+		checkStock,
+		getCartItemsWithDetails,
+	};
+}
+
+// Profile management hook
+export function useProfile() {
+	const { state, dispatch } = useDashboard();
+
+	const setUserProfile = (profile: UserProfile | null) => {
+		dispatch({ type: 'SET_USER_PROFILE', payload: profile });
+	};
+
+	return {
+		userProfile: state.userProfile,
+		setUserProfile,
+	};
+}
+
+// Optional wallet hook for future integration
+export function useWallet() {
+	const { state } = useDashboard();
+
+	const connectWallet = () => {
+		console.log('Wallet connection not required for invoice payments');
+	};
+
+	const disconnectWallet = () => {
+		console.log('Wallet disconnection not required for invoice payments');
+	};
+
+	return {
+		walletConnected: false,
+		userProfile: state.userProfile,
+		connectWallet,
+		disconnectWallet,
+	};
+}-e 
 ### FILE: ./src/lib/firebase.ts
 
 // src/lib/firebase.ts
@@ -700,7 +3403,7 @@ export default app;-e
 ### FILE: ./src/lib/avalanche-config.ts
 
 // src/lib/avalanche-config.ts
-import { AvalancheConfig, PaymentMonitorConfig, QRCodeConfig, RateLimitConfig } from '../../types/demo-payment';
+import { AvalancheConfig, PaymentMonitorConfig, QRCodeConfig, RateLimitConfig } from '@/types/demo-payment';
 
 /**
  * Avalanche FUJI Testnet 設定
@@ -1052,8 +3755,8 @@ import {
 	UpdateUserProfile,
 	UpdateUserStats,
 	ProfileCompleteness
-} from '../../../types/user';
-import { UserProfile } from '../../../types/dashboard';
+} from '@/types/user';
+import { UserProfile } from '@/types/dashboard';
 
 // コレクション名
 const USERS_COLLECTION = 'users';
@@ -1350,7 +4053,7 @@ import {
 	UpdateInventoryData,
 	BatchInventoryUpdate,
 	ProductError
-} from '../../../types/product';
+} from '@/types/product';
 import { getProductById } from './products';
 import { handleAsyncOperation } from '@/utils/errorHandling';
 
@@ -1886,7 +4589,7 @@ export const stopPeriodicCleanup = () => {
 
 // src/lib/firestore/users-wallet-extended.ts
 import { getAdminFirestore, handleAdminError } from '@/lib/firebase-admin';
-import { ChainType } from '../../../types/wallet';
+import { ChainType } from '@/types/wallet';
 import { 
   ExtendedFirestoreUser, 
   CreateExtendedUserData,
@@ -1896,7 +4599,7 @@ import {
   ExtendedUserQuery,
   ExtendedUserQueryResult,
   UserSettings
-} from '../../../types/user-extended';
+} from '@/types/user-extended';
 import { Timestamp } from 'firebase-admin/firestore';
 
 /**
@@ -2409,7 +5112,7 @@ export const syncExtendedWalletAuthWithFirestore = async (
 
 // src/lib/firestore/users-wallet.ts
 import { getAdminFirestore, handleAdminError } from '@/lib/firebase-admin';
-import { ChainType, WalletConnection } from '../../../types/wallet';
+import { ChainType, WalletConnection } from '@/types/wallet';
 import { Timestamp } from 'firebase-admin/firestore';
 
 /**
@@ -2828,7 +5531,7 @@ import {
 	ProductSummary,
 	ProductDetails,
 	ProductError
-} from '../../../types/product';
+} from '@/types/product';
 import { handleAsyncOperation } from '@/utils/errorHandling';
 
 // コレクション名
@@ -3209,7 +5912,7 @@ export const PRODUCT_CONSTANTS = {
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { useUnifiedAuth } from '@/contexts/UnifiedAuthContext';
+import { useUnifiedAuth } from '@/auth/contexts/UnifiedAuthContext';
 import CyberCard from '../../../components/common/CyberCard';
 import CyberButton from '../../../components/common/CyberButton';
 import { ProfileEditModal } from './ProfileEditModal';
@@ -4080,8 +6783,8 @@ export default HowToBuySection;-e
 import React from 'react';
 import CyberCard from '../../../components/common/CyberCard';
 import CyberButton from '../../../components/common/CyberButton';
-import { useCart, usePanel } from '../../context/DashboardContext';
-import { useUnifiedAuth } from '@/contexts/UnifiedAuthContext';
+import { useCart, usePanel } from '@/contexts/DashboardContext';
+import { useUnifiedAuth } from '@/auth/contexts/UnifiedAuthContext';
 import {
 	ShoppingCart,
 	Trash2,
@@ -4267,7 +6970,7 @@ export default CartSection;-e
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { useUnifiedAuth } from '@/contexts/UnifiedAuthContext';
+import { useUnifiedAuth } from '@/auth/contexts/UnifiedAuthContext';
 import CyberButton from '../../../components/common/CyberButton';
 import { FirestoreUser, UpdateUserProfile } from '../../../../../types/user';
 import {
@@ -5327,7 +8030,7 @@ import React, { useState, useEffect } from 'react';
 import CyberCard from '../../../components/common/CyberCard';
 import CyberButton from '../../../components/common/CyberButton';
 import ProteinModel from '../../../components/home/glowing-3d-text/ProteinModel';
-import { useCart } from '../../context/DashboardContext';
+import { useCart } from '@/contexts/DashboardContext';
 import { ShoppingCart, Star, Shield, Zap, Check, AlertTriangle, Clock, Loader2 } from 'lucide-react';
 import { ProductDetails } from '../../../../../types/product';
 import { getProductDetails, subscribeToProduct } from '@/lib/firestore/products';
@@ -6013,7 +8716,7 @@ export default DashboardCard;-e
 import React from 'react';
 import DashboardCard from './DashboardCard';
 import { SectionType } from '../../../../types/dashboard';
-import { useCart } from '../context/DashboardContext';
+import { useCart } from '@/contexts/DashboardContext';
 import { 
   ShoppingBag, 
   FileText, 
@@ -6193,7 +8896,7 @@ import Header from '../components/ui/Header';
 import Footer from '../components/ui/Footer';
 import GridPattern from '../components/common/GridPattern';
 import SlideInPanel from './components/SlideInPanel';
-import { DashboardProvider, usePanel } from './context/DashboardContext';
+import { DashboardProvider, usePanel } from '@/contexts/DashboardContext';
 
 // セクションコンポーネントのインポート
 import ShopSection from './components/sections/ShopSection';
@@ -6201,8 +8904,8 @@ import HowToBuySection from './components/sections/HowToBuySection';
 import WhitepaperSection from './components/sections/WhitepaperSection';
 import ProfileSection from './components/sections/ProfileSection';
 import CartSection from './components/sections/CartSection';
-import { SectionType } from '../../../types/dashboard';
-import { useUnifiedAuth } from '@/contexts/UnifiedAuthContext';
+import { SectionType } from '@/types/dashboard';
+import { useUnifiedAuth } from '@/auth/contexts/UnifiedAuthContext';
 interface DashboardLayoutProps {
 	children: React.ReactNode;
 }
@@ -6283,422 +8986,6 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
 		</DashboardProvider>
 	);
 }-e 
-### FILE: ./src/app/dashboard/context/DashboardContext.tsx
-
-// src/app/dashboard/context/DashboardContext.tsx
-'use client';
-
-import React, { createContext, useContext, useReducer, useEffect } from 'react';
-import { DashboardState, CartItem, UserProfile, SectionType } from '../../../../types/dashboard';
-import { useUnifiedAuth } from '@/contexts/UnifiedAuthContext';
-
-// カート有効期限（30日）
-const CART_EXPIRY_DAYS = 30;
-const CART_EXPIRY_MS = CART_EXPIRY_DAYS * 24 * 60 * 60 * 1000;
-
-// 簡素化されたCartItemの型（有効期限のみ）
-interface CartItemWithExpiry extends CartItem {
-	addedAt: string; // ISO string
-}
-
-// Actions
-type DashboardAction =
-	| { type: 'SET_USER_PROFILE'; payload: UserProfile | null }
-	| { type: 'ADD_TO_CART'; payload: CartItem & { maxStock?: number } }
-	| { type: 'REMOVE_FROM_CART'; payload: string }
-	| { type: 'UPDATE_CART_QUANTITY'; payload: { id: string; quantity: number; maxStock?: number } }
-	| { type: 'CLEAR_CART' }
-	| { type: 'CLEAR_EXPIRED_ITEMS' }
-	| { type: 'LOAD_FROM_STORAGE'; payload: Partial<DashboardState> }
-	| { type: 'SET_HYDRATED'; payload: boolean }
-	| { type: 'SET_ACTIVE_SECTION'; payload: SectionType | null }
-	| { type: 'SET_SLIDE_OPEN'; payload: boolean };
-
-// Helper functions for cart management
-const isItemExpired = (addedAt: string): boolean => {
-	const addedTime = new Date(addedAt).getTime();
-	const currentTime = Date.now();
-	return currentTime - addedTime > CART_EXPIRY_MS;
-};
-
-const validateQuantity = (quantity: number, maxStock?: number): number => {
-	const validQuantity = Math.max(1, Math.min(quantity, 10)); // 最低1個、最大10個
-	return maxStock ? Math.min(validQuantity, maxStock) : validQuantity;
-};
-
-const removeExpiredItems = (items: CartItemWithExpiry[]): CartItemWithExpiry[] => {
-	return items.filter(item => !isItemExpired(item.addedAt));
-};
-
-// 拡張されたDashboardStateの型
-interface ExtendedDashboardState extends DashboardState {
-	isHydrated: boolean; // ハイドレーション完了フラグ
-}
-
-// Initial state
-const initialState: ExtendedDashboardState = {
-	activeSection: null,
-	isSlideOpen: false,
-	cartItems: [],
-	userProfile: null,
-	walletConnected: false,
-	isHydrated: false, // 初期状態では false
-};
-
-// Reducer
-function dashboardReducer(state: ExtendedDashboardState, action: DashboardAction): ExtendedDashboardState {
-	switch (action.type) {
-		case 'SET_USER_PROFILE':
-			return { ...state, userProfile: action.payload };
-
-		case 'ADD_TO_CART': {
-			const { maxStock, ...itemData } = action.payload;
-			const newItem: CartItemWithExpiry = {
-				...itemData,
-				addedAt: new Date().toISOString()
-			};
-
-			// 期限切れアイテムを除去
-			const validItems = removeExpiredItems(state.cartItems as CartItemWithExpiry[]);
-
-			const existingItem = validItems.find(item => item.id === newItem.id);
-
-			if (existingItem) {
-				const newQuantity = validateQuantity(existingItem.quantity + newItem.quantity, maxStock);
-				return {
-					...state,
-					cartItems: validItems.map(item =>
-						item.id === newItem.id
-							? { ...item, quantity: newQuantity }
-							: item
-					),
-				};
-			}
-
-			// 新しいアイテムの数量検証
-			const validatedQuantity = validateQuantity(newItem.quantity, maxStock);
-
-			return {
-				...state,
-				cartItems: [...validItems, { ...newItem, quantity: validatedQuantity }],
-			};
-		}
-
-		case 'REMOVE_FROM_CART': {
-			const validItems = removeExpiredItems(state.cartItems as CartItemWithExpiry[]);
-
-			return {
-				...state,
-				cartItems: validItems.filter(item => item.id !== action.payload),
-			};
-		}
-
-		case 'UPDATE_CART_QUANTITY': {
-			const { id, quantity, maxStock } = action.payload;
-			const validItems = removeExpiredItems(state.cartItems as CartItemWithExpiry[]);
-
-			if (quantity <= 0) {
-				return {
-					...state,
-					cartItems: validItems.filter(item => item.id !== id),
-				};
-			}
-
-			const validatedQuantity = validateQuantity(quantity, maxStock);
-
-			return {
-				...state,
-				cartItems: validItems.map(item =>
-					item.id === id
-						? { ...item, quantity: validatedQuantity }
-						: item
-				),
-			};
-		}
-
-		case 'CLEAR_CART': {
-			return { ...state, cartItems: [] };
-		}
-
-		case 'CLEAR_EXPIRED_ITEMS': {
-			const validItems = removeExpiredItems(state.cartItems as CartItemWithExpiry[]);
-			return { ...state, cartItems: validItems };
-		}
-
-		case 'LOAD_FROM_STORAGE': {
-			// ストレージからロード時も期限チェック
-			const loadedData = { ...action.payload };
-			if (loadedData.cartItems) {
-				loadedData.cartItems = removeExpiredItems(loadedData.cartItems as CartItemWithExpiry[]);
-			}
-			return { ...state, ...loadedData };
-		}
-
-		case 'SET_HYDRATED':
-			return { ...state, isHydrated: action.payload };
-
-		case 'SET_ACTIVE_SECTION':
-			return { ...state, activeSection: action.payload };
-
-		case 'SET_SLIDE_OPEN':
-			return { ...state, isSlideOpen: action.payload };
-
-		default:
-			return state;
-	}
-}
-
-// Context
-const DashboardContext = createContext<{
-	state: ExtendedDashboardState;
-	dispatch: React.Dispatch<DashboardAction>;
-} | null>(null);
-
-// Provider
-export function DashboardProvider({ children }: { children: React.ReactNode }) {
-	const [state, dispatch] = useReducer(dashboardReducer, initialState);
-	const { isAuthenticated, walletAddress } = useUnifiedAuth()
-
-	// Load from localStorage on mount (クライアントサイドのみ)
-	useEffect(() => {
-		// ブラウザ環境でのみ実行
-		if (typeof window === 'undefined') return;
-
-		try {
-			const savedState = localStorage.getItem('dashboard-state');
-			if (savedState) {
-				const parsed = JSON.parse(savedState);
-				console.log('📦 Loading from localStorage:', parsed);
-				dispatch({ type: 'LOAD_FROM_STORAGE', payload: parsed });
-			}
-		} catch (error) {
-			console.error('Failed to load dashboard state from localStorage:', error);
-		} finally {
-			// ハイドレーション完了をマーク
-			dispatch({ type: 'SET_HYDRATED', payload: true });
-		}
-	}, []);
-
-	// 期限切れアイテムの定期クリーンアップ（1時間ごと）
-	useEffect(() => {
-		const cleanup = () => {
-			dispatch({ type: 'CLEAR_EXPIRED_ITEMS' });
-		};
-
-		// 初回クリーンアップ
-		cleanup();
-
-		// 1時間ごとにクリーンアップ
-		const interval = setInterval(cleanup, 60 * 60 * 1000);
-
-		return () => clearInterval(interval);
-	}, []);
-
-	// Save to localStorage when state changes (ハイドレーション完了後のみ)
-	useEffect(() => {
-		// ハイドレーション完了前は保存しない
-		if (!state.isHydrated) return;
-
-		try {
-			const stateToSave = {
-				cartItems: state.cartItems,
-				userProfile: state.userProfile,
-				lastUpdated: new Date().toISOString(),
-			};
-			console.log('💾 Saving to localStorage:', stateToSave);
-			localStorage.setItem('dashboard-state', JSON.stringify(stateToSave));
-		} catch (error) {
-			console.error('Failed to save dashboard state to localStorage:', error);
-		}
-	}, [state.cartItems, state.userProfile, state.isHydrated]);
-
-	// Notify header about cart changes (ハイドレーション完了後のみ)
-	useEffect(() => {
-		// ハイドレーション完了前は通知しない
-		if (!state.isHydrated) return;
-
-		const itemCount = state.cartItems.reduce((count, item) => count + item.quantity, 0);
-
-		// カスタムイベントでヘッダーにカート数を通知
-		const cartUpdateEvent = new CustomEvent('cartUpdated', {
-			detail: { itemCount }
-		});
-		window.dispatchEvent(cartUpdateEvent);
-		console.log('🔔 Cart updated notification sent:', itemCount);
-	}, [state.cartItems, state.isHydrated]);
-
-	// Set up cart click handler for header
-	useEffect(() => {
-		const cartClickHandler = () => {
-			dispatch({ type: 'SET_ACTIVE_SECTION', payload: 'cart' });
-			dispatch({ type: 'SET_SLIDE_OPEN', payload: true });
-		};
-
-		// カスタムイベントでヘッダーにクリックハンドラーを登録
-		const handlerEvent = new CustomEvent('cartClickHandlerSet', {
-			detail: { clickHandler: cartClickHandler }
-		});
-		window.dispatchEvent(handlerEvent);
-	}, []);
-
-	return (
-		<DashboardContext.Provider value={{ state, dispatch }}>
-			{children}
-		</DashboardContext.Provider>
-	);
-}
-
-// Hook
-export function useDashboard() {
-	const context = useContext(DashboardContext);
-	if (!context) {
-		throw new Error('useDashboard must be used within a DashboardProvider');
-	}
-	return context;
-}
-
-// Panel management hook
-export function usePanel() {
-	const { state, dispatch } = useDashboard();
-
-	const openPanel = (section: SectionType) => {
-		dispatch({ type: 'SET_ACTIVE_SECTION', payload: section });
-		dispatch({ type: 'SET_SLIDE_OPEN', payload: true });
-	};
-
-	const closePanel = () => {
-		dispatch({ type: 'SET_SLIDE_OPEN', payload: false });
-		// アニメーション完了後にactiveSectionをクリア
-		setTimeout(() => {
-			dispatch({ type: 'SET_ACTIVE_SECTION', payload: null });
-		}, 300);
-	};
-
-	return {
-		activeSection: state.activeSection,
-		isSlideOpen: state.isSlideOpen,
-		openPanel,
-		closePanel,
-	};
-}
-
-// Cart management hook
-export function useCart() {
-	const { state, dispatch } = useDashboard();
-
-	const addToCart = (item: CartItem, maxStock?: number) => {
-		dispatch({ type: 'ADD_TO_CART', payload: { ...item, maxStock } });
-	};
-
-	const removeFromCart = (id: string) => {
-		dispatch({ type: 'REMOVE_FROM_CART', payload: id });
-	};
-
-	const updateQuantity = (id: string, quantity: number, maxStock?: number) => {
-		dispatch({ type: 'UPDATE_CART_QUANTITY', payload: { id, quantity, maxStock } });
-	};
-
-	const clearCart = () => {
-		dispatch({ type: 'CLEAR_CART' });
-	};
-
-	const getCartTotal = () => {
-		return state.cartItems.reduce((total, item) => total + (item.price * item.quantity), 0);
-	};
-
-	const getCartItemCount = () => {
-		return state.cartItems.reduce((count, item) => count + item.quantity, 0);
-	};
-
-	// カート内のアイテムの残り有効期限を取得
-	const getItemTimeLeft = (addedAt: string) => {
-		const addedTime = new Date(addedAt).getTime();
-		const currentTime = Date.now();
-		const timeLeft = CART_EXPIRY_MS - (currentTime - addedTime);
-
-		if (timeLeft <= 0) return null;
-
-		const daysLeft = Math.floor(timeLeft / (24 * 60 * 60 * 1000));
-		const hoursLeft = Math.floor((timeLeft % (24 * 60 * 60 * 1000)) / (60 * 60 * 1000));
-
-		if (daysLeft > 0) return `${daysLeft} day${daysLeft > 1 ? 's' : ''} left`;
-		if (hoursLeft > 0) return `${hoursLeft} hour${hoursLeft > 1 ? 's' : ''} left`;
-		return 'Expires soon';
-	};
-
-	// 在庫チェック機能（ローカル版）
-	const checkStock = (id: string, requestedQuantity: number, availableStock: number) => {
-		const currentItem = state.cartItems.find(item => item.id === id);
-		const currentQuantity = currentItem ? currentItem.quantity : 0;
-		const totalRequested = currentQuantity + requestedQuantity;
-
-		return {
-			canAdd: totalRequested <= availableStock && totalRequested <= 10,
-			maxCanAdd: Math.min(availableStock - currentQuantity, 10 - currentQuantity),
-			willExceedStock: totalRequested > availableStock,
-			willExceedLimit: totalRequested > 10
-		};
-	};
-
-	// カートアイテムの詳細情報を取得（期限情報付き）
-	const getCartItemsWithDetails = () => {
-		return state.cartItems.map(item => {
-			const itemWithExpiry = item as CartItemWithExpiry;
-			return {
-				...item,
-				addedAt: itemWithExpiry.addedAt,
-				timeLeft: getItemTimeLeft(itemWithExpiry.addedAt)
-			};
-		});
-	};
-
-	return {
-		cartItems: state.cartItems,
-		addToCart,
-		removeFromCart,
-		updateQuantity,
-		clearCart,
-		getCartTotal,
-		getCartItemCount,
-		getItemTimeLeft,
-		checkStock,
-		getCartItemsWithDetails,
-	};
-}
-
-// Profile management hook
-export function useProfile() {
-	const { state, dispatch } = useDashboard();
-
-	const setUserProfile = (profile: UserProfile | null) => {
-		dispatch({ type: 'SET_USER_PROFILE', payload: profile });
-	};
-
-	return {
-		userProfile: state.userProfile,
-		setUserProfile,
-	};
-}
-
-// Optional wallet hook for future integration
-export function useWallet() {
-	const { state } = useDashboard();
-
-	const connectWallet = () => {
-		console.log('Wallet connection not required for invoice payments');
-	};
-
-	const disconnectWallet = () => {
-		console.log('Wallet disconnection not required for invoice payments');
-	};
-
-	return {
-		walletConnected: false,
-		userProfile: state.userProfile,
-		connectWallet,
-		disconnectWallet,
-	};
-}-e 
 ### FILE: ./src/app/dashboard/page.tsx
 
 // src/app/dashboard/page.tsx
@@ -6707,7 +8994,7 @@ export function useWallet() {
 import React from 'react';
 import DashboardGrid from './components/DashboardGrid';
 import PurchaseScanSection from './components/sections/PurchaseScanSection';
-import { usePanel } from './context/DashboardContext';
+import { usePanel } from '@/contexts/DashboardContext';
 
 export default function DashboardPage() {
 	const { openPanel } = usePanel();
@@ -6742,7 +9029,7 @@ export default function DashboardPage() {
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { useUnifiedAuth } from '@/contexts/UnifiedAuthContext';
+import { useUnifiedAuth } from '@/auth/contexts/UnifiedAuthContext';
 import CyberCard from '../components/common/CyberCard';
 import CyberButton from '../components/common/CyberButton';
 import { ProfileEditModal } from '../dashboard/components/sections/ProfileEditModal';
@@ -9717,11 +12004,11 @@ const LightingSetup = () => {
 export default LightingSetup;-e 
 ### FILE: ./src/app/components/AuthModal.tsx
 
-// src/app/components/AuthModal.tsx
+// src/app/componen@/au@/auth/components/AuthModal.tsx
 'use client';
 
 import { useState, useEffect } from 'react';
-import { useUnifiedAuth } from '@/contexts/UnifiedAuthContext';
+import { useUnifiedAuth } from '@/auth/contexts/UnifiedAuthContext';
 import { ChainType } from '../../../../types/wallet';
 import { Wallet, Shield, ChevronRight, AlertCircle, CheckCircle, Loader2, Settings } from 'lucide-react';
 
@@ -10341,8 +12628,8 @@ export default Footer;-e
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useChainId, useAccount } from 'wagmi';
-import { useUnifiedAuth } from '@/contexts/UnifiedAuthContext';
-import { ExtendedAuthModal } from '../AuthModal';
+import { useUnifiedAuth } from '@/auth/contexts/UnifiedAuthContext';
+import { ExtendedAuthModal } from '@/auth/components/AuthModal';
 import { ShoppingCart } from 'lucide-react';
 import { chainUtils } from '@/wallet-auth/adapters/evm/chain-config';
 
@@ -12024,9 +14311,9 @@ export default CyberButton;-e
 'use client';
 
 import React, { useState } from 'react';
-import { useUnifiedAuth } from '@/contexts/UnifiedAuthContext';
+import { useUnifiedAuth } from '@/auth/contexts/UnifiedAuthContext';
 import { useEVMWallet } from '@/wallet-auth/adapters/evm/EVMWalletAdapterWrapper';
-import { ExtendedAuthModal } from '../components/AuthModal';
+import { ExtendedAuthModal } from '../componen@/au@/auth/components/AuthModal';
 import CyberCard from '../components/common/CyberCard';
 import CyberButton from '../components/common/CyberButton';
 import { 
@@ -12534,7 +14821,7 @@ import './globals.css';
 import type { Metadata } from 'next';
 import { EVMWalletProvider } from '@/wallet-auth/adapters/evm/wagmi-provider';
 import { EVMWalletProvider as EVMWalletContextProvider } from '@/wallet-auth/adapters/evm/EVMWalletAdapterWrapper';
-import { UnifiedAuthProvider } from '@/contexts/UnifiedAuthContext';
+import { UnifiedAuthProvider } from '@/auth/contexts/UnifiedAuthContext';
 
 // フォント設定の最適化
 const montserrat = Montserrat({
@@ -15290,7 +17577,7 @@ import {
 	SupportedCryptoSymbol,
 	PriceConversionResult,
 	CRYPTO_DEFAULTS
-} from '../../types/crypto';
+} from '@/types/crypto';
 
 interface UsePriceConverterReturn {
 	convertUSDTo: (usdAmount: number, targetCurrency: string) => number;
@@ -15451,7 +17738,7 @@ import {
 	CryptoLoadingState,
 	CRYPTO_DEFAULTS,
 	SUPPORTED_CRYPTOS
-} from '../../types/crypto';
+} from '@/types/crypto';
 
 interface UseCryptoPricesOptions {
 	enableRealtime?: boolean;
@@ -15895,8 +18182,8 @@ export const createValidationError = (field: string, message: string): AppError 
 // src/utils/userHelpers.ts
 import { Timestamp } from 'firebase/firestore';
 import { User as FirebaseUser } from 'firebase/auth';
-import { FirestoreUser, ProfileCompleteness } from '../../types/user';
-import { UserProfile } from '../../types/dashboard';
+import { FirestoreUser, ProfileCompleteness } from '@/types/user';
+import { UserProfile } from '@/types/dashboard';
 
 /**
  * FirestoreUserを既存のUserProfile形式に変換
@@ -16134,7 +18421,7 @@ export const formatRelativeTime = (timestamp: Timestamp | Date | string): string
 ### FILE: ./src/utils/validation.ts
 
 // src/utils/validation.ts
-import { FirestoreUser, UpdateUserProfile } from '../../types/user';
+import { FirestoreUser, UpdateUserProfile } from '@/types/user';
 
 // バリデーションエラーの型
 export interface ValidationError {
@@ -18339,7 +20626,7 @@ import {
 	WalletError,
 	ChainConfig,
 	WalletProvider
-} from '../../../types/wallet';
+} from '@/types/wallet';
 
 /**
  * 全チェーン共通のWallet Adapterインターフェース
@@ -18526,1746 +20813,6 @@ export interface WalletAnalytics {
 
 	// レポート
 	generateReport(period: 'day' | 'week' | 'month'): any;
-}-e 
-### FILE: ./types/demo-payment.ts
-
-// types/demo-payment.ts
-import { Timestamp } from 'firebase/firestore';
-
-/**
- * デモInvoiceの状態
- */
-export type DemoInvoiceStatus = 
-  | 'pending'     // 支払い待機中
-  | 'confirming'  // ブロック確認中（1-3 confirmations）
-  | 'completed'   // 支払い完了
-  | 'expired'     // 期限切れ
-  | 'error';      // エラー状態
-
-/**
- * サポートされるブロックチェーン
- */
-export type SupportedChain = 'avalanche-fuji';
-
-/**
- * Avalanche FUJI ネットワーク設定
- */
-export interface AvalancheConfig {
-  chainId: number;
-  name: string;
-  rpcUrl: string;
-  blockExplorer: string;
-  nativeCurrency: {
-    name: string;
-    symbol: string;
-    decimals: number;
-  };
-  faucetUrl: string;
-  averageBlockTime: number; // milliseconds
-  confirmationBlocks: number;
-}
-
-/**
- * デモInvoice作成リクエスト
- */
-export interface CreateDemoInvoiceRequest {
-  chainId?: number; // デフォルト: 43113 (FUJI)
-  userAgent?: string;
-  ipAddress?: string;
-}
-
-/**
- * デモInvoice作成レスポンス
- */
-export interface CreateDemoInvoiceResponse {
-  success: boolean;
-  data?: {
-    invoiceId: string;
-    paymentAddress: string;
-    amount: string; // AVAX amount
-    amountWei: string; // Wei amount  
-    chainId: number;
-    qrCodeDataURL: string; // Base64 QR code image
-    paymentURI: string; // EIP-681 URI
-    expiresAt: string; // ISO string
-    estimatedGasFee: string; // AVAX amount
-  };
-  error?: {
-    code: string;
-    message: string;
-    details?: any;
-  };
-}
-
-/**
- * デモInvoiceステータスレスポンス
- */
-export interface DemoInvoiceStatusResponse {
-  success: boolean;
-  data?: {
-    invoiceId: string;
-    status: DemoInvoiceStatus;
-    paymentAddress: string;
-    amount: string;
-    chainId: number;
-    createdAt: string;
-    expiresAt: string;
-    transactionHash?: string;
-    blockNumber?: number;
-    confirmations?: number;
-    paidAt?: string;
-    timeRemaining?: number; // seconds
-  };
-  error?: {
-    code: string;
-    message: string;
-  };
-}
-
-/**
- * Firestore保存用のデモInvoiceデータ
- */
-export interface DemoInvoiceDocument {
-  invoiceId: string;
-  paymentAddress: string;
-  privateKey: string; // 暗号化して保存予定
-  amount: string; // AVAX amount
-  amountWei: string; // Wei amount
-  chainId: number;
-  status: DemoInvoiceStatus;
-  
-  // リクエスト情報
-  userAgent?: string;
-  ipAddress?: string;
-  
-  // タイムスタンプ
-  createdAt: Timestamp;
-  expiresAt: Timestamp;
-  
-  // 支払い完了後の情報
-  transactionHash?: string;
-  blockNumber?: number;
-  confirmations?: number;
-  paidAt?: Timestamp;
-  paidAmount?: string; // 実際に支払われた金額
-}
-
-/**
- * ウォレット生成結果
- */
-export interface GeneratedWallet {
-  address: string;
-  privateKey: string;
-  publicKey: string;
-  index: number; // HD wallet index
-  derivationPath: string;
-}
-
-/**
- * 決済監視設定
- */
-export interface PaymentMonitorConfig {
-  pollInterval: number; // milliseconds
-  maxPollDuration: number; // milliseconds  
-  confirmationBlocks: number;
-  retryAttempts: number;
-  backoffMultiplier: number;
-}
-
-/**
- * QRコード生成設定
- */
-export interface QRCodeConfig {
-  size: number;
-  margin: number;
-  colorDark: string;
-  colorLight: string;
-  errorCorrectionLevel: 'L' | 'M' | 'Q' | 'H';
-}
-
-/**
- * Rate limiting設定
- */
-export interface RateLimitConfig {
-  maxInvoicesPerIP: number;
-  windowMinutes: number;
-  maxInvoicesPerHour: number;
-  cleanupIntervalMinutes: number;
-}
-
-/**
- * デモ決済エラーコード
- */
-export type DemoPaymentErrorCode = 
-  | 'RATE_LIMIT_EXCEEDED'
-  | 'INVALID_CHAIN_ID'
-  | 'WALLET_GENERATION_FAILED'
-  | 'FIRESTORE_ERROR'
-  | 'QR_GENERATION_FAILED'
-  | 'INVOICE_NOT_FOUND'
-  | 'INVOICE_EXPIRED'
-  | 'RPC_CONNECTION_FAILED'
-  | 'PAYMENT_MONITORING_FAILED'
-  | 'INVALID_TRANSACTION'
-  | 'INSUFFICIENT_CONFIRMATIONS';
-
-/**
- * デモ決済エラー
- */
-export interface DemoPaymentError {
-  code: DemoPaymentErrorCode;
-  message: string;
-  details?: any;
-  timestamp: Date;
-  invoiceId?: string;
-}
-
-/**
- * 統計データ（analytics用）
- */
-export interface DemoAnalytics {
-  date: string; // YYYY-MM-DD
-  invoicesGenerated: number;
-  invoicesCompleted: number;
-  invoicesExpired: number;
-  averageCompletionTime: number; // seconds
-  totalAmountPaid: string; // AVAX
-  uniqueIPs: number;
-  popularTimeSlots: Record<string, number>; // hour -> count
-}
-
-/**
- * フロントエンド用のUI状態
- */
-export interface DemoPaymentUIState {
-  status: 'idle' | 'generating' | 'waiting' | 'confirming' | 'completed' | 'expired' | 'error';
-  invoiceId?: string;
-  paymentAddress?: string;
-  qrCodeDataURL?: string;
-  paymentURI?: string;
-  timeRemaining?: number; // seconds
-  confirmations?: number;
-  transactionHash?: string;
-  errorMessage?: string;
-  isPolling: boolean;
-}-e 
-### FILE: ./types/product.ts
-
-// types/product.ts
-import { Timestamp } from 'firebase/firestore';
-
-// Firestoreで管理する商品データの型
-export interface FirestoreProduct {
-  id: string;
-  name: string;
-  description: string;
-  
-  // 価格情報
-  price: {
-    usd: number;
-    eth?: number; // ETH価格（自動計算可能）
-  };
-  
-  // 在庫管理
-  inventory: {
-    totalStock: number;      // 総在庫数
-    availableStock: number;  // 利用可能在庫数
-    reservedStock: number;   // 予約済み在庫数（カート内商品）
-  };
-  
-  // メタデータ
-  metadata: {
-    rating: number;
-    reviewCount: number;
-    features: string[];
-    nutritionFacts: Record<string, string>;
-    images: string[];
-    tags: string[];
-  };
-  
-  // 設定
-  settings: {
-    maxOrderQuantity: number;
-    minOrderQuantity: number;
-    isActive: boolean;
-    category: string;
-    sku: string;
-  };
-  
-  // タイムスタンプ
-  timestamps: {
-    createdAt: Timestamp;
-    updatedAt: Timestamp;
-  };
-}
-
-// 商品作成用の型
-export interface CreateProductData {
-  name: string;
-  description: string;
-  price: {
-    usd: number;
-  };
-  inventory: {
-    totalStock: number;
-    availableStock: number;
-    reservedStock: 0;
-  };
-  metadata: {
-    rating: number;              // 0 から number に変更
-    reviewCount: number;         // 0 から number に変更
-    features: string[];
-    nutritionFacts: Record<string, string>;
-    images: string[];
-    tags: string[];
-  };
-  settings: {
-    maxOrderQuantity: number;
-    minOrderQuantity: 1;
-    isActive: boolean;
-    category: string;
-    sku: string;
-  };
-}
-
-// 商品更新用の部分型
-export interface UpdateProductData {
-  name?: string;
-  description?: string;
-  price?: Partial<FirestoreProduct['price']>;
-  metadata?: Partial<FirestoreProduct['metadata']>;
-  settings?: Partial<FirestoreProduct['settings']>;
-}
-
-// 在庫更新用の型
-export interface UpdateInventoryData {
-  totalStock?: number;
-  availableStock?: number;
-  reservedStock?: number;
-}
-
-// カート予約の型
-export interface CartReservation {
-  id: string;                    // 予約ID（ユニーク）
-  userId?: string;               // ユーザーID（ログイン済みの場合）
-  sessionId: string;             // セッションID（匿名ユーザー用）
-  productId: string;
-  quantity: number;
-  
-  // タイムスタンプ
-  createdAt: Timestamp;
-  expiresAt: Timestamp;          // 予約期限（15分後）
-  
-  // 状態
-  status: 'active' | 'expired' | 'confirmed' | 'cancelled';
-}
-
-// 在庫チェック結果の型
-export interface StockCheckResult {
-  productId: string;
-  requestedQuantity: number;
-  
-  // 在庫状況
-  totalStock: number;
-  availableStock: number;
-  reservedStock: number;
-  
-  // チェック結果
-  canReserve: boolean;
-  maxCanReserve: number;
-  
-  // 制限理由
-  limitReasons: {
-    exceedsStock: boolean;
-    exceedsOrderLimit: boolean;
-    productInactive: boolean;
-  };
-  
-  // 既存予約情報
-  existingReservation?: {
-    quantity: number;
-    expiresAt: Timestamp;
-  };
-}
-
-// 商品フィルター・検索用の型
-export interface ProductFilters {
-  category?: string;
-  isActive?: boolean;
-  minPrice?: number;
-  maxPrice?: number;
-  inStock?: boolean;
-  tags?: string[];
-  searchQuery?: string;
-}
-
-// 商品ソート用の型
-export interface ProductSortOptions {
-  field: 'name' | 'price.usd' | 'metadata.rating' | 'timestamps.createdAt' | 'inventory.availableStock';
-  direction: 'asc' | 'desc';
-}
-
-// 商品リスト取得のオプション
-export interface GetProductsOptions {
-  filters?: ProductFilters;
-  sort?: ProductSortOptions;
-  limit?: number;
-  offset?: number;
-}
-
-// ダッシュボード表示用に簡略化された商品型
-export interface ProductSummary {
-  id: string;
-  name: string;
-  price: number;
-  availableStock: number;
-  isActive: boolean;
-  category: string;
-  rating: number;
-  image?: string;
-}
-
-// 商品詳細表示用の型（FirestoreProductの表示用ラッパー）
-export interface ProductDetails {
-  id: string;
-  name: string;
-  description: string;
-  price: {
-    usd: number;
-    formatted: string;
-  };
-  inventory: {
-    inStock: number;
-    isAvailable: boolean;
-    stockLevel: 'high' | 'medium' | 'low' | 'out';
-  };
-  metadata: {
-    rating: number;
-    reviewCount: number;
-    features: string[];
-    nutritionFacts: Record<string, string>;
-    images: string[];
-    tags: string[];
-  };
-  settings: {
-    maxOrderQuantity: number;
-    minOrderQuantity: number;
-  };
-  timestamps: {
-    createdAt: Date;
-    updatedAt: Date;
-  };
-}
-
-// バッチ処理用の型
-export interface BatchInventoryUpdate {
-  productId: string;
-  updates: UpdateInventoryData;
-}
-
-// 統計・分析用の型
-export interface ProductAnalytics {
-  productId: string;
-  views: number;
-  cartAdditions: number;
-  purchases: number;
-  conversionRate: number;
-  averageRating: number;
-  totalRevenue: number;
-  period: {
-    from: Date;
-    to: Date;
-  };
-}
-
-// エラー型
-export interface ProductError {
-  code: 'not-found' | 'insufficient-stock' | 'reservation-expired' | 'product-inactive' | 'validation-error';
-  message: string;
-  productId?: string;
-  requestedQuantity?: number;
-  availableStock?: number;
-}-e 
-### FILE: ./types/react-three-fiber.d.ts
-
-// types/react-three-fiber.d.ts
-import { ReactThreeFiber } from '@react-three/fiber'
-import * as THREE from 'three'
-
-declare global {
-  namespace JSX {
-    interface IntrinsicElements {
-      mesh: ReactThreeFiber.Object3DNode<THREE.Mesh, typeof THREE.Mesh>
-      group: ReactThreeFiber.Object3DNode<THREE.Group, typeof THREE.Group>
-      planeGeometry: ReactThreeFiber.Node<THREE.PlaneGeometry, typeof THREE.PlaneGeometry>
-      boxGeometry: ReactThreeFiber.Node<THREE.BoxGeometry, typeof THREE.BoxGeometry>
-      sphereGeometry: ReactThreeFiber.Node<THREE.SphereGeometry, typeof THREE.SphereGeometry>
-      meshBasicMaterial: ReactThreeFiber.Node<THREE.MeshBasicMaterial, typeof THREE.MeshBasicMaterial>
-      meshStandardMaterial: ReactThreeFiber.Node<THREE.MeshStandardMaterial, typeof THREE.MeshStandardMaterial>
-      ambientLight: ReactThreeFiber.Object3DNode<THREE.AmbientLight, typeof THREE.AmbientLight>
-      directionalLight: ReactThreeFiber.Object3DNode<THREE.DirectionalLight, typeof THREE.DirectionalLight>
-      spotLight: ReactThreeFiber.Object3DNode<THREE.SpotLight, typeof THREE.SpotLight>
-      pointLight: ReactThreeFiber.Object3DNode<THREE.PointLight, typeof THREE.PointLight>
-    }
-  }
-}
-
-export {}-e 
-### FILE: ./types/crypto.ts
-
-// types/crypto.ts
-import { Timestamp } from 'firebase/firestore';
-
-// Firestore crypto_prices コレクションの型定義
-export interface FirestoreCryptoPriceData {
-	id: string;
-	symbol: string;
-	name: string;
-	price_usd: number;
-	price_change_24h: number;
-	price_change_percentage_24h: number;
-	market_cap_usd: number;
-	volume_24h_usd: number;
-	last_updated: Timestamp;
-	source: 'coingecko';
-}
-
-// フロントエンド用に変換された価格データ
-export interface CryptoPriceData {
-	id: string;
-	symbol: string;
-	name: string;
-	price_usd: number;
-	price_change_24h: number;
-	price_change_percentage_24h: number;
-	market_cap_usd: number;
-	volume_24h_usd: number;
-	last_updated: Date;
-	source: string;
-}
-
-// 価格データのマップ型
-export interface CryptoPricesMap {
-	[symbol: string]: CryptoPriceData;
-}
-
-// 暗号通貨メタデータ
-export interface CryptoMetadata {
-	supported_currencies: string[];
-	update_frequency_minutes: number;
-	last_sync_timestamp: Timestamp;
-	sync_status: 'success' | 'error' | 'in_progress';
-	error_message?: string;
-	coingecko_rate_limit_remaining?: number;
-	total_api_calls_today?: number;
-}
-
-// サポートされている暗号通貨の設定
-export const SUPPORTED_CRYPTOS = {
-	BTC: {
-		id: 'bitcoin',
-		symbol: 'BTC',
-		name: 'Bitcoin',
-		icon: '₿',
-		decimals: 6,
-		color: '#F7931A'
-	},
-	ETH: {
-		id: 'ethereum',
-		symbol: 'ETH',
-		name: 'Ethereum',
-		icon: 'Ξ',
-		decimals: 4,
-		color: '#627EEA'
-	},
-	SOL: {
-		id: 'solana',
-		symbol: 'SOL',
-		name: 'Solana',
-		icon: '◎',
-		decimals: 4,
-		color: '#14F195'
-	},
-	AVAX: {
-		id: 'avalanche-2',
-		symbol: 'AVAX',
-		name: 'Avalanche',
-		icon: '🔺',
-		decimals: 4,
-		color: '#E84142'
-	},
-	SUI: {
-		id: 'sui',
-		symbol: 'SUI',
-		name: 'Sui Network',
-		icon: '💧',
-		decimals: 4,
-		color: '#4DA2FF'
-	}
-} as const;
-
-export type SupportedCryptoSymbol = keyof typeof SUPPORTED_CRYPTOS;
-
-// Firestore操作の結果型
-export interface CryptoFetchResult {
-	success: boolean;
-	data?: CryptoPricesMap;
-	error?: string;
-	lastUpdated?: Date;
-}
-
-// 価格変換の結果型
-export interface PriceConversionResult {
-	originalAmount: number;
-	originalCurrency: 'USD';
-	convertedAmount: number;
-	targetCurrency: string;
-	exchangeRate: number;
-	lastUpdated: Date;
-}
-
-// エラーハンドリング用の型
-export interface CryptoError {
-	code: 'fetch-failed' | 'conversion-failed' | 'unsupported-currency' | 'stale-data' | 'network-error';
-	message: string;
-	details?: any;
-	timestamp: Date;
-}
-
-// ローディング状態の管理
-export interface CryptoLoadingState {
-	isLoading: boolean;
-	isRefreshing: boolean;
-	lastFetch: Date | null;
-	retryCount: number;
-	maxRetries: number;
-}
-
-// リアルタイム購読の設定
-export interface CryptoSubscriptionOptions {
-	enableRealtime: boolean;
-	refreshInterval?: number; // milliseconds
-	staleDataThreshold?: number; // milliseconds
-	autoRetry: boolean;
-	maxRetries?: number;
-}
-
-// デフォルトの設定値
-export const CRYPTO_DEFAULTS = {
-	REFRESH_INTERVAL: 30000, // 30秒
-	STALE_DATA_THRESHOLD: 300000, // 5分
-	MAX_RETRIES: 3,
-	DECIMAL_PLACES: {
-		BTC: 6,
-		ETH: 4,
-		SOL: 4,
-		AVAX: 4,
-		SUI: 4,
-		USD: 2
-	}
-} as const;-e 
-### FILE: ./types/dashboard.ts
-
-// types/dashboard.ts
-export type SectionType = 'shop' | 'how-to-buy' | 'whitepaper' | 'profile' | 'cart';
-
-export interface DashboardState {
-	activeSection: SectionType | null;
-	isSlideOpen: boolean;
-	cartItems: CartItem[];
-	userProfile: UserProfile | null;
-	walletConnected: boolean;
-}
-
-export interface DashboardCardProps {
-	id: SectionType;
-	title: string;
-	description: string;
-	icon: React.ReactNode;
-	stats?: string;
-	badge?: string;
-	onClick: (section: SectionType) => void;
-	className?: string;
-}
-
-export interface CartItem {
-	id: string;
-	name: string;
-	price: number;
-	quantity: number;
-	currency: 'BTC' | 'ETH' | 'SOL' | 'AVAX' | 'SUI'; // 更新: 新しい暗号通貨に対応
-	image?: string;
-}
-
-export interface UserProfile {
-	walletAddress: string;
-	displayName?: string;
-	totalSpent: number;
-	totalOrders: number;
-	rank: number;
-	badges: string[];
-	joinDate: Date;
-}
-
-export interface SlideInPanelProps {
-	isOpen: boolean;
-	onClose: () => void;
-	title: string;
-	children: React.ReactNode;
-	className?: string;
-}
-
-export interface PurchaseRecord {
-	rank: number;
-	walletAddress: string;
-	displayAddress: string; // 部分匿名化されたアドレス
-	totalSpent: number;
-	totalSpentUSD: number;
-	purchaseCount: number;
-	lastPurchase: Date;
-	txHashes: string[];
-	badges?: string[];
-	isCurrentUser?: boolean;
-}
-
-export interface FilterOptions {
-	period: 'today' | 'week' | 'month' | 'all';
-	minAmount?: number;
-	maxAmount?: number;
-	sortBy: 'amount' | 'count' | 'date';
-	sortOrder: 'asc' | 'desc';
-}
-
-// 新規追加: 暗号通貨価格関連の型定義
-export interface CryptoPriceData {
-	id: string;
-	symbol: string;
-	name: string;
-	price_usd: number;
-	price_change_24h: number;
-	price_change_percentage_24h: number;
-	market_cap_usd: number;
-	volume_24h_usd: number;
-	last_updated: Date;
-	source: string;
-}
-
-export interface CryptoPricesMap {
-	[symbol: string]: CryptoPriceData;
-}
-
-export interface UseCryptoPricesReturn {
-	prices: CryptoPricesMap;
-	loading: boolean;
-	error: string | null;
-	lastUpdated: Date | null;
-	refreshPrices: () => void;
-}
-
-export interface UsePriceConverterReturn {
-	convertUSDTo: (usdAmount: number, targetCurrency: string) => number;
-	formatCryptoPrice: (amount: number, currency: string) => string;
-	formatUSDPrice: (amount: number) => string;
-	isSupported: (currency: string) => boolean;
-	isLoading: boolean;
-	error: string | null;
-}
-
-export interface PriceDisplayProps {
-	usdAmount: number;
-	selectedCurrency: string;
-	showBoth?: boolean;
-	showChange?: boolean;
-	size?: 'sm' | 'md' | 'lg';
-	className?: string;
-}
-
-// 支払い方法のマッピング
-export const PAYMENT_METHODS = {
-	SOL: { name: 'Solana', symbol: 'SOL', icon: '◎' },
-	BTC: { name: 'Lightning', symbol: 'BTC', icon: '₿' },
-	AVAX: { name: 'Avalanche c-chain', symbol: 'AVAX', icon: '🔺' },
-	SUI: { name: 'Sui', symbol: 'SUI', icon: '💧' },
-	ETH: { name: 'Ethereum mainnet', symbol: 'ETH', icon: 'Ξ' },
-} as const;
-
-export type PaymentMethodKey = keyof typeof PAYMENT_METHODS;
-
-// ★ 新規追加: Demo Payment関連の型定義
-export interface DemoPaymentSettings {
-	enabled: boolean;
-	defaultChain: 'avalanche-fuji';
-	maxConcurrentInvoices: number;
-	pollingInterval: number; // milliseconds
-	demoTimeout: number; // milliseconds
-}
-
-// How to Buy セクション設定
-export interface HowToBuyConfig {
-	enableLiveDemo: boolean;
-	demoSettings: DemoPaymentSettings;
-	supportedChains: string[];
-	faucetLinks: Record<string, string>;
-}-e 
-### FILE: ./types/api-wallet.ts
-
-// types/api-wallet.ts
-import { ChainType } from './wallet';
-import { WalletFirestoreUser } from '../src/lib/firestore/users-wallet';
-import { ExtendedFirestoreUser } from './user-extended'; // 追加
-
-/**
- * Wallet認証API用の型定義
- */
-
-// Wallet認証リクエスト
-export interface WalletAuthRequest {
-  // 署名データ
-  signature: string;
-  message: string;
-  address: string;
-  chainType: ChainType;
-  chainId?: number | string;
-  nonce: string;
-  timestamp: number;
-  
-  // リクエスト情報（セキュリティ用）
-  ipAddress?: string;
-  userAgent?: string;
-}
-
-// Wallet認証レスポンス
-export interface WalletAuthResponse {
-  success: boolean;
-  data?: {
-    user: ExtendedFirestoreUser; // ExtendedFirestoreUserに変更
-    sessionToken?: string;
-    isNewUser: boolean;
-    message: string;
-  };
-  error?: {
-    code: string;
-    message: string;
-    details?: any;
-  };
-}
-
-// プロフィール更新リクエスト
-export interface UpdateWalletProfileRequest {
-  address: string;
-  signature: string; // 本人確認用署名
-  
-  profileData: {
-    displayName?: string;
-    nickname?: string;
-    profileImage?: string;
-    address?: {
-      country?: string;
-      prefecture?: string;
-      city?: string;
-      addressLine1?: string;
-      addressLine2?: string;
-      postalCode?: string;
-      phone?: string;
-    };
-  };
-}
-
-// プロフィール更新レスポンス
-export interface UpdateWalletProfileResponse {
-  success: boolean;
-  data?: {
-    user: ExtendedFirestoreUser; // ExtendedFirestoreUserに変更
-    message: string;
-  };
-  error?: {
-    code: string;
-    message: string;
-    details?: any;
-  };
-}
-
-// ユーザー情報取得レスポンス
-export interface GetWalletUserResponse {
-  success: boolean;
-  data?: {
-    user: ExtendedFirestoreUser; // ExtendedFirestoreUserに変更
-    exists: boolean;
-  };
-  error?: {
-    code: string;
-    message: string;
-  };
-}
-
-// 統計更新リクエスト
-export interface UpdateWalletStatsRequest {
-  address: string;
-  signature: string; // 本人確認用署名
-  
-  statsData: {
-    totalSpent?: number;
-    totalSpentUSD?: number;
-    totalOrders?: number;
-    rank?: number;
-    badges?: string[];
-  };
-}
-
-// エラーコード定義
-export type WalletApiErrorCode = 
-  | 'INVALID_SIGNATURE'
-  | 'EXPIRED_NONCE'
-  | 'ADDRESS_MISMATCH'
-  | 'INVALID_CHAIN'
-  | 'USER_NOT_FOUND'
-  | 'VALIDATION_ERROR'
-  | 'FIRESTORE_ERROR'
-  | 'PERMISSION_DENIED'
-  | 'RATE_LIMITED'
-  | 'INTERNAL_ERROR';
-
-// API エラー型
-export interface WalletApiError {
-  code: WalletApiErrorCode;
-  message: string;
-  details?: any;
-  timestamp: string;
-  requestId?: string;
-}
-
-// セッション情報
-export interface WalletSession {
-  address: string;
-  chainType: ChainType;
-  chainId?: number | string;
-  token: string;
-  expiresAt: number;
-  createdAt: number;
-}
-
-// バッチ操作用
-export interface BatchWalletUsersRequest {
-  addresses: string[];
-}
-
-export interface BatchWalletUsersResponse {
-  success: boolean;
-  data?: {
-    users: ExtendedFirestoreUser[]; // ExtendedFirestoreUserに変更
-    found: number;
-    total: number;
-  };
-  error?: WalletApiError;
-}-e 
-### FILE: ./types/wallet.ts
-
-// types/wallet.ts
-export type ChainType = 'evm' | 'solana' | 'sui';
-export type WalletType = 'metamask' | 'walletconnect' | 'coinbase' | 'phantom' | 'solflare' | 'sui-wallet' | 'ethos';
-export type AuthMethod = 'firebase' | 'wallet' | 'hybrid';
-
-// 基本的なウォレット接続情報
-export interface WalletConnection {
-	address: string;
-	chainType: ChainType;
-	chainId?: number | string;
-	walletType: string;
-	isConnected: boolean;
-	connectedAt?: Date;
-	lastUsedAt?: Date;
-	isVerified?: boolean; // 署名検証済みかどうか
-	isPrimary?: boolean;  // プライマリウォレットかどうか
-}
-
-// ウォレット認証で使用する署名データ
-export interface WalletSignatureData {
-	message: string;
-	signature: string;
-	address: string;
-	chainType: ChainType;
-	chainId?: number | string;
-	nonce: string;
-	timestamp: number;
-}
-
-// 認証結果
-export interface WalletAuthResult {
-	success: boolean;
-	user?: {
-		address: string;
-		chainType: ChainType;
-		chainId?: number | string;
-	};
-	error?: string;
-	signature?: WalletSignatureData;
-}
-
-// ウォレット状態
-export interface WalletState {
-	isConnecting: boolean;
-	isConnected: boolean;
-	isAuthenticated: boolean;
-	address?: string;
-	chainType?: ChainType;
-	chainId?: number | string;
-	walletType?: string;
-	error?: string;
-}
-
-// チェーン設定
-export interface ChainConfig {
-	chainId: number | string;
-	name: string;
-	nativeCurrency: {
-		name: string;
-		symbol: string;
-		decimals: number;
-	};
-	rpcUrls: string[];
-	blockExplorerUrls?: string[];
-	iconUrls?: string[];
-	isTestnet?: boolean;
-}
-
-// EVM固有の設定
-export interface EVMChainConfig extends ChainConfig {
-	chainId: number;
-}
-
-// Solana固有の設定
-export interface SolanaChainConfig extends ChainConfig {
-	chainId: string;
-	cluster: 'mainnet-beta' | 'testnet' | 'devnet';
-}
-
-// SUI固有の設定
-export interface SUIChainConfig extends ChainConfig {
-	chainId: string;
-	network: 'mainnet' | 'testnet' | 'devnet';
-}
-
-// サポートされているチェーンの設定
-export interface SupportedChains {
-	evm: EVMChainConfig[];
-	solana: SolanaChainConfig[];
-	sui: SUIChainConfig[];
-}
-
-// ウォレット機能
-export interface WalletCapabilities {
-	canSwitchChain: boolean;
-	canAddChain: boolean;
-	canSignMessage: boolean;
-	canSignTransaction: boolean;
-	supportsEIP1559: boolean; // EVM固有
-}
-
-// ウォレットプロバイダー情報
-export interface WalletProvider {
-	id: string;
-	name: string;
-	chainType: ChainType;
-	icon?: string;
-	downloadUrl?: string;
-	isInstalled: boolean;
-	capabilities: WalletCapabilities;
-}
-
-// 複数ウォレット管理用
-export interface ConnectedWallet extends WalletConnection {
-	id: string;
-	isVerified: boolean;
-	isPrimary: boolean;
-	nickname?: string;
-}
-
-// ウォレット切り替え用
-export interface WalletSwitchRequest {
-	fromAddress: string;
-	toAddress: string;
-	chainType: ChainType;
-	reason: string;
-}
-
-// 認証設定
-export interface WalletAuthConfig {
-	enabledChains: ChainType[];
-	preferredChain: ChainType;
-	authMessage: string;
-	nonceExpiry: number; // seconds
-	enableMultiWallet: boolean;
-	autoConnect: boolean;
-}
-
-// エラー型
-export interface WalletError {
-	code: string;
-	message: string;
-	details?: any;
-	chainType?: ChainType;
-}
-
-// ウォレット統計
-export interface WalletStats {
-	totalConnections: number;
-	lastConnected: Date;
-	connectionHistory: Array<{
-		address: string;
-		chainType: ChainType;
-		connectedAt: Date;
-		disconnectedAt?: Date;
-	}>;
-}-e 
-### FILE: ./types/user.ts
-
-// types/user.ts
-import { Timestamp } from 'firebase-admin/firestore'; // Admin SDK版に変更
-import { UserProfile } from './dashboard';
-
-// Firestoreで管理するユーザーデータの型
-export interface FirestoreUser {
-	id: string;                    // Firebase Auth UID
-	email: string;
-	displayName: string;
-	nickname?: string;             // ユーザーが設定可能なニックネーム
-	profileImage?: string;
-	walletAddress?: string;        // 将来のウォレット連携用
-
-	// 住所情報（初期値：空）
-	address?: {
-		country?: string;
-		prefecture?: string;          // 都道府県
-		city?: string;               // 市区町村
-		addressLine1?: string;       // 番地・建物名
-		addressLine2?: string;      // アパート・部屋番号等
-		postalCode?: string;         // 郵便番号
-		phone?: string;
-	};
-
-	// アカウント情報
-	createdAt: Timestamp;
-	updatedAt: Timestamp;
-	lastLoginAt: Timestamp;
-
-	// ユーザーステータス
-	isEmailVerified: boolean;
-	isActive: boolean;
-	membershipTier: 'bronze' | 'silver' | 'gold' | 'platinum';
-	isProfileComplete: boolean;     // 住所等必須情報が入力済みか
-
-	// 統計情報
-	stats: {
-		totalSpent: number;         // ETH（初期値：0）
-		totalSpentUSD: number;      // USD（初期値：0）
-		totalOrders: number;        // 初期値：0
-		rank: number;               // 初期値：999999
-		badges: string[];           // 初期値：['New Member']
-	};
-}
-
-// 初期ユーザー作成用の型
-export interface CreateUserData {
-	id: string;
-	email: string;
-	displayName: string;
-	nickname?: string;
-	profileImage?: string;
-	address?: {};
-	isEmailVerified: boolean;
-	isActive: true;
-	membershipTier: 'bronze';
-	isProfileComplete: false;
-	stats: {
-		totalSpent: 0;
-		totalSpentUSD: 0;
-		totalOrders: 0;
-		rank: 999999;
-		badges: ['New Member'];
-	};
-}
-
-// プロフィール更新用の部分型
-export interface UpdateUserProfile {
-	displayName?: string;
-	nickname?: string;
-	profileImage?: string;
-	address?: Partial<FirestoreUser['address']>;
-	isProfileComplete?: boolean;
-}
-
-// ユーザー統計更新用の型
-export interface UpdateUserStats {
-	totalSpent?: number;
-	totalSpentUSD?: number;
-	totalOrders?: number;
-	rank?: number;
-	badges?: string[];
-}
-
-// 注文データの型
-export interface Order {
-	id: string;                   // 注文ID
-	userId: string;               // ユーザーID（Firebase Auth UID）
-
-	// 注文情報
-	products: OrderItem[];
-	totalAmount: number;          // ETH
-	totalAmountUSD: number;
-	status: 'pending' | 'confirmed' | 'shipped' | 'delivered' | 'cancelled';
-
-	// ブロックチェーン情報
-	transactionHash?: string;     // トランザクションハッシュ
-	blockNumber?: number;
-	networkId: number;            // 1 (Ethereum), 137 (Polygon) etc.
-
-	// 配送情報
-	shippingAddress: FirestoreUser['address'];
-	trackingNumber?: string;
-
-	// タイムスタンプ
-	createdAt: Timestamp;
-	updatedAt: Timestamp;
-	shippedAt?: Timestamp;
-	deliveredAt?: Timestamp;
-}
-
-export interface OrderItem {
-	productId: string;
-	productName: string;
-	quantity: number;
-	priceETH: number;
-	priceUSD: number;
-}
-
-// 既存のUserProfileとFirestoreUserの変換用ヘルパー型
-export interface UserProfileAdapter {
-	fromFirestoreUser: (firestoreUser: FirestoreUser) => UserProfile;
-	toFirestoreUser: (userProfile: UserProfile, userId: string, email: string) => Partial<FirestoreUser>;
-}
-
-// プロフィール完成度チェック用
-export interface ProfileCompleteness {
-	isComplete: boolean;
-	completionPercentage: number;
-	missingFields: string[];
-	requiredFields: (keyof FirestoreUser)[];
-}-e 
-### FILE: ./types/user-extended.ts
-
-// types/user-extended.ts
-import { Timestamp } from 'firebase-admin/firestore'; // Admin SDK版を使用
-import { FirestoreUser } from './user';
-import { ChainType, WalletConnection } from './wallet';
-
-/**
- * Wallet認証対応の拡張ユーザーデータ型
- * 既存のFirestoreUserにWallet機能を追加
- */
-export interface ExtendedFirestoreUser extends Omit<FirestoreUser, 'id' | 'walletAddress'> {
-  id: string; // walletAddress または firebaseUID
-  
-  // 認証方式の識別
-  authMethod: 'firebase' | 'wallet' | 'hybrid';
-  
-  // Firebase認証情報（オプション）
-  firebaseUid?: string;
-  
-  // Wallet認証情報
-  walletAddress: string; // 必須（Wallet認証では主キー）
-  connectedWallets: WalletConnection[];
-  primaryWallet?: WalletConnection;
-  isWalletVerified: boolean;
-  
-  // 最終認証時刻（既存のlastLoginAtも保持）
-  lastAuthAt: Timestamp;
-  
-  // 認証履歴
-  authHistory: WalletAuthHistoryEntry[];
-  
-  // セキュリティ設定
-  securitySettings: {
-    requireSignatureForUpdates: boolean;
-    allowedChains: ChainType[];
-    maxSessionDuration: number; // minutes
-  };
-  
-  // 通知設定
-  notificationSettings: {
-    email: boolean;
-    push: boolean;
-    sms: boolean;
-    newOrders: boolean;
-    priceAlerts: boolean;
-    securityAlerts: boolean;
-  };
-}
-
-/**
- * 認証履歴エントリ
- */
-export interface WalletAuthHistoryEntry {
-  chainType: ChainType;
-  chainId?: number | string;
-  walletAddress: string;
-  timestamp: Timestamp;
-  success: boolean;
-  ipAddress?: string;
-  userAgent?: string;
-  location?: {
-    country?: string;
-    city?: string;
-  };
-  failureReason?: string;
-}
-
-/**
- * Wallet操作結果
- */
-export interface WalletOperationResult<T = any> {
-  success: boolean;
-  data?: T;
-  error?: {
-    code: string;
-    message: string;
-    details?: any;
-  };
-  metadata?: {
-    transactionHash?: string;
-    blockNumber?: number;
-    gasUsed?: string;
-    timestamp: Date;
-  };
-}
-
-/**
- * 認証フロー状態
- */
-export interface AuthFlowState {
-  currentStep: 'idle' | 'connecting' | 'signing' | 'verifying' | 'success' | 'error';
-  signatureRequired: boolean;
-  verificationRequired: boolean;
-  progress: number; // 0-100
-  selectedChain?: ChainType;
-  selectedWallet?: string;
-  errorMessage?: string;
-  retryCount?: number;
-}
-
-/**
- * ユーザー設定
- */
-export interface UserSettings {
-  // 表示設定
-  theme: 'light' | 'dark' | 'system';
-  language: 'en' | 'ja' | 'zh' | 'ko';
-  currency: 'USD' | 'JPY' | 'ETH' | 'BTC';
-  
-  // プライバシー設定
-  showProfileToPublic: boolean;
-  showStatsToPublic: boolean;
-  showBadgesToPublic: boolean;
-  
-  // 取引設定
-  defaultChain: ChainType;
-  slippageTolerance: number; // %
-  gasSettings: 'slow' | 'standard' | 'fast' | 'custom';
-  
-  // セキュリティ設定
-  requireConfirmationForLargeOrders: boolean;
-  largeOrderThreshold: number; // USD
-  sessionTimeout: number; // minutes
-}
-
-/**
- * ExtendedFirestoreUser作成用のデータ
- */
-export interface CreateExtendedUserData {
-  // 必須フィールド
-  authMethod: 'wallet';
-  walletAddress: string;
-  chainType: ChainType;
-  chainId?: number | string;
-  
-  // オプションフィールド
-  displayName?: string;
-  nickname?: string;
-  profileImage?: string;
-  
-  // リクエスト情報
-  ipAddress?: string;
-  userAgent?: string;
-  
-  // 初期設定
-  initialSettings?: Partial<UserSettings>;
-}
-
-/**
- * プロフィール更新データ
- */
-export interface UpdateExtendedUserProfile {
-  displayName?: string;
-  nickname?: string;
-  profileImage?: string;
-  address?: ExtendedFirestoreUser['address'];
-  notificationSettings?: Partial<ExtendedFirestoreUser['notificationSettings']>;
-  securitySettings?: Partial<ExtendedFirestoreUser['securitySettings']>;
-  userSettings?: Partial<UserSettings>;
-}
-
-/**
- * 統計情報更新データ
- */
-export interface UpdateExtendedUserStats {
-  totalSpent?: number;
-  totalSpentUSD?: number;
-  totalOrders?: number;
-  rank?: number;
-  badges?: string[];
-  newAchievements?: string[];
-}
-
-/**
- * Wallet接続情報（拡張版）
- */
-export interface ExtendedWalletConnection extends WalletConnection {
-  // 追加情報
-  nickname?: string;
-  isHardwareWallet: boolean;
-  securityLevel: 'low' | 'medium' | 'high';
-  
-  // 使用統計
-  totalTransactions: number;
-  totalValue: number; // ETH
-  firstUsed: Date;
-  lastUsed: Date;
-  
-  // 設定
-  isDefault: boolean;
-  notifications: boolean;
-  autoConnect: boolean;
-}
-
-/**
- * ユーザーアクティビティ
- */
-export interface UserActivity {
-  id: string;
-  userId: string;
-  type: 'login' | 'logout' | 'purchase' | 'profile_update' | 'wallet_connect' | 'wallet_disconnect';
-  description: string;
-  metadata?: any;
-  timestamp: Timestamp;
-  chainType?: ChainType;
-  walletAddress?: string;
-  ipAddress?: string;
-}
-
-/**
- * ユーザー通知
- */
-export interface UserNotification {
-  id: string;
-  userId: string;
-  type: 'info' | 'success' | 'warning' | 'error';
-  title: string;
-  message: string;
-  isRead: boolean;
-  actionUrl?: string;
-  actionText?: string;
-  metadata?: any;
-  createdAt: Timestamp;
-  expiresAt?: Timestamp;
-}
-
-/**
- * バッチ操作用
- */
-export interface BatchExtendedUserOperation {
-  operation: 'create' | 'update' | 'delete';
-  userId: string;
-  data?: Partial<ExtendedFirestoreUser>;
-}
-
-export interface BatchExtendedUserResult {
-  success: boolean;
-  results: Array<{
-    userId: string;
-    success: boolean;
-    error?: string;
-  }>;
-  summary: {
-    total: number;
-    successful: number;
-    failed: number;
-  };
-}
-
-/**
- * 検索・フィルタ用
- */
-export interface ExtendedUserQuery {
-  walletAddresses?: string[];
-  chainTypes?: ChainType[];
-  authMethods?: ('firebase' | 'wallet' | 'hybrid')[];
-  membershipTiers?: ('bronze' | 'silver' | 'gold' | 'platinum')[];
-  isActive?: boolean;
-  isWalletVerified?: boolean;
-  createdAfter?: Date;
-  createdBefore?: Date;
-  lastAuthAfter?: Date;
-  lastAuthBefore?: Date;
-  minTotalSpent?: number;
-  maxTotalSpent?: number;
-  hasBadges?: string[];
-  limit?: number;
-  offset?: number;
-  sortBy?: 'createdAt' | 'lastAuthAt' | 'totalSpent' | 'rank';
-  sortOrder?: 'asc' | 'desc';
-}
-
-export interface ExtendedUserQueryResult {
-  users: ExtendedFirestoreUser[];
-  total: number;
-  hasMore: boolean;
-  nextOffset?: number;
-}-e 
-### FILE: ./types/auth.ts
-
-// types/auth.ts (Extended対応版)
-import { User as FirebaseUser } from 'firebase/auth';
-import { FirestoreUser } from './user';
-import { ExtendedFirestoreUser, WalletOperationResult } from './user-extended';
-import { WalletConnection, WalletAuthResult, ChainType } from './wallet';
-
-// 統合認証方式
-export type AuthMethod = 'firebase' | 'wallet' | 'hybrid';
-
-// 統合認証状態（Extended対応）
-export interface UnifiedAuthState {
-	// 認証方式
-	authMethod: AuthMethod;
-
-	// Firebase認証
-	firebaseUser: FirebaseUser | null;
-	firebaseLoading: boolean;
-
-	// Wallet認証
-	walletConnection: WalletConnection | null;
-	walletLoading: boolean;
-
-	// Firestore統合（Extended対応）
-	firestoreUser: ExtendedFirestoreUser | null; // ExtendedFirestoreUserに変更
-	firestoreLoading: boolean;
-
-	// 全体の状態
-	isAuthenticated: boolean;
-	isLoading: boolean;
-
-	// エラー
-	error: string | null;
-}
-
-// 認証設定
-export interface AuthConfig {
-	// 認証方式の優先順位
-	preferredMethod: AuthMethod;
-
-	// 各認証方式の有効/無効
-	enableFirebase: boolean;
-	enableWallet: boolean;
-
-	// 自動ログイン
-	autoConnect: boolean;
-
-	// セッション管理
-	sessionTimeout: number; // minutes
-
-	// ウォレット設定
-	walletConfig?: {
-		enabledChains: ChainType[];
-		preferredChain: ChainType;
-	};
-}
-
-// Extended認証アクション
-export interface AuthActions {
-	// Firebase認証
-	signInWithEmail: (email: string, password: string) => Promise<void>;
-	signUpWithEmail: (email: string, password: string) => Promise<void>;
-	signInWithGoogle: () => Promise<void>;
-
-	// Wallet認証
-	connectWallet: (chainType?: ChainType, walletType?: string) => Promise<WalletConnection>;
-	authenticateWallet: (chainType?: ChainType,address?: string) => Promise<WalletAuthResult>;
-	switchWalletChain: (chainType: ChainType, chainId: number | string) => Promise<void>;
-
-	// 統合ログアウト
-	logout: () => Promise<void>;
-
-	// Extended プロフィール更新（戻り値型を変更）
-	updateProfile: (data: Partial<ExtendedFirestoreUser>) => Promise<WalletOperationResult>;
-
-	// Extended セッション管理
-	refreshSession: () => Promise<void>;
-}
-
-// 認証イベント
-export type AuthEventType =
-	| 'firebase-login'
-	| 'firebase-logout'
-	| 'wallet-connect'
-	| 'wallet-disconnect'
-	| 'wallet-authenticate'
-	| 'unified-login'
-	| 'unified-logout'
-	| 'profile-update'
-	| 'error';
-
-export interface AuthEvent {
-	type: AuthEventType;
-	timestamp: Date;
-	data?: any;
-	error?: string;
-}
-
-// Extended認証フック用の戻り値
-export interface UseAuthReturn extends UnifiedAuthState, AuthActions {
-	// 便利なゲッター
-	primaryUserId: string | null;
-	displayName: string | null;
-	emailAddress: string | null;
-	walletAddress: string | null;
-
-	// 状態チェック
-	isFirebaseAuth: boolean;
-	isWalletAuth: boolean;
-	hasMultipleAuth: boolean;
-
-	// イベント
-	addEventListener: (type: AuthEventType, callback: (event: AuthEvent) => void) => () => void;
-}
-
-// ウォレット接続結果
-export interface WalletConnectionResult {
-	success: boolean;
-	connection?: WalletConnection;
-	error?: string;
-}
-
-// 認証統合結果（Extended対応）
-export interface AuthIntegrationResult {
-	success: boolean;
-	authMethod: AuthMethod;
-	firebaseUser?: FirebaseUser;
-	walletConnection?: WalletConnection;
-	firestoreUser?: ExtendedFirestoreUser; // ExtendedFirestoreUserに変更
-	error?: string;
-}
-
-// Firebase + Wallet統合データ（Extended対応）
-export interface IntegratedUserData {
-	// Firebase認証データ
-	firebaseUid?: string;
-	email?: string;
-	emailVerified?: boolean;
-
-	// Extended Wallet認証データ
-	connectedWallets: WalletConnection[];
-	primaryWallet?: WalletConnection;
-
-	// Extended認証履歴
-	authHistory: Array<{
-		method: AuthMethod;
-		timestamp: Date;
-		chainType?: ChainType;
-		success: boolean;
-		ipAddress?: string;
-		userAgent?: string;
-	}>;
-
-	// Extended設定
-	preferences: {
-		preferredAuthMethod: AuthMethod;
-		autoConnect: boolean;
-		preferredChain?: ChainType;
-	};
-
-	// Extended セキュリティ設定
-	securitySettings: {
-		requireSignatureForUpdates: boolean;
-		allowedChains: ChainType[];
-		maxSessionDuration: number;
-	};
-
-	// Extended 通知設定
-	notificationSettings: {
-		email: boolean;
-		push: boolean;
-		sms: boolean;
-		newOrders: boolean;
-		priceAlerts: boolean;
-		securityAlerts: boolean;
-	};
-}
-
-// Extended認証プロバイダーのProps
-export interface UnifiedAuthProviderProps {
-	children: React.ReactNode;
-	config?: Partial<AuthConfig>;
-}
-
-// Extended認証コンテキストの型
-export interface UnifiedAuthContextType extends UseAuthReturn {
-	// 設定
-	config: AuthConfig;
-
-	// Extended状態
-	extendedUser: ExtendedFirestoreUser | null;
-	authFlowState: any; // AuthFlowState
-
-	// Extended操作
-	refreshExtendedUser: () => Promise<void>;
-	getAuthHistory: () => any[] | null;
-	getConnectedWallets: () => WalletConnection[] | null;
-	updateUserProfile: (profileData: any) => Promise<WalletOperationResult>;
-
-	// 内部状態
-	_internal?: {
-		eventEmitter: EventTarget;
-		sessionStorage: Map<string, any>;
-	};
-
-	// デバッグ情報
-	_debug: {
-		firebaseReady: boolean;
-		walletReady: boolean;
-		lastError: string | null;
-		apiCalls: number;
-		lastApiCall: Date | null;
-	};
-}
-
-// 後方互換性のための従来の型（非推奨）
-export interface LegacyAuthActions {
-	updateProfile: (data: Partial<FirestoreUser>) => Promise<void>;
-}
-
-// Extended専用のヘルパー型
-export interface ExtendedAuthHelpers {
-	// Extended ユーザー操作
-	getExtendedUserStats: () => ExtendedFirestoreUser['stats'] | null;
-	getExtendedUserSecurity: () => ExtendedFirestoreUser['securitySettings'] | null;
-	getExtendedUserNotifications: () => ExtendedFirestoreUser['notificationSettings'] | null;
-	
-	// Extended Wallet操作
-	addWalletConnection: (connection: WalletConnection) => Promise<WalletOperationResult>;
-	removeWalletConnection: (address: string) => Promise<WalletOperationResult>;
-	setPrimaryWallet: (address: string) => Promise<WalletOperationResult>;
-	
-	// Extended 設定操作
-	updateSecuritySettings: (settings: Partial<ExtendedFirestoreUser['securitySettings']>) => Promise<WalletOperationResult>;
-	updateNotificationSettings: (settings: Partial<ExtendedFirestoreUser['notificationSettings']>) => Promise<WalletOperationResult>;
 }-e 
 ### FILE: ./scripts/seedProductsAdmin.js
 

@@ -117,8 +117,6 @@
 │   │   │   │       ├── PurchaseScanSection.tsx
 │   │   │   │       ├── ShopSection.tsx
 │   │   │   │       └── WhitepaperSection.tsx
-│   │   │   ├── context
-│   │   │   │   └── DashboardContext.tsx
 │   │   │   ├── layout.tsx
 │   │   │   └── page.tsx
 │   │   ├── favicon.ico
@@ -131,8 +129,19 @@
 │   │   │   └── cyber-components.css
 │   │   └── wallet-auth-demo
 │   │       └── page.tsx
+│   ├── auth
+│   │   ├── components
+│   │   ├── config
+│   │   ├── contexts
+│   │   │   └── UnifiedAuthContext.tsx
+│   │   ├── providers
+│   │   ├── services
+│   │   └── types
+│   │       ├── api-wallet.ts
+│   │       ├── auth.ts
+│   │       └── wallet.ts
 │   ├── contexts
-│   │   └── UnifiedAuthContext.tsx
+│   │   └── DashboardContext.tsx
 │   ├── hooks
 │   │   ├── useCryptoPrices.ts
 │   │   └── usePriceConverter.ts
@@ -146,6 +155,17 @@
 │   │       ├── users-wallet-extended.ts
 │   │       ├── users-wallet.ts
 │   │       └── users.ts
+│   ├── types
+│   │   ├── api-wallet.ts
+│   │   ├── auth.ts
+│   │   ├── crypto.ts
+│   │   ├── dashboard.ts
+│   │   ├── demo-payment.ts
+│   │   ├── product.ts
+│   │   ├── react-three-fiber.d.ts
+│   │   ├── user-extended.ts
+│   │   ├── user.ts
+│   │   └── wallet.ts
 │   ├── utils
 │   │   ├── errorHandling.ts
 │   │   ├── userHelpers.ts
@@ -161,17 +181,6 @@
 │       └── core
 │           └── WalletAdapterInterface.ts
 ├── tailwind.config.js
-├── tsconfig.json
-└── types
-    ├── api-wallet.ts
-    ├── auth.ts
-    ├── crypto.ts
-    ├── dashboard.ts
-    ├── demo-payment.ts
-    ├── product.ts
-    ├── react-three-fiber.d.ts
-    ├── user-extended.ts
-    ├── user.ts
-    └── wallet.ts
+└── tsconfig.json
 
-47 directories, 127 files
+53 directories, 130 files

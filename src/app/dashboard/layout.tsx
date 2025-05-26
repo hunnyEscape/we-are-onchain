@@ -14,7 +14,7 @@ import WhitepaperSection from './components/sections/WhitepaperSection';
 import ProfileSection from './components/sections/ProfileSection';
 import CartSection from './components/sections/CartSection';
 import { SectionType } from '@/types/dashboard';
-import { useUnifiedAuth } from '@/contexts/UnifiedAuthContext';
+import { useUnifiedAuth } from '@/auth/contexts/UnifiedAuthContext';
 interface DashboardLayoutProps {
 	children: React.ReactNode;
 }

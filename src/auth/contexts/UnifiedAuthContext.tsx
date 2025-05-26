@@ -2,19 +2,19 @@
 'use client';
 
 import React, { createContext, useContext, useEffect, useState, useCallback, useRef } from 'react';
-import { ChainType } from '@/types/wallet';
+import { ChainType } from '@/auth/types/wallet';
 import {
 	ExtendedFirestoreUser,
 	WalletOperationResult,
 	AuthFlowState
-} from '@/types/user-extended';
-import { UnifiedAuthState, AuthConfig, AuthActions, AuthEvent, AuthEventType, UseAuthReturn } from '@/types/auth';
-import { WalletAuthRequest, WalletAuthResponse } from '@/types/api-wallet';
+} from '@/auth/types/user-extended';
+import { UnifiedAuthState, AuthConfig, AuthActions, AuthEvent, AuthEventType, UseAuthReturn } from '@/auth/types/auth';
+import { WalletAuthRequest, WalletAuthResponse } from '@/auth/types/api-wallet';
 
 // EVMWalletProviderはオプショナルにする
 let useEVMWallet: any = null;
 try {
-	const evmModule = require('@/wallet-auth/adapters/evm/EVMWalletAdapterWrapper');
+	const evmModule = require('@/auth/providers/EVMWalletAdapterWrapper');
 	useEVMWallet = evmModule.useEVMWallet;
 } catch (error) {
 	console.warn('EVMWallet not available:', error);
@@ -290,7 +290,7 @@ export const UnifiedAuthProvider = ({ children, config: userConfig = {} }: Unifi
 
 				if (chainType === 'evm') {
 					// 1. EVMAuthServiceの初期化とNonce生成
-					const authService = new (await import('@/wallet-auth/adapters/evm/EVMAuthService')).EVMAuthService();
+					const authService = new (await import('@/auth/services/EVMAuthService')).EVMAuthService();
 					const nonce = authService.generateNonce();
 
 					// 2. ウォレットアドレス確認（evmWallet.addressを使用）

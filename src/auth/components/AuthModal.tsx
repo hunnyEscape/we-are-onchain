@@ -1,9 +1,9 @@
-// src/app/components/AuthModal.tsx
+// src/auth/components/AuthModal.tsx
 'use client';
 
 import { useState, useEffect } from 'react';
-import { useUnifiedAuth } from '@/contexts/UnifiedAuthContext';
-import { ChainType } from '../../../../types/wallet';
+import { useUnifiedAuth } from '@/auth/contexts/UnifiedAuthContext';
+import { ChainType } from '@/auth/types/wallet';
 import { Wallet, Shield, ChevronRight, AlertCircle, CheckCircle, Loader2, Settings } from 'lucide-react';
 
 interface ExtendedAuthModalProps {

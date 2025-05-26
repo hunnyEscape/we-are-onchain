@@ -2,9 +2,9 @@
 import { Montserrat, Space_Grotesk } from 'next/font/google';
 import './globals.css';
 import type { Metadata } from 'next';
-import { EVMWalletProvider } from '@/wallet-auth/adapters/evm/wagmi-provider';
-import { EVMWalletProvider as EVMWalletContextProvider } from '@/wallet-auth/adapters/evm/EVMWalletAdapterWrapper';
-import { UnifiedAuthProvider } from '@/contexts/UnifiedAuthContext';
+import { EVMWalletProvider } from '@/auth/providers/wagmi-provider';
+import { EVMWalletProvider as EVMWalletContextProvider } from '@/auth/providers/EVMWalletAdapterWrapper';
+import { UnifiedAuthProvider } from '@/auth/contexts/UnifiedAuthContext';
 
 // フォント設定の最適化
 const montserrat = Montserrat({

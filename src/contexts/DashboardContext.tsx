@@ -3,7 +3,7 @@
 
 import React, { createContext, useContext, useReducer, useEffect } from 'react';
 import { DashboardState, CartItem, UserProfile, SectionType } from '../../../../types/dashboard';
-import { useUnifiedAuth } from '@/contexts/UnifiedAuthContext';
+import { useUnifiedAuth } from '@/auth/contexts/UnifiedAuthContext';
 
 // カート有効期限（30日）
 const CART_EXPIRY_DAYS = 30;

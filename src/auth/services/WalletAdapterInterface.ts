@@ -8,7 +8,7 @@ import {
 	WalletError,
 	ChainConfig,
 	WalletProvider
-} from '@/types/wallet';
+} from '@/auth/types/wallet';
 
 /**
  * 全チェーン共通のWallet Adapterインターフェース

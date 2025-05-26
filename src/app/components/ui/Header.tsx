@@ -6,7 +6,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { AuthModal } from '../auth/AuthModal';
 import { ShoppingCart } from 'lucide-react';
 
-// ダッシュボードページでのみカート機能を使用するためのhook
+// ダッシュボードページでのみカート機能を使用するためのhoo
 const useCartInDashboard = () => {
 	const [cartItemCount, setCartItemCount] = useState(0);
 	const [onCartClick, setOnCartClick] = useState<(() => void) | null>(null);

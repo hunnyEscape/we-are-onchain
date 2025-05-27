@@ -18,6 +18,9 @@ import { useChainSelection } from '@/auth/hooks/useChainSelection';
 import { useAuthFlow, ExtendedAuthStep } from '@/auth/hooks/useAuthFlow';
 import { AuthActionsService } from '@/auth/services/AuthActionsService';
 
+import { ethers } from 'ethers';
+import { fetchGasInfoEvm } from '@/auth/utils/fetchGasInfo';
+
 // EVMWalletProviderはオプショナルにする
 let useEVMWallet: any = null;
 try {
